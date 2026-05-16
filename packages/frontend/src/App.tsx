@@ -9,7 +9,7 @@ import styles from './App.module.css';
 
 export default function App() {
   const {
-    screen, roomId, myColor, gameState, errorMsg, gameOver,
+    screen, roomId, myColor, myName, gameState, errorMsg, gameOver,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, placeMinePhase3, toggleMark,
@@ -46,9 +46,9 @@ export default function App() {
   }
 
   if (screen === 'finished') {
-    const winner    = gameOver?.winnerColor ?? gameState?.winnerColor;
-    const isWinner  = winner === myColor;
-    const reason    = gameOver?.reason;
+    const winner   = gameOver?.winnerColor ?? gameState?.winnerColor;
+    const isWinner = winner === myColor;
+    const winnerPlayer = gameState?.players.find((p) => p.color === winner);
     return (
       <div className={styles.centered}>
         <div className={styles.waitCard}>
@@ -56,11 +56,11 @@ export default function App() {
           <p>
             Победитель:{' '}
             <span style={{ color: winner === 'red' ? '#e74c3c' : '#3498db' }}>
-              {winner === 'red' ? '🔴 Красный' : '🔵 Синий'}
+              {winner === 'red' ? '🔴' : '🔵'} {winnerPlayer?.name ?? winner}
             </span>
           </p>
-          {reason === 'lives'          && <p>Причина: потеряны все жизни</p>}
-          {reason === 'no_mines_space' && <p>Причина: нет места для мин</p>}
+          {gameOver?.reason === 'lives'          && <p>Причина: потеряны все жизни</p>}
+          {gameOver?.reason === 'no_mines_space' && <p>Причина: нет места для мин</p>}
           <button className={styles.replayBtn} onClick={() => window.location.reload()}>
             Играть снова
           </button>
@@ -70,31 +70,40 @@ export default function App() {
   }
 
   if (screen === 'game' && gameState && myColor) {
+    const me       = gameState.players.find((p) => p.color === myColor);
+    const opponent = gameState.players.find((p) => p.color !== myColor);
+
     return (
       <div className={styles.gameLayout}>
-        {/* Шапка */}
         <div className={styles.gameHeader}>
           <h2 className={styles.logo}>💣 Minesweeper PvP</h2>
           <span className={styles.roomBadge}>Комната: {roomId}</span>
+
+          {/* Имя текущего игрока */}
           <span
-            className={styles.colorBadge}
-            style={{ color: myColor === 'red' ? '#e74c3c' : '#3498db' }}
+            className={styles.playerBadge}
+            style={{ borderColor: myColor === 'red' ? '#e74c3c' : '#3498db' }}
           >
-            Вы: {myColor === 'red' ? '🔴 Красный' : '🔵 Синий'}
+            {myColor === 'red' ? '🔴' : '🔵'} {me?.name ?? myName}
           </span>
-          {/* Кнопка помощи */}
+
+          <span className={styles.vs}>vs</span>
+
+          {/* Имя противника */}
+          <span
+            className={styles.playerBadge}
+            style={{ borderColor: opponent?.color === 'red' ? '#e74c3c55' : '#3498db55' }}
+          >
+            {opponent?.color === 'red' ? '🔴' : '🔵'} {opponent?.name ?? '...'}
+          </span>
+
           <button className={styles.helpBtn} onClick={() => setShowHelp(true)}>
             ❓ Правила
           </button>
         </div>
 
-        {/* Игровое поле */}
         <div className={styles.gameBody}>
-          <GameInfo
-            gameState={gameState}
-            myColor={myColor}
-            onEndPhase2={endPhase2}
-          />
+          <GameInfo  gameState={gameState} myColor={myColor} onEndPhase2={endPhase2} />
           <Board
             gameState={gameState}
             myColor={myColor}
@@ -117,11 +126,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Тост с ошибкой */}
         {errorMsg && <div className={styles.toastError}>{errorMsg}</div>}
-
-        {/* Модалка правил */}
-        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+        {showHelp  && <HelpModal onClose={() => setShowHelp(false)} />}
       </div>
     );
   }

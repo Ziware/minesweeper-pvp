@@ -28,6 +28,7 @@ import {
 export interface PlayerState {
   id: string;
   color: PlayerColor;
+  name: string;
   lives: number;
   minesPlaced: number;
   connected: boolean;
@@ -56,10 +57,10 @@ export class RoomManager {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   }
 
-  createRoom(socketId: string, config: Partial<GameConfig> = {}): Room {
-    const roomId = this.generateRoomId();
-    const fullConfig: GameConfig = { ...DEFAULT_CONFIG, ...config };
-    const board = createBoard(fullConfig.boardSize);
+  createRoom(socketId: string, playerName: string, config: Partial<GameConfig> = {}): Room {
+    const roomId     = this.generateRoomId();
+    const fullConfig = { ...DEFAULT_CONFIG, ...config };
+    const board      = createBoard(fullConfig.boardSize);
     initBoard(board, fullConfig);
 
     const room: Room = {
@@ -69,6 +70,7 @@ export class RoomManager {
       players: [{
         id: socketId,
         color: 'red',
+        name: playerName,
         lives: fullConfig.maxLives,
         minesPlaced: 0,
         connected: true,
@@ -95,23 +97,50 @@ export class RoomManager {
     return room;
   }
 
-  joinRoom(socketId: string, roomId: string): Room | null {
+  joinRoom(socketId: string, roomId: string, playerName: string): Room | null {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length >= 2) return null;
 
     room.players.push({
       id: socketId,
       color: 'blue',
+      name: playerName,
       lives: room.config.maxLives,
       minesPlaced: 0,
       connected: true,
       setupConfirmed: false,
     });
-    room.phase = 'setup';
+    room.phase      = 'setup';
     room.turn.phase = 'setup';
 
     this.socketToRoom.set(socketId, roomId);
     this.socketToPlayer.set(socketId, 'blue');
+    return room;
+  }
+
+  // Восстанавливаем сессию после перезагрузки страницы
+  restoreSession(
+    newSocketId: string,
+    roomId: string,
+    playerColor: PlayerColor
+  ): Room | null {
+    const room = this.rooms.get(roomId);
+    if (!room) return null;
+
+    const player = room.players.find((p) => p.color === playerColor);
+    if (!player) return null;
+
+    // Обновляем socket id игрока
+    const oldSocketId = player.id;
+    player.id         = newSocketId;
+    player.connected  = true;
+
+    // Переносим маппинги
+    this.socketToRoom.delete(oldSocketId);
+    this.socketToPlayer.delete(oldSocketId);
+    this.socketToRoom.set(newSocketId, roomId);
+    this.socketToPlayer.set(newSocketId, playerColor);
+
     return room;
   }
 
@@ -130,7 +159,7 @@ export class RoomManager {
   }
 
   removePlayer(socketId: string): { room: Room | null; color: PlayerColor | null } {
-    const room = this.getRoom(socketId);
+    const room  = this.getRoom(socketId);
     const color = this.getPlayerColor(socketId);
     if (room) {
       const player = room.players.find((p) => p.id === socketId);
@@ -184,7 +213,7 @@ export class RoomManager {
     const bothConfirmed = room.setupConfirmed.size === 2;
     if (bothConfirmed) {
       room.phase = 'phase1';
-      room.turn = createInitialTurnState('red');
+      room.turn  = createInitialTurnState('red');
     }
     return { ok: true, bothConfirmed };
   }
@@ -199,18 +228,16 @@ export class RoomManager {
     const actionZone  = getActionZoneTopLeft(clickedRow, clickedCol);
 
     if (!isValidZoneSelection(room.board, displayZone.row, displayZone.col, color, room.config)) {
-      return { ok: false, error: 'В зоне 3×3 нет ваших свободных клеток' };
+      return { ok: false, error: 'В зоне 3×3 нет ваших клеток' };
     }
 
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
 
-    revealNumbersInDisplayZone(
-      room.board, displayZone.row, displayZone.col, color, room.config
-    );
+    revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
 
     room.turn.phase = 'phase2';
-    room.phase = 'phase2';
+    room.phase      = 'phase2';
     room.turn.lastActionMessage = null;
     return { ok: true };
   }
@@ -241,15 +268,11 @@ export class RoomManager {
       const player = room.players.find((p) => p.color === color)!;
       player.lives--;
 
-      // Пересчитываем цифры после удаления мины
-      refreshNumbersInDisplayZone(
-        room.board, displayZone.row, displayZone.col, color, room.config
-      );
+      refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
 
-      // Проверяем смерть сразу после взрыва
       if (player.lives <= 0) {
-        const opponent = room.players.find((p) => p.color !== color)!;
-        room.winner    = opponent.color;
+        const opp   = room.players.find((p) => p.color !== color)!;
+        room.winner    = opp.color;
         room.winReason = 'lives';
         room.phase     = 'finished';
         clearRevealedNumbers(room.board);
@@ -270,10 +293,7 @@ export class RoomManager {
 
       if (inDisplayZone) {
         revealNumberForCell(room.board, row, col, color, room.config);
-        // Пересчитываем соседние клетки в зоне — их числа могли измениться
-        refreshNumbersInDisplayZone(
-          room.board, displayZone.row, displayZone.col, color, room.config
-        );
+        refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
       }
       room.turn.lastActionMessage = null;
     }
@@ -325,11 +345,7 @@ export class RoomManager {
         revealNumberForCell(room.board, row, col, color, room.config);
       }
 
-      // Пересчитываем все числа в зоне 3x3 после разминирования
-      refreshNumbersInDisplayZone(
-        room.board, displayZone.row, displayZone.col, color, room.config
-      );
-
+      refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
       room.turn.lastActionMessage = '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.';
     } else {
       this.clearMarkOnCell(room, row, col);
@@ -356,12 +372,11 @@ export class RoomManager {
   }
 
   private startPhase3(room: Room, message?: string): void {
-    // Убираем зоны и цифры при переходе в фазу 3
     clearRevealedNumbers(room.board);
-    room.turn.selectedZone = null;
-    room.turn.actionZone   = null;
-    room.turn.phase        = 'phase3';
-    room.phase             = 'phase3';
+    room.turn.selectedZone        = null;
+    room.turn.actionZone          = null;
+    room.turn.phase               = 'phase3';
+    room.phase                    = 'phase3';
     room.turn.minesPlacedThisTurn = 0;
     if (message) room.turn.lastActionMessage = message;
   }
@@ -377,12 +392,8 @@ export class RoomManager {
     }
 
     const cell = room.board[row][col];
-    if (cell.owner !== color) {
-      return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
-    }
-    if (cell.hasMine) {
-      return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
-    }
+    if (cell.owner !== color)  return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
+    if (cell.hasMine)          return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
 
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
@@ -396,7 +407,6 @@ export class RoomManager {
   }
 
   private checkAndFinishTurn(room: Room): boolean {
-    // Проверяем жизни текущего игрока (мог умереть раньше, но это доп. проверка)
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer)!;
     if (cur.lives <= 0) {
       const opp  = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
@@ -429,7 +439,7 @@ export class RoomManager {
   }
 
   getBoardForPlayer(room: Room, color: PlayerColor) {
-    const board = getBoardForPlayer(room.board, color);
+    const board   = getBoardForPlayer(room.board, color);
     const myMarks = room.marks[color];
     for (const [key, mark] of Object.entries(myMarks)) {
       const [r, c] = key.split(',').map(Number);
@@ -442,8 +452,8 @@ export class RoomManager {
 
   getGameStateForPlayer(room: Room, color: PlayerColor) {
     return {
-      board: this.getBoardForPlayer(room, color),
-      players: room.players,
+      board:       this.getBoardForPlayer(room, color),
+      players:     room.players,
       turn: {
         ...room.turn,
         capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),

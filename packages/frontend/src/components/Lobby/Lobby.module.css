@@ -6,30 +6,37 @@
   min-height: 100vh;
   background: #1a1a2e;
   color: #eee;
-  gap: 24px;
+  gap: 20px;
+  padding: 24px;
 }
 
 .title {
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   font-weight: bold;
-  margin-bottom: 8px;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .card {
   background: #16213e;
   border-radius: 12px;
-  padding: 24px;
+  padding: 22px 26px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 320px;
+  min-width: 280px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
 
-.card h2 {
-  margin: 0;
-  font-size: 1.2rem;
-}
+.card h2 { margin: 0; font-size: 1.1rem; }
+
+.hint { margin: 0; font-size: 0.85rem; color: #778; }
 
 .input {
   padding: 10px 14px;
@@ -39,6 +46,9 @@
   color: #eee;
   font-size: 1rem;
 }
+
+.inputError { border-color: #e74c3c; }
+.fieldError { color: #e74c3c; font-size: 0.82rem; margin-top: -6px; }
 
 .btnRed {
   padding: 12px;
@@ -51,7 +61,6 @@
   font-weight: bold;
   transition: background 0.2s;
 }
-
 .btnRed:hover { background: #e74c3c; }
 
 .btnBlue {
@@ -65,8 +74,8 @@
   font-weight: bold;
   transition: background 0.2s;
 }
-
-.btnBlue:hover { background: #3498db; }
+.btnBlue:hover  { background: #3498db; }
+.btnBlue:disabled { background: #444; cursor: not-allowed; }
 
 .error {
   color: #e74c3c;

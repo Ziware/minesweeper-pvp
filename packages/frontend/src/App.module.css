@@ -51,34 +51,49 @@
 .gameHeader {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 8px 20px;
   background: #16213e;
   border-bottom: 1px solid #0f3460;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
-.logo { margin: 0; font-size: 1.3rem; }
+.logo { margin: 0; font-size: 1.2rem; }
 
 .roomBadge {
   background: #0f3460;
-  padding: 4px 12px;
+  padding: 4px 10px;
   border-radius: 20px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-family: monospace;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
-.colorBadge { font-weight: bold; font-size: 0.95rem; }
+/* Имя игрока */
+.playerBadge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 2px solid;
+  font-size: 0.88rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.04);
+}
+
+.vs {
+  font-size: 0.78rem;
+  color: #556;
+  font-weight: bold;
+}
 
 .helpBtn {
   margin-left: auto;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 8px;
   border: 1px solid #0f3460;
   background: #0f3460;
   color: #7af;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   cursor: pointer;
   font-weight: 600;
   transition: background 0.2s;
@@ -88,8 +103,8 @@
 .gameBody {
   display: flex;
   flex: 1;
-  gap: 16px;
-  padding: 16px;
+  gap: 14px;
+  padding: 14px;
   align-items: flex-start;
   justify-content: center;
   overflow: hidden;
@@ -99,17 +114,17 @@
 .legend {
   background: #16213e;
   border-radius: 12px;
-  padding: 16px;
-  font-size: 0.84rem;
+  padding: 14px;
+  font-size: 0.82rem;
   color: #bbb;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 180px;
-  max-width: 200px;
+  gap: 5px;
+  min-width: 170px;
+  max-width: 195px;
   flex-shrink: 0;
 }
-.legend h3 { margin: 0; color: #eee; font-size: 0.88rem; }
+.legend h3 { margin: 0; color: #eee; font-size: 0.86rem; }
 .legend hr  { border: none; border-top: 1px solid #333; margin: 3px 0; }
 
 .toastError {
@@ -122,7 +137,7 @@
   padding: 12px 28px;
   border-radius: 10px;
   font-weight: bold;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   border: 1px solid #e74c3c55;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   z-index: 1000;

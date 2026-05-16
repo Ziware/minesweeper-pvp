@@ -27,6 +27,7 @@ export interface ClientCellState {
 export interface PlayerState {
   id: string;
   color: PlayerColor;
+  name: string;          // ← имя игрока
   lives: number;
   minesPlaced: number;
   connected: boolean;
@@ -41,7 +42,6 @@ export interface GameConfig {
   initialMines: number;
 }
 
-// Открытая статистика доски — видна обоим игрокам
 export interface BoardStats {
   redMines: number;
   blueMines: number;
@@ -61,39 +61,41 @@ export interface TurnState {
 }
 
 export interface S2C_RoomCreated { roomId: string; playerColor: PlayerColor; }
-export interface S2C_RoomJoined { roomId: string; playerColor: PlayerColor; }
+export interface S2C_RoomJoined  { roomId: string; playerColor: PlayerColor; }
 
 export interface S2C_GameState {
   board: ClientCellState[][];
   players: PlayerState[];
   turn: Omit<TurnState, 'capturedThisTurn'> & { capturedThisTurn: string[] };
   config: GameConfig;
-  stats: BoardStats;          // ← открытая статистика
+  stats: BoardStats;
   winnerColor?: PlayerColor;
 }
 
-export interface S2C_Error { message: string; }
+export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor;
   reason: 'no_mines_space' | 'lives';
 }
 
 export interface C2S_CreateRoom { playerName: string; }
-export interface C2S_JoinRoom { roomId: string; playerName: string; }
-export interface C2S_PlaceMine { row: number; col: number; }
+export interface C2S_JoinRoom   { roomId: string; playerName: string; }
+export interface C2S_PlaceMine  { row: number; col: number; }
 export interface C2S_SelectZone { row: number; col: number; }
-export interface C2S_CaptureCell { row: number; col: number; }
-export interface C2S_DefuseCell { row: number; col: number; }
+export interface C2S_CaptureCell     { row: number; col: number; }
+export interface C2S_DefuseCell      { row: number; col: number; }
 export interface C2S_PlaceMinePhase3 { row: number; col: number; }
 export interface C2S_ToggleMark { row: number; col: number; mark: CellMark; }
 
 export interface ServerToClientEvents {
-  roomCreated: (data: S2C_RoomCreated) => void;
-  roomJoined:  (data: S2C_RoomJoined) => void;
-  gameState:   (data: S2C_GameState) => void;
-  error:       (data: S2C_Error) => void;
-  gameOver:    (data: S2C_GameOver) => void;
+  roomCreated:        (data: S2C_RoomCreated) => void;
+  roomJoined:         (data: S2C_RoomJoined) => void;
+  gameState:          (data: S2C_GameState) => void;
+  error:              (data: S2C_Error) => void;
+  gameOver:           (data: S2C_GameOver) => void;
   waitingForOpponent: () => void;
+  // Восстановление сессии после перезагрузки
+  sessionRestored:    (data: { playerColor: PlayerColor; roomId: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -107,4 +109,6 @@ export interface ClientToServerEvents {
   placeMinePhase3: (data: C2S_PlaceMinePhase3) => void;
   endPhase2:       () => void;
   toggleMark:      (data: C2S_ToggleMark) => void;
+  // Восстановление сессии
+  restoreSession:  (data: { roomId: string; playerColor: PlayerColor }) => void;
 }

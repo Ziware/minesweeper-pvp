@@ -6,103 +6,65 @@
   min-height: 100vh;
   background: #1a1a2e;
   color: #eee;
-  gap: 16px;
-  padding: 24px;
+  gap: 14px;
+  padding: 20px;
 }
 
-.title {
-  font-size: 1.8rem;
-  font-weight: bold;
-  margin: 0;
+.header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.subtitle {
-  font-size: 1rem;
-  color: #aaa;
+.title    { font-size: 1.6rem; font-weight: bold; margin: 0; }
+.subtitle { font-size: 0.95rem; color: #aaa; margin: 0; }
+
+.opponentLine {
+  font-size: 0.88rem;
+  color: #99b;
   margin: 0;
 }
+.ready   { color: #7affaa; }
+.waiting { color: #f39c12; }
 
 .board {
   display: grid;
   gap: 2px;
+  padding: 8px;
+  background: #0d1b2a;
+  border-radius: 10px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.5);
 }
 
-.cell {
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  user-select: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  transition: filter 0.15s;
-}
-
-.clickable { cursor: pointer; }
-.clickable:hover { filter: brightness(1.35); }
-
-.red   { background: #6b1f1f; }
-.blue  { background: #1f3a6b; }
-.enemy { background: #2a2a2a; cursor: default; }
-.mine  { background: #7d2d2d !important; }
-
-/* Кнопка подтверждения */
 .confirmBtn {
-  margin-top: 8px;
-  padding: 14px 32px;
+  padding: 13px 32px;
   border-radius: 10px;
   border: none;
   background: #27ae60;
   color: white;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
   transition: background 0.2s;
 }
-
-.confirmBtn:disabled {
-  background: #444;
-  cursor: not-allowed;
-  color: #888;
-}
-
+.confirmBtn:disabled        { background: #444; cursor: not-allowed; color: #888; }
 .confirmBtn:not(:disabled):hover { background: #2ecc71; }
 
-/* Ожидание соперника */
 .waitingBox {
-  margin-top: 8px;
   display: flex;
   align-items: center;
   gap: 14px;
   background: #0f3460;
   border-radius: 12px;
-  padding: 16px 24px;
-  min-width: 300px;
+  padding: 14px 24px;
 }
 
-.waitingSpinner {
-  font-size: 2rem;
-  animation: spin 2s linear infinite;
-}
+.waitingSpinner { font-size: 1.8rem; animation: spin 2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes spin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.waitingText {
-  font-size: 1rem;
-  font-weight: bold;
-  line-height: 1.5;
-}
-
-.waitingSubtext {
-  font-size: 0.85rem;
-  color: #7ab;
-  font-weight: normal;
-}
+.waitingText    { font-weight: bold; font-size: 0.95rem; }
+.waitingSubtext { font-size: 0.82rem; color: #7ab; }
 
 .error {
   color: #e74c3c;
