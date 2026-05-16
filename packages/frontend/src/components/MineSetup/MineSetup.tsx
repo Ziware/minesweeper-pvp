@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { S2C_GameState, PlayerColor } from '@minesweeper-pvp/shared';
 import { Cell } from '../Cell/Cell';
 import styles from './MineSetup.module.css';
@@ -15,7 +15,7 @@ function useCellSize(boardSize: number): number {
   const [cellSize, setCellSize] = React.useState(44);
   React.useEffect(() => {
     function calc() {
-      const reservedH = 220; // заголовок + кнопка + отступы
+      const reservedH = 220;
       const reservedW = 80;
       const availW = window.innerWidth  - reservedW;
       const availH = window.innerHeight - reservedH;
@@ -40,15 +40,25 @@ export function MineSetup({
   const me       = players.find((p) => p.color === myColor)!;
   const opponent = players.find((p) => p.color !== myColor);
 
-  const iConfirmed       = me.setupConfirmed;
+  const iConfirmed        = me.setupConfirmed;
   const opponentConfirmed = opponent?.setupConfirmed ?? false;
   const canConfirm        = me.minesPlaced === config.initialMines && !iConfirmed;
 
   const cellSize = useCellSize(config.boardSize);
 
-  const handleRightClick = (e: React.MouseEvent) => e.preventDefault();
+  const handleCellClick = useCallback((r: number, c: number) => {
+    const cell = board[r][c];
+    const isOwn = cell.owner === myColor;
+    if (isOwn && !iConfirmed) {
+      onPlaceMine(r, c);
+    }
+  }, [board, myColor, iConfirmed, onPlaceMine]);
 
-  const colorLabel = myColor === 'red' ? '🔴 Красный' : '🔵 Синий';
+  const handleRightClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const colorLabel   = myColor === 'red' ? '🔴 Красный' : '🔵 Синий';
   const opponentName = opponent?.name ?? 'Противник';
 
   return (
@@ -67,39 +77,35 @@ export function MineSetup({
         </p>
       </div>
 
-      {/* Та же сетка что и в игре */}
       <div
         className={styles.board}
         style={{ gridTemplateColumns: `repeat(${config.boardSize}, ${cellSize}px)` }}
       >
         {board.map((row, r) =>
-          row.map((cell, c) => {
-            const isOwn     = cell.owner === myColor;
-            const clickable = isOwn && !iConfirmed;
-
-            return (
-              <div
-                key={`${r}-${c}`}
-                style={{ width: cellSize, height: cellSize }}
-                onClick={() => clickable && onPlaceMine(r, c)}
-                onContextMenu={handleRightClick}
-              >
-                <Cell
-                  cell={cell}
-                  row={r}
-                  col={c}
-                  myColor={myColor}
-                  zoneType="none"
-                  isHover={false}
-                  isInActiveZone={false}
-                  gamePhase="setup"
-                  isMyTurn={!iConfirmed}
-                  onClick={() => clickable && onPlaceMine(r, c)}
-                  onRightClick={handleRightClick}
-                />
-              </div>
-            );
-          })
+          row.map((cell, c) => (
+            <div
+              key={`${r}-${c}`}
+              style={{ width: cellSize, height: cellSize }}
+              // Обработчик ТОЛЬКО здесь, не в Cell
+              onClick={() => handleCellClick(r, c)}
+              onContextMenu={handleRightClick}
+            >
+              <Cell
+                cell={cell}
+                row={r}
+                col={c}
+                myColor={myColor}
+                zoneType="none"
+                isHover={false}
+                isInActiveZone={false}
+                gamePhase="setup"
+                isMyTurn={!iConfirmed}
+                // Cell получает заглушки — клик обрабатывается на div выше
+                onClick={() => {}}
+                onRightClick={handleRightClick}
+              />
+            </div>
+          ))
         )}
       </div>
 
