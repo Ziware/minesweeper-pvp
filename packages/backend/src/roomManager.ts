@@ -296,14 +296,10 @@ export class RoomManager {
 
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
+    const captured    = room.turn.capturedThisTurn as Set<string>;
 
-    const inActionZone =
-      row >= actionZone.row && row < actionZone.row + 5 &&
-      col >= actionZone.col && col < actionZone.col + 5 &&
-      isInBounds(row, col, room.config.boardSize);
-
-    if (!inActionZone) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Cell not in action zone' };
+    if (!canCaptureCell(room.board, row, col, color, captured, actionZone.row, actionZone.col, room.config)) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse this cell' };
     }
 
     const cell = room.board[row][col];
