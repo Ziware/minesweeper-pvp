@@ -11,6 +11,9 @@ RUN yarn install --frozen-lockfile
 WORKDIR /app/packages/backend
 RUN yarn tsc
 
+# Проверяем что файлы собрались
+RUN ls -la /app/packages/backend/dist/
+
 # ─── Production образ ───────────────────────────────────────
 FROM node:20-alpine AS production
 
@@ -22,7 +25,11 @@ COPY packages/backend/ packages/backend/
 
 RUN yarn install --frozen-lockfile --production
 
-COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
+# Копируем собранный dist из builder
+COPY --from=builder /app/packages/backend/dist/ ./packages/backend/dist/
+
+# Проверяем что скопировалось
+RUN ls -la /app/packages/backend/dist/
 
 EXPOSE 3001
 
