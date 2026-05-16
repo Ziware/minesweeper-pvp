@@ -49,12 +49,16 @@ export interface Room {
   marks: Record<PlayerColor, Record<string, CellMark>>;
 }
 
+const EMPTY_ROOM_TTL_MS = 60 * 60 * 1000;
+
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   // socket.id → roomId
   private socketToRoom: Map<string, string> = new Map();
   // socket.id → PlayerColor
   private socketToPlayer: Map<string, PlayerColor> = new Map();
+  // roomId → таймер удаления комнаты, если все игроки отключились
+  private emptyRoomCleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   generateRoomId(): string {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -145,6 +149,8 @@ export class RoomManager {
       };
     }
 
+    this.cancelEmptyRoomCleanup(roomId);
+
     // Обновляем socket.id (он изменился после переподключения)
     const oldSocketId = player.id;
     this.socketToRoom.delete(oldSocketId);
@@ -182,7 +188,50 @@ export class RoomManager {
     }
     this.socketToRoom.delete(socketId);
     this.socketToPlayer.delete(socketId);
+    if (room) this.scheduleEmptyRoomCleanupIfNeeded(room);
     return { room, color };
+  }
+
+  private scheduleEmptyRoomCleanupIfNeeded(room: Room): boolean {
+    const allPlayersDisconnected = room.players.length > 0 && room.players.every((p) => !p.connected);
+    if (!allPlayersDisconnected) return false;
+    if (this.emptyRoomCleanupTimers.has(room.id)) return true;
+
+    const timer = setTimeout(() => {
+      this.emptyRoomCleanupTimers.delete(room.id);
+      const currentRoom = this.rooms.get(room.id);
+      if (!currentRoom) return;
+
+      const stillEmpty = currentRoom.players.length > 0 && currentRoom.players.every((p) => !p.connected);
+      if (stillEmpty) this.deleteRoom(room.id);
+    }, EMPTY_ROOM_TTL_MS);
+
+    timer.unref?.();
+    this.emptyRoomCleanupTimers.set(room.id, timer);
+    return true;
+  }
+
+  private cancelEmptyRoomCleanup(roomId: string): boolean {
+    const timer = this.emptyRoomCleanupTimers.get(roomId);
+    if (!timer) return false;
+
+    clearTimeout(timer);
+    this.emptyRoomCleanupTimers.delete(roomId);
+    return true;
+  }
+
+  private deleteRoom(roomId: string): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+
+    this.cancelEmptyRoomCleanup(roomId);
+    for (const player of room.players) {
+      if (this.socketToRoom.get(player.id) === roomId) {
+        this.socketToRoom.delete(player.id);
+        this.socketToPlayer.delete(player.id);
+      }
+    }
+    return this.rooms.delete(roomId);
   }
 
   getOpponentSocketId(room: Room, color: PlayerColor): string | null {
