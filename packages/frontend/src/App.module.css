@@ -17,7 +17,6 @@
   gap: 16px;
   box-shadow: 0 4px 32px rgba(0,0,0,0.5);
 }
-
 .waitCard h1, .waitCard h2 { margin: 0; }
 
 .roomId {
@@ -39,65 +38,80 @@
 }
 .replayBtn:hover { background: #2ecc71; }
 
-/* ===== Игровой экран ===== */
 .gameLayout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: #1a1a2e;
   color: #eee;
-  /* Позиционирование для тоста */
   position: relative;
 }
 
 .gameHeader {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 24px;
+  gap: 16px;
+  padding: 8px 20px;
   background: #16213e;
   border-bottom: 1px solid #0f3460;
+  flex-shrink: 0;
 }
 
-.logo { margin: 0; font-size: 1.4rem; }
+.logo { margin: 0; font-size: 1.3rem; }
 
 .roomBadge {
   background: #0f3460;
   padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-family: monospace;
   letter-spacing: 0.1em;
 }
 
-.colorBadge { font-weight: bold; font-size: 1rem; }
+.colorBadge { font-weight: bold; font-size: 0.95rem; }
+
+.helpBtn {
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #0f3460;
+  background: #0f3460;
+  color: #7af;
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.helpBtn:hover { background: #1a4f80; }
 
 .gameBody {
   display: flex;
   flex: 1;
-  gap: 24px;
-  padding: 24px;
+  gap: 16px;
+  padding: 16px;
   align-items: flex-start;
   justify-content: center;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .legend {
   background: #16213e;
   border-radius: 12px;
-  padding: 20px;
-  font-size: 0.88rem;
+  padding: 16px;
+  font-size: 0.84rem;
   color: #bbb;
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  min-width: 190px;
-  max-width: 210px;
+  gap: 6px;
+  min-width: 180px;
+  max-width: 200px;
+  flex-shrink: 0;
 }
+.legend h3 { margin: 0; color: #eee; font-size: 0.88rem; }
+.legend hr  { border: none; border-top: 1px solid #333; margin: 3px 0; }
 
-.legend h3 { margin: 0; color: #eee; font-size: 0.92rem; }
-.legend hr  { border: none; border-top: 1px solid #333; margin: 4px 0; }
-
-/* ===== Тост с ошибкой — снизу экрана ===== */
 .toastError {
   position: fixed;
   bottom: 28px;

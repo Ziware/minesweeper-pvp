@@ -1,0 +1,98 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px;
+}
+
+.modal {
+  background: #16213e;
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 580px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.7);
+  color: #dde;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: #0f3460;
+  border: none;
+  color: #eee;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.closeBtn:hover { background: #e74c3c; }
+
+.title {
+  margin: 0 0 20px 0;
+  font-size: 1.5rem;
+  color: #eee;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+section h3 {
+  margin: 0 0 6px 0;
+  font-size: 1rem;
+  color: #7af;
+}
+
+section p, section ul {
+  margin: 4px 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #bbc;
+}
+
+section ul {
+  padding-left: 20px;
+}
+
+section ul li {
+  margin-bottom: 4px;
+}
+
+.phase {
+  background: #0d1f36;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 8px;
+}
+
+.phaseTitle {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #ffe066;
+  margin-bottom: 6px;
+}
+
+kbd {
+  background: #0f3460;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-family: monospace;
+  color: #eee;
+}

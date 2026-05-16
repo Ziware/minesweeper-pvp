@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSocket } from './hooks/useSocket';
 import { Lobby }     from './components/Lobby/Lobby';
 import { MineSetup } from './components/MineSetup/MineSetup';
 import { Board }     from './components/Board/Board';
 import { GameInfo }  from './components/GameInfo/GameInfo';
+import { HelpModal } from './components/HelpModal/HelpModal';
 import styles from './App.module.css';
 
 export default function App() {
@@ -13,6 +14,8 @@ export default function App() {
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, placeMinePhase3, toggleMark,
   } = useSocket();
+
+  const [showHelp, setShowHelp] = useState(false);
 
   if (screen === 'lobby') {
     return <Lobby onCreateRoom={createRoom} onJoinRoom={joinRoom} errorMsg={errorMsg} />;
@@ -43,9 +46,9 @@ export default function App() {
   }
 
   if (screen === 'finished') {
-    const winner = gameOver?.winnerColor ?? gameState?.winnerColor;
-    const isWinner = winner === myColor;
-    const reason = gameOver?.reason;
+    const winner    = gameOver?.winnerColor ?? gameState?.winnerColor;
+    const isWinner  = winner === myColor;
+    const reason    = gameOver?.reason;
     return (
       <div className={styles.centered}>
         <div className={styles.waitCard}>
@@ -56,7 +59,7 @@ export default function App() {
               {winner === 'red' ? '🔴 Красный' : '🔵 Синий'}
             </span>
           </p>
-          {reason === 'lives'         && <p>Причина: потеряны все жизни</p>}
+          {reason === 'lives'          && <p>Причина: потеряны все жизни</p>}
           {reason === 'no_mines_space' && <p>Причина: нет места для мин</p>}
           <button className={styles.replayBtn} onClick={() => window.location.reload()}>
             Играть снова
@@ -69,17 +72,29 @@ export default function App() {
   if (screen === 'game' && gameState && myColor) {
     return (
       <div className={styles.gameLayout}>
+        {/* Шапка */}
         <div className={styles.gameHeader}>
           <h2 className={styles.logo}>💣 Minesweeper PvP</h2>
           <span className={styles.roomBadge}>Комната: {roomId}</span>
-          <span className={styles.colorBadge} style={{ color: myColor === 'red' ? '#e74c3c' : '#3498db' }}>
+          <span
+            className={styles.colorBadge}
+            style={{ color: myColor === 'red' ? '#e74c3c' : '#3498db' }}
+          >
             Вы: {myColor === 'red' ? '🔴 Красный' : '🔵 Синий'}
           </span>
+          {/* Кнопка помощи */}
+          <button className={styles.helpBtn} onClick={() => setShowHelp(true)}>
+            ❓ Правила
+          </button>
         </div>
 
+        {/* Игровое поле */}
         <div className={styles.gameBody}>
-          <GameInfo gameState={gameState} myColor={myColor} onEndPhase2={endPhase2} />
-
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            onEndPhase2={endPhase2}
+          />
           <Board
             gameState={gameState}
             myColor={myColor}
@@ -89,7 +104,6 @@ export default function App() {
             onPlaceMinePhase3={placeMinePhase3}
             onToggleMark={toggleMark}
           />
-
           <div className={styles.legend}>
             <h3>Управление</h3>
             <div>🖱️ ЛКМ — действие</div>
@@ -98,17 +112,16 @@ export default function App() {
             <hr />
             <h3>Фазы хода</h3>
             <div>1️⃣ Выбор зоны 3×3</div>
-            <div>2️⃣ Захват клеток (зона 5×5)</div>
+            <div>2️⃣ Захват (зона 5×5)</div>
             <div>3️⃣ Поставить 2 мины</div>
           </div>
         </div>
 
-        {/* Тост с ошибкой — снизу экрана */}
-        {errorMsg && (
-          <div className={styles.toastError}>
-            {errorMsg}
-          </div>
-        )}
+        {/* Тост с ошибкой */}
+        {errorMsg && <div className={styles.toastError}>{errorMsg}</div>}
+
+        {/* Модалка правил */}
+        {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       </div>
     );
   }

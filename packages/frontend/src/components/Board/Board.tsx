@@ -13,19 +13,39 @@ interface BoardProps {
   onToggleMark: (row: number, col: number, mark: CellMark) => void;
 }
 
-// Проверяем принадлежность клетки к зоне NxN с центром в (centerRow, centerCol)
-// Зона может частично выходить за поле — это нормально
 function inZoneWithCenter(
-  r: number,
-  c: number,
-  centerRow: number,
-  centerCol: number,
-  halfSize: number  // 1 для 3x3, 2 для 5x5
+  r: number, c: number,
+  centerRow: number, centerCol: number,
+  halfSize: number
 ): boolean {
   return (
     r >= centerRow - halfSize && r <= centerRow + halfSize &&
     c >= centerCol - halfSize && c <= centerCol + halfSize
   );
+}
+
+// Вычисляем размер клетки в зависимости от размера экрана и boardSize
+function useCellSize(boardSize: number): number {
+  const [cellSize, setCellSize] = React.useState(44);
+
+  React.useEffect(() => {
+    function calc() {
+      // Оставляем место для GameInfo (260px) + Legend (210px) + gaps + padding
+      const reservedW = 260 + 210 + 24 * 4 + 32;
+      const reservedH = 60 + 44 + 80; // header + bottomBar + padding
+      const availW = window.innerWidth  - reservedW;
+      const availH = window.innerHeight - reservedH;
+      const maxByW = Math.floor(availW / boardSize);
+      const maxByH = Math.floor(availH / boardSize);
+      const size   = Math.max(28, Math.min(56, maxByW, maxByH));
+      setCellSize(size);
+    }
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [boardSize]);
+
+  return cellSize;
 }
 
 export function Board({
@@ -40,8 +60,9 @@ export function Board({
   const { board, turn, config } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
 
-  // Восстанавливаем центр из selectedZone (topLeft + 1) и actionZone (topLeft + 2)
-  // selectedZone.row = centerRow - 1  =>  centerRow = selectedZone.row + 1
+  const cellSize = useCellSize(config.boardSize);
+
+  // Центр зон из selectedZone/actionZone
   const displayCenter = turn.selectedZone
     ? { row: turn.selectedZone.row + 1, col: turn.selectedZone.col + 1 }
     : null;
@@ -49,7 +70,6 @@ export function Board({
     ? { row: turn.actionZone.row + 2, col: turn.actionZone.col + 2 }
     : null;
 
-  // Клетка под курсором (для превью в phase1)
   const [hoverCell, setHoverCell] = useState<{ row: number; col: number } | null>(null);
 
   const isInDisplayZone = useCallback(
@@ -76,32 +96,23 @@ export function Board({
 
   const handleClick = (r: number, c: number, e: React.MouseEvent) => {
     if (!isMyTurn) return;
-    const cell = board[r][c];
+    const cell  = board[r][c];
     const phase = turn.phase;
 
     if (phase === 'phase1') {
-      // Передаём координаты кликнутой клетки — она и будет центром зон
       onSelectZone(r, c);
       return;
     }
-
     if (phase === 'phase2') {
       if (e.ctrlKey || e.metaKey) {
-        if (cell.owner !== myColor && isInActionZone(r, c)) {
-          onDefuseCell(r, c);
-        }
+        if (cell.owner !== myColor && isInActionZone(r, c)) onDefuseCell(r, c);
         return;
       }
-      if (cell.owner !== myColor && isInActionZone(r, c)) {
-        onCaptureCell(r, c);
-      }
+      if (cell.owner !== myColor && isInActionZone(r, c)) onCaptureCell(r, c);
       return;
     }
-
     if (phase === 'phase3') {
-      if (cell.owner === myColor && cell.hasMine === false) {
-        onPlaceMinePhase3(r, c);
-      }
+      if (cell.owner === myColor && cell.hasMine === false) onPlaceMinePhase3(r, c);
     }
   };
 
@@ -109,22 +120,20 @@ export function Board({
     e.preventDefault();
     const cell = board[r][c];
     const next: Record<CellMark, CellMark> = {
-      none: 'flag',
-      flag: 'question',
-      question: 'none',
+      none: 'flag', flag: 'question', question: 'none',
     };
     onToggleMark(r, c, next[cell.mark]);
   };
 
   const getZoneType = (r: number, c: number): 'display' | 'action' | 'none' => {
     if (isInDisplayZone(r, c)) return 'display';
-    if (isInActionZone(r, c)) return 'action';
+    if (isInActionZone(r, c))  return 'action';
     return 'none';
   };
 
   const getHoverZoneType = (r: number, c: number): 'display' | 'action' | 'none' => {
     if (isInHoverDisplay(r, c)) return 'display';
-    if (isInHoverAction(r, c)) return 'action';
+    if (isInHoverAction(r, c))  return 'action';
     return 'none';
   };
 
@@ -134,18 +143,23 @@ export function Board({
     <div className={styles.wrapper}>
       <div
         className={styles.board}
-        style={{ gridTemplateColumns: `repeat(${config.boardSize}, 44px)` }}
+        style={{
+          gridTemplateColumns: `repeat(${config.boardSize}, ${cellSize}px)`,
+        }}
       >
         {board.map((row, r) =>
           row.map((cell, c) => {
             const activeZone = getZoneType(r, c);
-            const hoverZone = getHoverZoneType(r, c);
-            const finalZone = activeZone !== 'none' ? activeZone : hoverZone;
-            const isHover = activeZone === 'none' && hoverZone !== 'none';
+            const hoverZone  = getHoverZoneType(r, c);
+            const finalZone  = activeZone !== 'none' ? activeZone : hoverZone;
+            const isHover    = activeZone === 'none' && hoverZone !== 'none';
+            // Клетка в активной зоне (не превью) — скрываем мину
+            const isInActive = activeZone !== 'none';
 
             return (
               <div
                 key={`${r}-${c}`}
+                style={{ width: cellSize, height: cellSize }}
                 onMouseEnter={() => setHoverCell({ row: r, col: c })}
                 onMouseLeave={() => setHoverCell(null)}
               >
@@ -156,8 +170,8 @@ export function Board({
                   myColor={myColor}
                   zoneType={finalZone}
                   isHover={isHover}
+                  isInActiveZone={isInActive}
                   gamePhase={turn.phase}
-                  canDefuse={turn.canDefuse}
                   isMyTurn={isMyTurn}
                   onClick={(e) => handleClick(r, c, e)}
                   onRightClick={(e) => handleRightClick(e, r, c)}
@@ -168,7 +182,6 @@ export function Board({
         )}
       </div>
 
-      {/* Нижняя панель — фиксированная высота, доска не двигается */}
       <div className={styles.bottomBar}>
         {showLegend && (
           <div className={styles.zoneLegend}>

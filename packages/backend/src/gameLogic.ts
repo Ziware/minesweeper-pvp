@@ -86,6 +86,31 @@ export function revealNumbersInDisplayZone(
   }
 }
 
+// Пересчитываем цифры для всех уже открытых клеток в зоне 3x3
+// Вызывается после любого изменения мин в зоне (захват, разминирование)
+export function refreshNumbersInDisplayZone(
+  board: CellState[][],
+  displayZoneRow: number,
+  displayZoneCol: number,
+  playerColor: PlayerColor,
+  config: GameConfig
+): void {
+  for (let dr = 0; dr < 3; dr++) {
+    for (let dc = 0; dc < 3; dc++) {
+      const r = displayZoneRow + dr;
+      const c = displayZoneCol + dc;
+      if (!isInBounds(r, c, config.boardSize)) continue;
+      const cell = board[r][c];
+      // Пересчитываем только уже открытые клетки игрока
+      if (cell.owner === playerColor && cell.isRevealed) {
+        cell.number = countAdjacentEnemyMines(
+          board, r, c, playerColor, config.boardSize
+        );
+      }
+    }
+  }
+}
+
 export function revealNumberForCell(
   board: CellState[][],
   row: number,
@@ -111,7 +136,6 @@ export function clearRevealedNumbers(board: CellState[][]): void {
   }
 }
 
-// Без зажима — центр строго в кликнутой клетке
 export function getDisplayZoneTopLeft(
   clickedRow: number,
   clickedCol: number,
@@ -126,8 +150,6 @@ export function getActionZoneTopLeft(
   return { row: clickedRow - 2, col: clickedCol - 2 };
 }
 
-// Проверка валидности зоны:
-// в 3x3 должна быть хотя бы одна клетка игрока БЕЗ мины
 export function isValidZoneSelection(
   board: CellState[][],
   displayZoneRow: number,
@@ -141,7 +163,6 @@ export function isValidZoneSelection(
       const c = displayZoneCol + dc;
       if (!isInBounds(r, c, config.boardSize)) continue;
       const cell = board[r][c];
-      // Свободная клетка игрока (без мины)
       if (cell.owner === playerColor && !cell.hasMine) {
         return true;
       }
@@ -164,14 +185,11 @@ export function canCaptureCell(
   if (cell.owner === playerColor) return false;
 
   const inActionZone =
-    row >= actionZoneRow &&
-    row < actionZoneRow + 5 &&
-    col >= actionZoneCol &&
-    col < actionZoneCol + 5 &&
+    row >= actionZoneRow && row < actionZoneRow + 5 &&
+    col >= actionZoneCol && col < actionZoneCol + 5 &&
     isInBounds(row, col, config.boardSize);
   if (!inActionZone) return false;
 
-  // Все 8 соседей (включая диагонали)
   for (let dr = -1; dr <= 1; dr++) {
     for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
@@ -189,7 +207,6 @@ export function canCaptureCell(
   return false;
 }
 
-
 export function countFreePlayerCells(
   board: CellState[][],
   playerColor: PlayerColor
@@ -203,7 +220,6 @@ export function countFreePlayerCells(
   return count;
 }
 
-// Статистика которую видят оба игрока открыто
 export interface BoardStats {
   redMines: number;
   blueMines: number;
@@ -227,10 +243,6 @@ export function computeBoardStats(board: CellState[][]): BoardStats {
   return { redMines, blueMines, redCells, blueCells };
 }
 
-// Формируем доску для игрока:
-// - свои клетки: hasMine виден
-// - чужие клетки с миной: hasMine скрыт (null), но сам факт owner виден
-// - isRevealed/number: только на своих клетках, поэтому передаём как есть
 export function getBoardForPlayer(
   board: CellState[][],
   playerColor: PlayerColor

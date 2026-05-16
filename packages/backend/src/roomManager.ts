@@ -11,6 +11,7 @@ import {
   createBoard,
   initBoard,
   revealNumbersInDisplayZone,
+  refreshNumbersInDisplayZone,
   revealNumberForCell,
   clearRevealedNumbers,
   isValidZoneSelection,
@@ -216,16 +217,20 @@ export class RoomManager {
 
   captureCell(
     room: Room, color: PlayerColor, row: number, col: number
-  ): { ok: boolean; hitMine: boolean; error?: string } {
-    if (room.turn.phase !== 'phase2') return { ok: false, hitMine: false, error: 'Not phase 2' };
-    if (room.turn.currentPlayer !== color) return { ok: false, hitMine: false, error: 'Not your turn' };
+  ): { ok: boolean; hitMine: boolean; gameOver: boolean; error?: string } {
+    if (room.turn.phase !== 'phase2') {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Not phase 2' };
+    }
+    if (room.turn.currentPlayer !== color) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Not your turn' };
+    }
 
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
     const captured    = room.turn.capturedThisTurn as Set<string>;
 
     if (!canCaptureCell(room.board, row, col, color, captured, actionZone.row, actionZone.col, room.config)) {
-      return { ok: false, hitMine: false, error: 'Cannot capture this cell' };
+      return { ok: false, hitMine: false, gameOver: false, error: 'Cannot capture this cell' };
     }
 
     const cell    = room.board[row][col];
@@ -233,7 +238,24 @@ export class RoomManager {
 
     if (hitMine) {
       cell.hasMine = false;
-      room.players.find((p) => p.color === color)!.lives--;
+      const player = room.players.find((p) => p.color === color)!;
+      player.lives--;
+
+      // Пересчитываем цифры после удаления мины
+      refreshNumbersInDisplayZone(
+        room.board, displayZone.row, displayZone.col, color, room.config
+      );
+
+      // Проверяем смерть сразу после взрыва
+      if (player.lives <= 0) {
+        const opponent = room.players.find((p) => p.color !== color)!;
+        room.winner    = opponent.color;
+        room.winReason = 'lives';
+        room.phase     = 'finished';
+        clearRevealedNumbers(room.board);
+        return { ok: true, hitMine: true, gameOver: true };
+      }
+
       room.turn.lastActionMessage = '💥 Вы наступили на мину! Потеряна жизнь.';
       this.startPhase3(room);
     } else {
@@ -248,19 +270,29 @@ export class RoomManager {
 
       if (inDisplayZone) {
         revealNumberForCell(room.board, row, col, color, room.config);
+        // Пересчитываем соседние клетки в зоне — их числа могли измениться
+        refreshNumbersInDisplayZone(
+          room.board, displayZone.row, displayZone.col, color, room.config
+        );
       }
       room.turn.lastActionMessage = null;
     }
 
-    return { ok: true, hitMine };
+    return { ok: true, hitMine, gameOver: false };
   }
 
   defuseCell(
     room: Room, color: PlayerColor, row: number, col: number
-  ): { ok: boolean; hadMine: boolean; error?: string } {
-    if (room.turn.phase !== 'phase2') return { ok: false, hadMine: false, error: 'Not phase 2' };
-    if (room.turn.currentPlayer !== color) return { ok: false, hadMine: false, error: 'Not your turn' };
-    if (!room.turn.canDefuse) return { ok: false, hadMine: false, error: 'Already defused this turn' };
+  ): { ok: boolean; hadMine: boolean; gameOver: boolean; error?: string } {
+    if (room.turn.phase !== 'phase2') {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Not phase 2' };
+    }
+    if (room.turn.currentPlayer !== color) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Not your turn' };
+    }
+    if (!room.turn.canDefuse) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Already defused this turn' };
+    }
 
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
@@ -270,10 +302,14 @@ export class RoomManager {
       col >= actionZone.col && col < actionZone.col + 5 &&
       isInBounds(row, col, room.config.boardSize);
 
-    if (!inActionZone) return { ok: false, hadMine: false, error: 'Cell not in action zone' };
+    if (!inActionZone) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Cell not in action zone' };
+    }
 
     const cell = room.board[row][col];
-    if (cell.owner === color) return { ok: false, hadMine: false, error: 'Cannot defuse own cell' };
+    if (cell.owner === color) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse own cell' };
+    }
 
     room.turn.canDefuse = false;
     const hadMine = cell.hasMine;
@@ -292,13 +328,19 @@ export class RoomManager {
       if (inDisplayZone) {
         revealNumberForCell(room.board, row, col, color, room.config);
       }
+
+      // Пересчитываем все числа в зоне 3x3 после разминирования
+      refreshNumbersInDisplayZone(
+        room.board, displayZone.row, displayZone.col, color, room.config
+      );
+
       room.turn.lastActionMessage = '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.';
     } else {
       room.turn.lastActionMessage = '⚠️ Мины не оказалось. Ход переходит к фазе 3.';
       this.startPhase3(room, room.turn.lastActionMessage);
     }
 
-    return { ok: true, hadMine };
+    return { ok: true, hadMine, gameOver: false };
   }
 
   private clearMarkOnCell(room: Room, row: number, col: number): void {
@@ -315,9 +357,12 @@ export class RoomManager {
   }
 
   private startPhase3(room: Room, message?: string): void {
+    // Убираем зоны и цифры при переходе в фазу 3
     clearRevealedNumbers(room.board);
-    room.turn.phase = 'phase3';
-    room.phase      = 'phase3';
+    room.turn.selectedZone = null;
+    room.turn.actionZone   = null;
+    room.turn.phase        = 'phase3';
+    room.phase             = 'phase3';
     room.turn.minesPlacedThisTurn = 0;
     if (message) room.turn.lastActionMessage = message;
   }
@@ -325,12 +370,20 @@ export class RoomManager {
   placeMinePhase3(
     room: Room, color: PlayerColor, row: number, col: number
   ): { ok: boolean; done: boolean; gameOver: boolean; error?: string } {
-    if (room.turn.phase !== 'phase3') return { ok: false, done: false, gameOver: false, error: 'Not phase 3' };
-    if (room.turn.currentPlayer !== color) return { ok: false, done: false, gameOver: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase3') {
+      return { ok: false, done: false, gameOver: false, error: 'Not phase 3' };
+    }
+    if (room.turn.currentPlayer !== color) {
+      return { ok: false, done: false, gameOver: false, error: 'Not your turn' };
+    }
 
     const cell = room.board[row][col];
-    if (cell.owner !== color) return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
-    if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
+    if (cell.owner !== color) {
+      return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
+    }
+    if (cell.hasMine) {
+      return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
+    }
 
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
@@ -344,9 +397,10 @@ export class RoomManager {
   }
 
   private checkAndFinishTurn(room: Room): boolean {
+    // Проверяем жизни текущего игрока (мог умереть раньше, но это доп. проверка)
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer)!;
     if (cur.lives <= 0) {
-      const opp = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
+      const opp  = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
       room.winner    = opp.color;
       room.winReason = 'lives';
       room.phase     = 'finished';
@@ -396,7 +450,7 @@ export class RoomManager {
         capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
       },
       config:      room.config,
-      stats:       computeBoardStats(room.board),   // ← открытая статистика
+      stats:       computeBoardStats(room.board),
       winnerColor: room.winner,
     };
   }

@@ -1,71 +1,39 @@
 .cell {
-  width: 44px;
-  height: 44px;
-  border-radius: 4px;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   user-select: none;
   border: 1px solid rgba(255,255,255,0.07);
   transition: filter 0.1s, box-shadow 0.1s;
-  position: relative;
   box-sizing: border-box;
 }
 
-/* ===== Цвета владельца — базовые ===== */
 .ownerRed  { background: #5c1a1a; }
 .ownerBlue { background: #1a3d5c; }
 .ownerNone { background: #1e1e2e; cursor: default; }
 
-/* ===== Мина — более насыщенный оттенок ТОГО ЖЕ цвета ===== */
-/* Красная клетка с миной: насыщеннее красный */
 .mineRed  { background: #8b1a1a !important; }
-/* Синяя клетка с миной: насыщеннее синий */
 .mineBlue { background: #1a4f80 !important; }
 
-/* ===== Зоны ===== */
-/* 3x3 — жёлтая рамка */
-.activeDisplay {
-  box-shadow: 0 0 0 2px #ffe066 inset;
-}
-.hoverDisplay {
-  box-shadow: 0 0 0 2px rgba(255,224,102,0.45) inset;
-}
-/* 5x5 — голубая рамка */
-.activeAction {
-  box-shadow: 0 0 0 2px #66d9ff inset;
-}
-.hoverAction {
-  box-shadow: 0 0 0 2px rgba(102,217,255,0.35) inset;
-}
+.activeDisplay { box-shadow: 0 0 0 2px #ffe066 inset; }
+.hoverDisplay  { box-shadow: 0 0 0 2px rgba(255,224,102,0.4) inset; }
+.activeAction  { box-shadow: 0 0 0 2px #66d9ff inset; }
+.hoverAction   { box-shadow: 0 0 0 2px rgba(102,217,255,0.3) inset; }
 
-/* Когда и зона и своя клетка — рамка поверх фона */
-.activeDisplay.ownerRed,
-.activeDisplay.ownerBlue {
-  /* рамка видна поверх фона владельца */
-}
-
-/* ===== Открытая клетка (фаза 1) ===== */
-/* Фон НЕ меняем — остаётся цвет владельца */
-/* Добавляем только внутреннее свечение */
-.revealed {
-  /* Не меняем background — пусть остаётся ownerRed/ownerBlue */
-}
-
-/* Когда открыта И в зоне 3x3 — желтая рамка + лёгкий glow */
 .revealed.activeDisplay {
-  box-shadow: 0 0 0 2px #ffe066 inset, 0 0 8px rgba(255,224,102,0.2);
+  box-shadow: 0 0 0 2px #ffe066 inset, 0 0 8px rgba(255,224,102,0.15);
 }
 
-/* ===== Фаза 3 ===== */
 .phase3Target { cursor: crosshair; }
 .phase3Target:hover {
   filter: brightness(1.4);
-  box-shadow: 0 0 8px rgba(255,220,50,0.35);
+  box-shadow: 0 0 8px rgba(255,220,50,0.3);
 }
 
-/* ===== Hover общий ===== */
 .cell:hover { filter: brightness(1.18); }
 .ownerNone:hover { filter: none; }

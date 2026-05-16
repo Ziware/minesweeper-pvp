@@ -10,8 +10,9 @@ interface CellProps {
   zoneType: 'display' | 'action' | 'none';
   isHover: boolean;
   gamePhase: string;
-  canDefuse: boolean;
   isMyTurn: boolean;
+  // Находится ли клетка в активной зоне (не превью)
+  isInActiveZone: boolean;
   onClick: (e: React.MouseEvent) => void;
   onRightClick: (e: React.MouseEvent) => void;
 }
@@ -30,30 +31,29 @@ const NUMBER_COLORS: Record<number, string> = {
 
 function getCellContent(
   cell: ClientCellState,
-  myColor: PlayerColor
+  myColor: PlayerColor,
+  isInActiveZone: boolean,
+  zoneType: 'display' | 'action' | 'none',
 ): React.ReactNode {
   if (cell.mark === 'flag')     return '🚩';
   if (cell.mark === 'question') return '❓';
 
-  // Цифры — только на своих открытых клетках
-  // При этом своя мина в зоне 3x3 СКРЫТА (isRevealed=true, но hasMine не показываем)
+  // В активной зоне 3x3 — показываем цифры, мины скрыты
   if (cell.isRevealed && cell.number !== null) {
     return (
-      <span
-        style={{
-          color: NUMBER_COLORS[cell.number] ?? '#eee',
-          fontWeight: 'bold',
-          fontSize: '1rem',
-          lineHeight: 1,
-        }}
-      >
+      <span style={{
+        color: NUMBER_COLORS[cell.number] ?? '#eee',
+        fontWeight: 'bold',
+        fontSize: '1rem',
+        lineHeight: 1,
+      }}>
         {cell.number}
       </span>
     );
   }
 
-  // Своя мина (НЕ в зоне 3x3, т.е. isRevealed=false) — показываем иконку
-  if (cell.hasMine === true && cell.owner === myColor) {
+  // Своя мина — показываем только если НЕ в активной зоне (3x3 или 5x5)
+  if (cell.hasMine === true && cell.owner === myColor && !isInActiveZone) {
     return '💣';
   }
 
@@ -67,28 +67,24 @@ export function Cell({
   isHover,
   gamePhase,
   isMyTurn,
+  isInActiveZone,
   onClick,
   onRightClick,
 }: CellProps) {
   const isOwn = cell.owner === myColor;
 
-  // Если клетка открыта (в зоне 3x3) — показываем обычный цвет владельца,
-  // но убираем иконку мины (она скрыта)
-  // revealed применяем только как доп-стиль для подсветки рамкой,
-  // НЕ меняем фон на серый
   const classNames = [
     styles.cell,
-    // Цвет фона строго по owner
     cell.owner === 'red'  ? styles.ownerRed  : '',
     cell.owner === 'blue' ? styles.ownerBlue : '',
     cell.owner === null   ? styles.ownerNone : '',
-    // Мина на своей клетке — более контрастный оттенок того же цвета
-    cell.hasMine === true && cell.owner === 'red'  ? styles.mineRed  : '',
-    cell.hasMine === true && cell.owner === 'blue' ? styles.mineBlue : '',
+    // Мина — контрастный оттенок, только если не в активной зоне
+    cell.hasMine === true && cell.owner === 'red'  && !isInActiveZone ? styles.mineRed  : '',
+    cell.hasMine === true && cell.owner === 'blue' && !isInActiveZone ? styles.mineBlue : '',
     // Зоны
     zoneType === 'display' ? (isHover ? styles.hoverDisplay : styles.activeDisplay) : '',
     zoneType === 'action'  ? (isHover ? styles.hoverAction  : styles.activeAction)  : '',
-    // Открытая клетка — только рамка, фон не меняем
+    // Открытая клетка
     cell.isRevealed ? styles.revealed : '',
     // Фаза 3
     gamePhase === 'phase3' && isMyTurn && isOwn && !cell.hasMine ? styles.phase3Target : '',
@@ -96,7 +92,7 @@ export function Cell({
 
   return (
     <div className={classNames} onClick={onClick} onContextMenu={onRightClick}>
-      {getCellContent(cell, myColor)}
+      {getCellContent(cell, myColor, isInActiveZone, zoneType)}
     </div>
   );
 }
