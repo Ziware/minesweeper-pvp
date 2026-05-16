@@ -1,0 +1,122 @@
+.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+.waitCard {
+  background: #16213e;
+  border-radius: 16px;
+  padding: 40px 56px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.5);
+}
+
+.waitCard h1, .waitCard h2 { margin: 0; }
+
+.roomId {
+  font-size: 2rem;
+  letter-spacing: 0.2em;
+  color: #f39c12;
+}
+
+.replayBtn {
+  margin-top: 8px;
+  padding: 12px 32px;
+  border-radius: 10px;
+  border: none;
+  background: #27ae60;
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+.replayBtn:hover { background: #2ecc71; }
+
+/* ===== Игровой экран ===== */
+.gameLayout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #eee;
+  /* Позиционирование для тоста */
+  position: relative;
+}
+
+.gameHeader {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+}
+
+.logo { margin: 0; font-size: 1.4rem; }
+
+.roomBadge {
+  background: #0f3460;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-family: monospace;
+  letter-spacing: 0.1em;
+}
+
+.colorBadge { font-weight: bold; font-size: 1rem; }
+
+.gameBody {
+  display: flex;
+  flex: 1;
+  gap: 24px;
+  padding: 24px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.legend {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 20px;
+  font-size: 0.88rem;
+  color: #bbb;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 190px;
+  max-width: 210px;
+}
+
+.legend h3 { margin: 0; color: #eee; font-size: 0.92rem; }
+.legend hr  { border: none; border-top: 1px solid #333; margin: 4px 0; }
+
+/* ===== Тост с ошибкой — снизу экрана ===== */
+.toastError {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c1515;
+  color: #ff8080;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-weight: bold;
+  font-size: 0.95rem;
+  border: 1px solid #e74c3c55;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 1000;
+  white-space: nowrap;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(16px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

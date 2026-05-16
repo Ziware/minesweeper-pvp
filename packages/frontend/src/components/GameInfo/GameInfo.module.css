@@ -1,0 +1,166 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  background: #16213e;
+  border-radius: 14px;
+  color: #eee;
+  min-width: 230px;
+  max-width: 260px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* Статус хода */
+.turnStatus {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+.myTurn {
+  background: linear-gradient(135deg, #1a472a, #27ae60);
+  box-shadow: 0 0 14px rgba(39,174,96,0.5);
+  animation: pulse 2s infinite;
+}
+.opponentTurn { background: #2c2c3a; color: #777; }
+.turnIcon { font-size: 1.2rem; }
+
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 14px rgba(39,174,96,0.4); }
+  50%      { box-shadow: 0 0 22px rgba(39,174,96,0.85); }
+}
+
+/* Игроки */
+.playersSection { display: flex; flex-direction: column; gap: 7px; }
+
+.playerCard {
+  padding: 9px 13px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 2px solid transparent;
+  transition: opacity .25s, filter .25s, box-shadow .25s;
+}
+.red  { background: #5c1a1a; }
+.blue { background: #1a3a5c; }
+
+.activePlayer {
+  opacity: 1;
+  filter: brightness(1.35);
+  border-color: rgba(255,255,255,0.5);
+  box-shadow: 0 0 16px rgba(255,255,255,0.12);
+}
+.inactivePlayer { opacity: 0.4; filter: brightness(0.65); }
+
+.playerHeader { display: flex; align-items: center; justify-content: space-between; }
+.playerLabel  { font-weight: bold; font-size: 0.92rem; }
+.activeBadge  {
+  font-size: 0.7rem;
+  background: rgba(255,255,255,0.22);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.hearts     { display: flex; gap: 2px; font-size: 0.95rem; }
+.heartFull  { opacity: 1; }
+.heartEmpty { opacity: 0.3; }
+
+/* Фаза */
+.phaseBox {
+  background: #0f3460;
+  border-radius: 10px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.phaseTitle { font-weight: bold; font-size: 0.88rem; }
+.phaseDesc  { font-size: 0.76rem; color: #9bb; line-height: 1.4; }
+
+/* Сообщение */
+.actionMessage {
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.messageDanger  { background: #3d1010; color: #ff8080; border-left: 3px solid #e74c3c; }
+.messageWarning { background: #3d2e00; color: #ffd97a; border-left: 3px solid #f39c12; }
+.messageSuccess { background: #0f3320; color: #7affaa; border-left: 3px solid #27ae60; }
+
+/* Статистика */
+.statsBlock {
+  background: #0d1f36;
+  border-radius: 10px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.statsTitle {
+  font-size: 0.82rem;
+  font-weight: bold;
+  color: #aac;
+  margin-bottom: 3px;
+}
+.statHeader {
+  font-size: 0.75rem;
+  color: #778;
+  font-weight: 600;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.83rem;
+  color: #bbb;
+}
+.statRow strong { color: #eee; }
+
+.redLabel  { color: #e88; }
+.blueLabel { color: #88c; }
+.redVal    { color: #faa !important; }
+.blueVal   { color: #aaf !important; }
+
+.statDivider {
+  height: 1px;
+  background: #1e3050;
+  margin: 3px 0;
+}
+
+.phase3Row { color: #f0c040; }
+.phase3Row strong { color: #ffe066; }
+
+/* Разминирование */
+.defuseStatus {
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.defuseAvailable { background: #1a3320; color: #7affaa; border: 1px solid #27ae6055; }
+.defuseUsed      { background: #222;    color: #666;    border: 1px solid #33333355; }
+
+/* Кнопка */
+.endPhaseBtn {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: #e67e22;
+  color: white;
+  font-size: 0.92rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.endPhaseBtn:hover { background: #f39c12; }

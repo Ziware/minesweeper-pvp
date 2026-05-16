@@ -1,0 +1,148 @@
+import React from 'react';
+import { S2C_GameState, PlayerColor } from '@minesweeper-pvp/shared';
+import styles from './GameInfo.module.css';
+
+interface GameInfoProps {
+  gameState: S2C_GameState;
+  myColor: PlayerColor;
+  onEndPhase2: () => void;
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  phase1: 'Фаза 1 — выбор зоны 3×3',
+  phase2: 'Фаза 2 — захват клеток',
+  phase3: 'Фаза 3 — расстановка мин',
+};
+
+const PHASE_DESCRIPTIONS: Record<string, string> = {
+  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша свободная клетка.',
+  phase2: 'Захватывайте вражеские клетки в зоне 5×5. Ctrl+Click — разминировать.',
+  phase3: 'Поставьте ровно 2 мины на свои свободные клетки.',
+};
+
+export function GameInfo({ gameState, myColor, onEndPhase2 }: GameInfoProps) {
+  const { players, turn, config, stats } = gameState;
+  const isMyTurn = turn.currentPlayer === myColor;
+
+  const redPlayer  = players.find((p) => p.color === 'red')!;
+  const bluePlayer = players.find((p) => p.color === 'blue')!;
+
+  // Флажки — из доски
+  const flagCount = gameState.board.flat().filter((c) => c.mark === 'flag').length;
+
+  const renderHearts = (lives: number, max: number) =>
+    Array.from({ length: max }, (_, i) => (
+      <span key={i} className={i < lives ? styles.heartFull : styles.heartEmpty}>
+        {i < lives ? '❤️' : '🖤'}
+      </span>
+    ));
+
+  return (
+    <div className={styles.panel}>
+      {/* Статус хода */}
+      <div className={`${styles.turnStatus} ${isMyTurn ? styles.myTurn : styles.opponentTurn}`}>
+        <span className={styles.turnIcon}>{isMyTurn ? '⚔️' : '⏳'}</span>
+        <span>{isMyTurn ? 'Ваш ход!' : 'Ход противника...'}</span>
+      </div>
+
+      {/* Карточки игроков */}
+      <div className={styles.playersSection}>
+        <div className={[
+          styles.playerCard, styles.red,
+          turn.currentPlayer === 'red' ? styles.activePlayer : styles.inactivePlayer,
+        ].join(' ')}>
+          <div className={styles.playerHeader}>
+            <span className={styles.playerLabel}>🔴 Красный</span>
+            {turn.currentPlayer === 'red' && <span className={styles.activeBadge}>ходит</span>}
+          </div>
+          <div className={styles.hearts}>{renderHearts(redPlayer.lives, config.maxLives)}</div>
+        </div>
+
+        <div className={[
+          styles.playerCard, styles.blue,
+          turn.currentPlayer === 'blue' ? styles.activePlayer : styles.inactivePlayer,
+        ].join(' ')}>
+          <div className={styles.playerHeader}>
+            <span className={styles.playerLabel}>🔵 Синий</span>
+            {turn.currentPlayer === 'blue' && <span className={styles.activeBadge}>ходит</span>}
+          </div>
+          <div className={styles.hearts}>{renderHearts(bluePlayer.lives, config.maxLives)}</div>
+        </div>
+      </div>
+
+      {/* Текущая фаза */}
+      <div className={styles.phaseBox}>
+        <div className={styles.phaseTitle}>{PHASE_LABELS[turn.phase] ?? turn.phase}</div>
+        {isMyTurn && <div className={styles.phaseDesc}>{PHASE_DESCRIPTIONS[turn.phase]}</div>}
+      </div>
+
+      {/* Сообщение */}
+      {turn.lastActionMessage && (
+        <div className={[
+          styles.actionMessage,
+          turn.lastActionMessage.startsWith('💥') ? styles.messageDanger  :
+          turn.lastActionMessage.startsWith('⚠️') ? styles.messageWarning :
+          styles.messageSuccess,
+        ].join(' ')}>
+          {turn.lastActionMessage}
+        </div>
+      )}
+
+      {/* ===== Статистика — открытая для обоих ===== */}
+      <div className={styles.statsBlock}>
+        <div className={styles.statsTitle}>📊 Статистика</div>
+
+        {/* Строка: мины */}
+        <div className={styles.statHeader}>Мины на поле</div>
+        <div className={styles.statRow}>
+          <span className={styles.redLabel}>🔴 Красный:</span>
+          <strong className={styles.redVal}>{stats.redMines}</strong>
+        </div>
+        <div className={styles.statRow}>
+          <span className={styles.blueLabel}>🔵 Синий:</span>
+          <strong className={styles.blueVal}>{stats.blueMines}</strong>
+        </div>
+
+        {/* Строка: клетки */}
+        <div className={styles.statHeader}>Клеток во владении</div>
+        <div className={styles.statRow}>
+          <span className={styles.redLabel}>🔴 Красный:</span>
+          <strong className={styles.redVal}>{stats.redCells}</strong>
+        </div>
+        <div className={styles.statRow}>
+          <span className={styles.blueLabel}>🔵 Синий:</span>
+          <strong className={styles.blueVal}>{stats.blueCells}</strong>
+        </div>
+
+        {/* Флажки */}
+        <div className={styles.statDivider} />
+        <div className={styles.statRow}>
+          <span>🚩 Флажков:</span>
+          <strong>{flagCount}</strong>
+        </div>
+
+        {/* Фаза 3 */}
+        {turn.phase === 'phase3' && isMyTurn && (
+          <div className={`${styles.statRow} ${styles.phase3Row}`}>
+            <span>📍 Поставлено мин:</span>
+            <strong>{turn.minesPlacedThisTurn} / {config.minesPerTurn}</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Разминирование */}
+      {turn.phase === 'phase2' && (
+        <div className={`${styles.defuseStatus} ${turn.canDefuse ? styles.defuseAvailable : styles.defuseUsed}`}>
+          {turn.canDefuse ? '🔧 Разминирование доступно' : '🔧 Разминирование использовано'}
+        </div>
+      )}
+
+      {/* Кнопка завершить фазу 2 */}
+      {isMyTurn && turn.phase === 'phase2' && (
+        <button className={styles.endPhaseBtn} onClick={onEndPhase2}>
+          Завершить захват →
+        </button>
+      )}
+    </div>
+  );
+}

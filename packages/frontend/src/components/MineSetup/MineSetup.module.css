@@ -1,0 +1,113 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #1a1a2e;
+  color: #eee;
+  gap: 16px;
+  padding: 24px;
+}
+
+.title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: #aaa;
+  margin: 0;
+}
+
+.board {
+  display: grid;
+  gap: 2px;
+}
+
+.cell {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  user-select: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: filter 0.15s;
+}
+
+.clickable { cursor: pointer; }
+.clickable:hover { filter: brightness(1.35); }
+
+.red   { background: #6b1f1f; }
+.blue  { background: #1f3a6b; }
+.enemy { background: #2a2a2a; cursor: default; }
+.mine  { background: #7d2d2d !important; }
+
+/* Кнопка подтверждения */
+.confirmBtn {
+  margin-top: 8px;
+  padding: 14px 32px;
+  border-radius: 10px;
+  border: none;
+  background: #27ae60;
+  color: white;
+  font-size: 1.05rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.confirmBtn:disabled {
+  background: #444;
+  cursor: not-allowed;
+  color: #888;
+}
+
+.confirmBtn:not(:disabled):hover { background: #2ecc71; }
+
+/* Ожидание соперника */
+.waitingBox {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #0f3460;
+  border-radius: 12px;
+  padding: 16px 24px;
+  min-width: 300px;
+}
+
+.waitingSpinner {
+  font-size: 2rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.waitingText {
+  font-size: 1rem;
+  font-weight: bold;
+  line-height: 1.5;
+}
+
+.waitingSubtext {
+  font-size: 0.85rem;
+  color: #7ab;
+  font-weight: normal;
+}
+
+.error {
+  color: #e74c3c;
+  background: #2c1515;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+}

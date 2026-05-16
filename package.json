@@ -1,0 +1,15 @@
+{
+  "name": "minesweeper-pvp",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "yarn workspace @minesweeper-pvp/backend dev",
+    "dev:frontend": "yarn workspace @minesweeper-pvp/frontend dev",
+    "dev": "concurrently \"yarn dev:backend\" \"yarn dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
