@@ -336,6 +336,9 @@ export class RoomManager {
 
       room.turn.lastActionMessage = '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.';
     } else {
+      this.clearMarkOnCell(room, row, col);
+      cell.owner   = color;
+      (room.turn.capturedThisTurn as Set<string>).add(`${row},${col}`);
       room.turn.lastActionMessage = '⚠️ Мины не оказалось. Ход переходит к фазе 3.';
       this.startPhase3(room, room.turn.lastActionMessage);
     }
