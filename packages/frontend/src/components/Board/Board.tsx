@@ -37,7 +37,7 @@ function useCellSize(boardSize: number): number {
       const availH = window.innerHeight - reservedH;
       const maxByW = Math.floor(availW / boardSize);
       const maxByH = Math.floor(availH / boardSize);
-      const size   = Math.max(28, Math.min(56, maxByW, maxByH));
+      const size   = Math.max(48, Math.min(64, maxByW, maxByH));
       setCellSize(size);
     }
     calc();

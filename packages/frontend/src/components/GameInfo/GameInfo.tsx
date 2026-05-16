@@ -15,9 +15,9 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const PHASE_DESCRIPTIONS: Record<string, string> = {
-  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша свободная клетка.',
+  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша захваченная клетка.',
   phase2: 'Захватывайте вражеские клетки в зоне 5×5. Ctrl+Click — разминировать.',
-  phase3: 'Поставьте ровно 2 мины на свои свободные клетки.',
+  phase3: 'Поставьте ровно 3 мины на свои свободные клетки.',
 };
 
 export function GameInfo({ gameState, myColor, onEndPhase2 }: GameInfoProps) {

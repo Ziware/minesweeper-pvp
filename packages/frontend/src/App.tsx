@@ -113,7 +113,7 @@ export default function App() {
             <h3>Фазы хода</h3>
             <div>1️⃣ Выбор зоны 3×3</div>
             <div>2️⃣ Захват (зона 5×5)</div>
-            <div>3️⃣ Поставить 2 мины</div>
+            <div>3️⃣ Поставить 3 мины</div>
           </div>
         </div>
 

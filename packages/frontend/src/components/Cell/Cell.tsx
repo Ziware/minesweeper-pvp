@@ -11,7 +11,6 @@ interface CellProps {
   isHover: boolean;
   gamePhase: string;
   isMyTurn: boolean;
-  // Находится ли клетка в активной зоне (не превью)
   isInActiveZone: boolean;
   onClick: (e: React.MouseEvent) => void;
   onRightClick: (e: React.MouseEvent) => void;
@@ -33,12 +32,11 @@ function getCellContent(
   cell: ClientCellState,
   myColor: PlayerColor,
   isInActiveZone: boolean,
-  zoneType: 'display' | 'action' | 'none',
 ): React.ReactNode {
-  if (cell.mark === 'flag')     return '🚩';
-  if (cell.mark === 'question') return '❓';
+  if (cell.mark === 'flag')     return <span className={styles.icon}>🚩</span>;
+  if (cell.mark === 'question') return <span className={styles.icon}>❓</span>;
 
-  // В активной зоне 3x3 — показываем цифры, мины скрыты
+  // Цифры на открытых своих клетках в зоне 3x3
   if (cell.isRevealed && cell.number !== null) {
     return (
       <span style={{
@@ -52,9 +50,10 @@ function getCellContent(
     );
   }
 
-  // Своя мина — показываем только если НЕ в активной зоне (3x3 или 5x5)
+  // Своя мина: показываем иконку только если НЕ в активной зоне
+  // Цвет фона (mineRed/mineBlue) остаётся всегда через CSS-класс
   if (cell.hasMine === true && cell.owner === myColor && !isInActiveZone) {
-    return '💣';
+    return <span className={styles.icon}>💣</span>;
   }
 
   return null;
@@ -78,9 +77,10 @@ export function Cell({
     cell.owner === 'red'  ? styles.ownerRed  : '',
     cell.owner === 'blue' ? styles.ownerBlue : '',
     cell.owner === null   ? styles.ownerNone : '',
-    // Мина — контрастный оттенок, только если не в активной зоне
-    cell.hasMine === true && cell.owner === 'red'  && !isInActiveZone ? styles.mineRed  : '',
-    cell.hasMine === true && cell.owner === 'blue' && !isInActiveZone ? styles.mineBlue : '',
+    // Цвет мины — показываем ВСЕГДА когда есть мина на своей клетке
+    // (иконка скрыта в зоне, но цвет фона остаётся)
+    cell.hasMine === true && cell.owner === 'red'  ? styles.mineRed  : '',
+    cell.hasMine === true && cell.owner === 'blue' ? styles.mineBlue : '',
     // Зоны
     zoneType === 'display' ? (isHover ? styles.hoverDisplay : styles.activeDisplay) : '',
     zoneType === 'action'  ? (isHover ? styles.hoverAction  : styles.activeAction)  : '',
@@ -92,7 +92,7 @@ export function Cell({
 
   return (
     <div className={classNames} onClick={onClick} onContextMenu={onRightClick}>
-      {getCellContent(cell, myColor, isInActiveZone, zoneType)}
+      {getCellContent(cell, myColor, isInActiveZone)}
     </div>
   );
 }

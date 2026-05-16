@@ -10,7 +10,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   boardSize: 10,
   totalMines: 7,
   maxLives: 3,
-  minesPerTurn: 2,
+  minesPerTurn: 3,
   initialMines: 7,
 };
 
@@ -162,8 +162,7 @@ export function isValidZoneSelection(
       const r = displayZoneRow + dr;
       const c = displayZoneCol + dc;
       if (!isInBounds(r, c, config.boardSize)) continue;
-      const cell = board[r][c];
-      if (cell.owner === playerColor && !cell.hasMine) {
+      if (board[r][c].owner === playerColor) {
         return true;
       }
     }

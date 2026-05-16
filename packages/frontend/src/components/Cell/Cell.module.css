@@ -11,15 +11,30 @@
   border: 1px solid rgba(255,255,255,0.07);
   transition: filter 0.1s, box-shadow 0.1s;
   box-sizing: border-box;
+  position: relative;
 }
 
+/* Иконки занимают ~75% размера клетки */
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 75%;
+  height: 75%;
+  font-size: clamp(14px, 4vw, 32px);
+  line-height: 1;
+}
+
+/* ===== Цвета владельца ===== */
 .ownerRed  { background: #5c1a1a; }
 .ownerBlue { background: #1a3d5c; }
 .ownerNone { background: #1e1e2e; cursor: default; }
 
+/* ===== Мина — насыщеннее, показывается ВСЕГДА (иконка скрывается в зоне, цвет нет) ===== */
 .mineRed  { background: #8b1a1a !important; }
 .mineBlue { background: #1a4f80 !important; }
 
+/* ===== Зоны ===== */
 .activeDisplay { box-shadow: 0 0 0 2px #ffe066 inset; }
 .hoverDisplay  { box-shadow: 0 0 0 2px rgba(255,224,102,0.4) inset; }
 .activeAction  { box-shadow: 0 0 0 2px #66d9ff inset; }
@@ -29,6 +44,7 @@
   box-shadow: 0 0 0 2px #ffe066 inset, 0 0 8px rgba(255,224,102,0.15);
 }
 
+/* ===== Фаза 3 ===== */
 .phase3Target { cursor: crosshair; }
 .phase3Target:hover {
   filter: brightness(1.4);
