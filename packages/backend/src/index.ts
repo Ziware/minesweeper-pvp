@@ -24,39 +24,45 @@ function broadcastGameState(roomId: string) {
     io.to(player.id).emit('gameState', state as any);
   }
   if (room.winner) {
-    io.to(roomId).emit('gameOver', {
-      winnerColor: room.winner,
-      reason: room.winReason || 'lives',
-    });
+    for (const player of room.players) {
+      io.to(player.id).emit('gameOver', {
+        winnerColor: room.winner!,
+        reason: room.winReason || 'lives',
+      });
+    }
   }
 }
 
 io.on('connection', (socket) => {
-  console.log('Connected:', socket.id);
+  console.log('[connect]', socket.id);
 
-  // Восстановление сессии после перезагрузки
-  socket.on('restoreSession', ({ roomId, playerColor }) => {
-    const room = roomManager.restoreSession(socket.id, roomId, playerColor);
-    if (!room) {
-      socket.emit('error', { message: 'Session expired or room not found' });
+  socket.on('restoreSession', ({ roomId, playerColor, tabId }) => {
+    const result = roomManager.restoreSession(socket.id, roomId, playerColor, tabId);
+    if (!result.room) {
+      socket.emit('error', { message: result.error || 'Session expired or room not found' });
       return;
     }
-    socket.join(room.id);
+    socket.join(result.room.id);
     socket.emit('sessionRestored', { playerColor, roomId });
-    const state = roomManager.getGameStateForPlayer(room, playerColor);
+    const state = roomManager.getGameStateForPlayer(result.room, playerColor);
     socket.emit('gameState', state as any);
-    console.log(`Session restored: ${playerColor} in room ${roomId}`);
+    console.log(`[restore] ${playerColor} tab=${tabId} room=${roomId}`);
   });
 
   socket.on('createRoom', ({ playerName }) => {
-    const room = roomManager.createRoom(socket.id, playerName);
+    // tabId берём из handshake query если нужен, но проще получить через restoreSession
+    // При createRoom tabId не нужен — он придёт при первом restoreSession
+    // Используем socket.id как временный tabId до получения реального
+    const tabId = (socket.handshake.query.tabId as string) || socket.id;
+    const room  = roomManager.createRoom(socket.id, tabId, playerName);
     socket.join(room.id);
     socket.emit('roomCreated', { roomId: room.id, playerColor: 'red' });
     socket.emit('waitingForOpponent');
   });
 
   socket.on('joinRoom', ({ roomId, playerName }) => {
-    const room = roomManager.joinRoom(socket.id, roomId.toUpperCase(), playerName);
+    const tabId = (socket.handshake.query.tabId as string) || socket.id;
+    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName);
     if (!room) {
       socket.emit('error', { message: 'Room not found or full' });
       return;
@@ -70,8 +76,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.placeMineSetup(room, color, row, col);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.placeMineSetup(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -79,8 +85,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.confirmSetup(room, color);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.confirmSetup(room, color);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -88,8 +94,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.selectZone(room, color, row, col);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.selectZone(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -97,8 +103,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.captureCell(room, color, row, col);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.captureCell(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -106,8 +112,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.defuseCell(room, color, row, col);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.defuseCell(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -115,8 +121,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.endPhase2(room, color);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.endPhase2(room, color);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -124,8 +130,8 @@ io.on('connection', (socket) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
     if (!room || !color) return;
-    const result = roomManager.placeMinePhase3(room, color, row, col);
-    if (!result.ok) { socket.emit('error', { message: result.error! }); return; }
+    const r = roomManager.placeMinePhase3(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
   });
 
@@ -140,7 +146,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     const { room } = roomManager.removePlayer(socket.id);
-    if (room) console.log(`Player left room ${room.id}`);
+    if (room) console.log(`[disconnect] left room ${room.id}`);
   });
 });
 

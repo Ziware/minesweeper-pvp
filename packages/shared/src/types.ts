@@ -27,7 +27,7 @@ export interface ClientCellState {
 export interface PlayerState {
   id: string;
   color: PlayerColor;
-  name: string;          // ← имя игрока
+  name: string;
   lives: number;
   minesPlaced: number;
   connected: boolean;
@@ -94,7 +94,6 @@ export interface ServerToClientEvents {
   error:              (data: S2C_Error) => void;
   gameOver:           (data: S2C_GameOver) => void;
   waitingForOpponent: () => void;
-  // Восстановление сессии после перезагрузки
   sessionRestored:    (data: { playerColor: PlayerColor; roomId: string }) => void;
 }
 
@@ -109,6 +108,6 @@ export interface ClientToServerEvents {
   placeMinePhase3: (data: C2S_PlaceMinePhase3) => void;
   endPhase2:       () => void;
   toggleMark:      (data: C2S_ToggleMark) => void;
-  // Восстановление сессии
-  restoreSession:  (data: { roomId: string; playerColor: PlayerColor }) => void;
+  // tabId позволяет серверу различать вкладки одного устройства
+  restoreSession:  (data: { roomId: string; playerColor: PlayerColor; tabId: string }) => void;
 }
