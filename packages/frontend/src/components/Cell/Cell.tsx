@@ -9,6 +9,7 @@ interface CellProps {
   myColor: PlayerColor;
   zoneType: 'display' | 'action' | 'none';
   isHover: boolean;
+  isHeadquarters: boolean;
   gamePhase: string;
   isMyTurn: boolean;
   isInActiveZone: boolean;
@@ -32,7 +33,10 @@ function getCellContent(
   cell: ClientCellState,
   myColor: PlayerColor,
   isInActiveZone: boolean,
+  isHeadquarters: boolean,
 ): React.ReactNode {
+  if (isHeadquarters) return <span className={styles.icon}>🏰</span>;
+
   if (cell.mark === 'flag')     return <span className={styles.icon}>🚩</span>;
   if (cell.mark === 'question') return <span className={styles.icon}>❓</span>;
 
@@ -64,6 +68,7 @@ export function Cell({
   myColor,
   zoneType,
   isHover,
+  isHeadquarters,
   gamePhase,
   isMyTurn,
   isInActiveZone,
@@ -84,15 +89,17 @@ export function Cell({
     // Зоны
     zoneType === 'display' ? (isHover ? styles.hoverDisplay : styles.activeDisplay) : '',
     zoneType === 'action'  ? (isHover ? styles.hoverAction  : styles.activeAction)  : '',
+    // Штаб
+    isHeadquarters ? styles.headquarters : '',
     // Открытая клетка
     cell.isRevealed ? styles.revealed : '',
     // Фаза 3
-    gamePhase === 'phase3' && isMyTurn && isOwn && !cell.hasMine ? styles.phase3Target : '',
+    gamePhase === 'phase3' && isMyTurn && isOwn && !cell.hasMine && !isHeadquarters ? styles.phase3Target : '',
   ].filter(Boolean).join(' ');
 
   return (
     <div className={classNames} onClick={onClick} onContextMenu={onRightClick}>
-      {getCellContent(cell, myColor, isInActiveZone)}
+      {getCellContent(cell, myColor, isInActiveZone, isHeadquarters)}
     </div>
   );
 }

@@ -16,13 +16,14 @@ import {
   clearRevealedNumbers,
   isValidZoneSelection,
   canCaptureCell,
-  countFreePlayerCells,
   getBoardForPlayer,
   createInitialTurnState,
   getDisplayZoneTopLeft,
   getActionZoneTopLeft,
   isInBounds,
   computeBoardStats,
+  getHeadquartersOwner,
+  isPlayerCellReachable,
 } from './gameLogic';
 
 export interface PlayerState {
@@ -45,7 +46,7 @@ export interface Room {
   turn: TurnState;
   setupConfirmed: Set<PlayerColor>;
   winner?: PlayerColor;
-  winReason?: 'lives' | 'no_mines_space';
+  winReason?: 'lives' | 'headquarters' | 'territory';
   marks: Record<PlayerColor, Record<string, CellMark>>;
 }
 
@@ -94,6 +95,7 @@ export class RoomManager {
         minesPlacedThisTurn: 0,
         capturedThisTurn: new Set(),
         lastActionMessage: null,
+        turnsPlayed: { red: 0, blue: 0 },
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
@@ -244,6 +246,10 @@ export class RoomManager {
     if (player.setupConfirmed) return { ok: false, error: 'Already confirmed' };
     const cell = room.board[row][col];
     if (cell.owner !== color) return { ok: false, error: 'Not your cell' };
+    if (getHeadquartersOwner(row, col, room.config)) return { ok: false, error: 'Штаб нельзя заминировать' };
+    if (!isPlayerCellReachable(room.board, row, col, color, room.config)) {
+      return { ok: false, error: 'Мины можно ставить только в доступные клетки' };
+    }
     if (cell.hasMine) {
       cell.hasMine = false;
       player.minesPlaced--;
@@ -279,7 +285,7 @@ export class RoomManager {
     const displayZone = getDisplayZoneTopLeft(clickedRow, clickedCol);
     const actionZone  = getActionZoneTopLeft(clickedRow, clickedCol);
     if (!isValidZoneSelection(room.board, displayZone.row, displayZone.col, color, room.config)) {
-      return { ok: false, error: 'В зоне 3×3 нет ваших клеток' };
+      return { ok: false, error: 'В зоне 3×3 нет доступных клеток вашей территории' };
     }
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
@@ -296,8 +302,8 @@ export class RoomManager {
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
     const captured    = room.turn.capturedThisTurn as Set<string>;
-    if (!canCaptureCell(room.board, row, col, color, captured, actionZone.row, actionZone.col, room.config)) {
-      return { ok: false, hitMine: false, gameOver: false, error: 'Cannot capture this cell' };
+    if (!canCaptureCell(room.board, row, col, color, actionZone.row, actionZone.col, room.config)) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Клетка должна быть в зоне 5×5 и рядом с доступной клеткой вашей территории' };
     }
     const cell    = room.board[row][col];
     const hitMine = cell.hasMine;
@@ -311,6 +317,7 @@ export class RoomManager {
         room.winner    = opp.color;
         room.winReason = 'lives';
         room.phase     = 'finished';
+        room.turn.phase = 'finished';
         clearRevealedNumbers(room.board);
         return { ok: true, hitMine: true, gameOver: true };
       }
@@ -327,6 +334,9 @@ export class RoomManager {
       if (inDisplayZone) {
         revealNumberForCell(room.board, row, col, color, room.config);
         refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+      }
+      if (this.checkHeadquartersCapture(room, color, row, col)) {
+        return { ok: true, hitMine, gameOver: true };
       }
       room.turn.lastActionMessage = null;
     }
@@ -350,8 +360,8 @@ export class RoomManager {
     const displayZone = room.turn.selectedZone!;
     const captured    = room.turn.capturedThisTurn as Set<string>;
 
-    if (!canCaptureCell(room.board, row, col, color, captured, actionZone.row, actionZone.col, room.config)) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse this cell' };
+    if (!canCaptureCell(room.board, row, col, color, actionZone.row, actionZone.col, room.config)) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Клетка должна быть в зоне 5×5 и рядом с доступной клеткой вашей территории' };
     }
 
     const cell = room.board[row][col];
@@ -378,11 +388,17 @@ export class RoomManager {
       }
 
       refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+      if (this.checkHeadquartersCapture(room, color, row, col)) {
+        return { ok: true, hadMine, gameOver: true };
+      }
       room.turn.lastActionMessage = '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.';
     } else {
       this.clearMarkOnCell(room, row, col);
       cell.owner   = color;
       (room.turn.capturedThisTurn as Set<string>).add(`${row},${col}`);
+      if (this.checkHeadquartersCapture(room, color, row, col)) {
+        return { ok: true, hadMine, gameOver: true };
+      }
       room.turn.lastActionMessage = '⚠️ Мины не оказалось. Клетка захвачена. Ход переходит к фазе 3.';
       this.startPhase3(room, room.turn.lastActionMessage);
     }
@@ -416,8 +432,17 @@ export class RoomManager {
   placeMinePhase3(room: Room, color: PlayerColor, row: number, col: number) {
     if (room.turn.phase !== 'phase3') return { ok: false, done: false, gameOver: false, error: 'Not phase 3' };
     if (room.turn.currentPlayer !== color) return { ok: false, done: false, gameOver: false, error: 'Not your turn' };
+    if (room.turn.minesPlacedThisTurn >= room.config.minesPerTurn) {
+      return { ok: false, done: false, gameOver: false, error: 'Mine limit reached' };
+    }
     const cell = room.board[row][col];
     if (cell.owner !== color) return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
+    if (getHeadquartersOwner(row, col, room.config)) {
+      return { ok: false, done: false, gameOver: false, error: 'Штаб нельзя заминировать' };
+    }
+    if (!isPlayerCellReachable(room.board, row, col, color, room.config)) {
+      return { ok: false, done: false, gameOver: false, error: 'Мины можно ставить только в доступные клетки' };
+    }
     if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
@@ -429,6 +454,25 @@ export class RoomManager {
     return { ok: true, done: false, gameOver: false };
   }
 
+  endPhase3(room: Room, color: PlayerColor) {
+    if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Not phase 3' };
+    if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Not your turn' };
+    const gameOver = this.checkAndFinishTurn(room);
+    return { ok: true, gameOver };
+  }
+
+  private checkHeadquartersCapture(room: Room, color: PlayerColor, row: number, col: number): boolean {
+    const headquartersOwner = getHeadquartersOwner(row, col, room.config);
+    if (!headquartersOwner || headquartersOwner === color) return false;
+
+    room.winner = color;
+    room.winReason = 'headquarters';
+    room.phase = 'finished';
+    room.turn.phase = 'finished';
+    clearRevealedNumbers(room.board);
+    return true;
+  }
+
   private checkAndFinishTurn(room: Room): boolean {
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer)!;
     if (cur.lives <= 0) {
@@ -436,16 +480,31 @@ export class RoomManager {
       room.winner    = opp.color;
       room.winReason = 'lives';
       room.phase     = 'finished';
+      room.turn.phase = 'finished';
       return true;
     }
+
+    const turnsPlayed = {
+      ...room.turn.turnsPlayed,
+      [room.turn.currentPlayer]: room.turn.turnsPlayed[room.turn.currentPlayer] + 1,
+    };
+
+    if (
+      turnsPlayed.red >= room.config.turnLimitPerPlayer &&
+      turnsPlayed.blue >= room.config.turnLimitPerPlayer
+    ) {
+      const stats = computeBoardStats(room.board);
+      room.winner = stats.redCells >= stats.blueCells ? 'red' : 'blue';
+      room.winReason = 'territory';
+      room.phase = 'finished';
+      room.turn.phase = 'finished';
+      room.turn.turnsPlayed = turnsPlayed;
+      clearRevealedNumbers(room.board);
+      return true;
+    }
+
     const nextColor: PlayerColor = room.turn.currentPlayer === 'red' ? 'blue' : 'red';
-    if (countFreePlayerCells(room.board, nextColor) < room.config.minesPerTurn) {
-      room.winner    = room.turn.currentPlayer;
-      room.winReason = 'no_mines_space';
-      room.phase     = 'finished';
-      return true;
-    }
-    room.turn  = createInitialTurnState(nextColor);
+    room.turn  = createInitialTurnState(nextColor, turnsPlayed);
     room.phase = 'phase1';
     return false;
   }

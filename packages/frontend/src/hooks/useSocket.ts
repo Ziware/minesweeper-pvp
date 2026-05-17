@@ -13,7 +13,7 @@ export type GameScreen = 'lobby' | 'waiting' | 'setup' | 'game' | 'finished';
 
 export interface GameOverInfo {
   winnerColor: PlayerColor;
-  reason: 'no_mines_space' | 'lives';
+  reason: 'lives' | 'headquarters' | 'territory';
 }
 
 const SOCKET_URL =
@@ -191,6 +191,8 @@ export function useSocket() {
     socketRef.current?.emit('defuseCell',      { row, col });
   const endPhase2       = () =>
     socketRef.current?.emit('endPhase2');
+  const endPhase3       = () =>
+    socketRef.current?.emit('endPhase3');
   const placeMinePhase3 = (row: number, col: number) =>
     socketRef.current?.emit('placeMinePhase3', { row, col });
   const toggleMark      = (row: number, col: number, mark: CellMark) =>
@@ -200,6 +202,6 @@ export function useSocket() {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
-    selectZone, captureCell, defuseCell, endPhase2, placeMinePhase3, toggleMark,
+    selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
   };
 }

@@ -126,6 +126,15 @@ io.on('connection', (socket) => {
     broadcastGameState(room.id);
   });
 
+  socket.on('endPhase3', () => {
+    const room  = roomManager.getRoom(socket.id);
+    const color = roomManager.getPlayerColor(socket.id);
+    if (!room || !color) return;
+    const r = roomManager.endPhase3(room, color);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
+    broadcastGameState(room.id);
+  });
+
   socket.on('placeMinePhase3', ({ row, col }) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);

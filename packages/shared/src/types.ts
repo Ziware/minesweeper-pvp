@@ -40,6 +40,7 @@ export interface GameConfig {
   maxLives: number;
   minesPerTurn: number;
   initialMines: number;
+  turnLimitPerPlayer: number;
 }
 
 export interface BoardStats {
@@ -58,6 +59,7 @@ export interface TurnState {
   minesPlacedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
   lastActionMessage: string | null;
+  turnsPlayed: Record<PlayerColor, number>;
 }
 
 export interface S2C_RoomCreated { roomId: string; playerColor: PlayerColor; }
@@ -75,7 +77,7 @@ export interface S2C_GameState {
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor;
-  reason: 'no_mines_space' | 'lives';
+  reason: 'lives' | 'headquarters' | 'territory';
 }
 
 export interface C2S_CreateRoom { playerName: string; }
@@ -107,6 +109,7 @@ export interface ClientToServerEvents {
   defuseCell:      (data: C2S_DefuseCell) => void;
   placeMinePhase3: (data: C2S_PlaceMinePhase3) => void;
   endPhase2:       () => void;
+  endPhase3:       () => void;
   toggleMark:      (data: C2S_ToggleMark) => void;
   // tabId позволяет серверу различать вкладки одного устройства
   restoreSession:  (data: { roomId: string; playerColor: PlayerColor; tabId: string }) => void;

@@ -6,6 +6,7 @@ interface GameInfoProps {
   gameState: S2C_GameState;
   myColor: PlayerColor;
   onEndPhase2: () => void;
+  onEndPhase3: () => void;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -15,12 +16,12 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const PHASE_DESCRIPTIONS: Record<string, string> = {
-  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша захваченная клетка.',
-  phase2: 'Захватывайте вражеские клетки в зоне 5×5. Ctrl+Click — разминировать.',
-  phase3: 'Поставьте ровно 3 мины на свои свободные клетки.',
+  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша доступная клетка, соединённая со штабом.',
+  phase2: 'Захватывайте вражеские клетки в зоне 5×5 рядом с доступной клеткой. Ctrl+Click — разминировать.',
+  phase3: 'Поставьте от 0 до 3 мин на свои свободные доступные клетки и завершите ход.',
 };
 
-export function GameInfo({ gameState, myColor, onEndPhase2 }: GameInfoProps) {
+export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameInfoProps) {
   const { players, turn, config, stats } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
 
@@ -92,6 +93,16 @@ export function GameInfo({ gameState, myColor, onEndPhase2 }: GameInfoProps) {
       <div className={styles.statsBlock}>
         <div className={styles.statsTitle}>📊 Статистика</div>
 
+        <div className={styles.statHeader}>Лимит ходов</div>
+        <div className={styles.statRow}>
+          <span className={styles.redLabel}>🔴 Красный:</span>
+          <strong className={styles.redVal}>{turn.turnsPlayed.red} / {config.turnLimitPerPlayer}</strong>
+        </div>
+        <div className={styles.statRow}>
+          <span className={styles.blueLabel}>🔵 Синий:</span>
+          <strong className={styles.blueVal}>{turn.turnsPlayed.blue} / {config.turnLimitPerPlayer}</strong>
+        </div>
+
         {/* Строка: мины */}
         <div className={styles.statHeader}>Мины на поле</div>
         <div className={styles.statRow}>
@@ -141,6 +152,13 @@ export function GameInfo({ gameState, myColor, onEndPhase2 }: GameInfoProps) {
       {isMyTurn && turn.phase === 'phase2' && (
         <button className={styles.endPhaseBtn} onClick={onEndPhase2}>
           Завершить захват →
+        </button>
+      )}
+
+      {/* Кнопка завершить фазу 3 */}
+      {isMyTurn && turn.phase === 'phase3' && (
+        <button className={styles.endPhaseBtn} onClick={onEndPhase3}>
+          Завершить расстановку →
         </button>
       )}
     </div>

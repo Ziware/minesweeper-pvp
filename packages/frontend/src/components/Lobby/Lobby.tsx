@@ -4,10 +4,9 @@ import styles from './Lobby.module.css';
 interface LobbyProps {
   onCreateRoom: (name: string) => void;
   onJoinRoom:   (roomId: string, name: string) => void;
-  errorMsg: string;
 }
 
-export function Lobby({ onCreateRoom, onJoinRoom, errorMsg }: LobbyProps) {
+export function Lobby({ onCreateRoom, onJoinRoom }: LobbyProps) {
   const [name,   setName]   = useState('');
   const [joinId, setJoinId] = useState('');
   const [nameErr, setNameErr] = useState('');
@@ -27,8 +26,6 @@ export function Lobby({ onCreateRoom, onJoinRoom, errorMsg }: LobbyProps) {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>💣 Minesweeper PvP</h1>
-
       {/* Имя — общее для обоих действий */}
       <div className={styles.card}>
         <h2>Ваше имя</h2>
@@ -73,7 +70,6 @@ export function Lobby({ onCreateRoom, onJoinRoom, errorMsg }: LobbyProps) {
         </div>
       </div>
 
-      {errorMsg && <div className={styles.error}>{errorMsg}</div>}
     </div>
   );
 }

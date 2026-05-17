@@ -44,6 +44,11 @@
   box-shadow: 0 0 0 2px #ffe066 inset, 0 0 8px rgba(255,224,102,0.15);
 }
 
+/* ===== Штаб ===== */
+.headquarters {
+  box-shadow: 0 0 0 2px #ffd166 inset, 0 0 10px rgba(255,209,102,0.35);
+}
+
 /* ===== Фаза 3 ===== */
 .phase3Target { cursor: crosshair; }
 .phase3Target:hover {

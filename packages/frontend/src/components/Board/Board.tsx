@@ -24,6 +24,51 @@ function inZoneWithCenter(
   );
 }
 
+function isHeadquartersCell(row: number, col: number, boardSize: number): boolean {
+  const firstCol = Math.floor((boardSize - 2) / 2);
+  return (row === 0 || row === boardSize - 1) && (col === firstCol || col === firstCol + 1);
+}
+
+function getReachableCells(
+  board: S2C_GameState['board'],
+  playerColor: PlayerColor,
+  boardSize: number,
+): Set<string> {
+  const firstCol = Math.floor((boardSize - 2) / 2);
+  const startRow = playerColor === 'red' ? 0 : boardSize - 1;
+  const starts = [
+    { row: startRow, col: firstCol },
+    { row: startRow, col: firstCol + 1 },
+  ];
+  const reachable = new Set<string>();
+  const queue: Array<{ row: number; col: number }> = [];
+
+  for (const start of starts) {
+    if (board[start.row]?.[start.col]?.owner !== playerColor) continue;
+    const key = `${start.row},${start.col}`;
+    reachable.add(key);
+    queue.push(start);
+  }
+
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
+  for (let i = 0; i < queue.length; i++) {
+    const current = queue[i];
+    for (const [dr, dc] of directions) {
+      const nr = current.row + dr;
+      const nc = current.col + dc;
+      if (nr < 0 || nr >= boardSize || nc < 0 || nc >= boardSize) continue;
+      if (board[nr][nc].owner !== playerColor) continue;
+
+      const key = `${nr},${nc}`;
+      if (reachable.has(key)) continue;
+      reachable.add(key);
+      queue.push({ row: nr, col: nc });
+    }
+  }
+
+  return reachable;
+}
+
 // Вычисляем размер клетки в зависимости от размера экрана и boardSize
 function useCellSize(boardSize: number): number {
   const [cellSize, setCellSize] = React.useState(44);
@@ -112,7 +157,15 @@ export function Board({
       return;
     }
     if (phase === 'phase3') {
-      if (cell.owner === myColor && cell.hasMine === false) onPlaceMinePhase3(r, c);
+      const reachableCells = getReachableCells(board, myColor, config.boardSize);
+      if (
+        cell.owner === myColor &&
+        cell.hasMine === false &&
+        !isHeadquartersCell(r, c, config.boardSize) &&
+        reachableCells.has(`${r},${c}`)
+      ) {
+        onPlaceMinePhase3(r, c);
+      }
     }
   };
 
@@ -171,6 +224,7 @@ export function Board({
                   zoneType={finalZone}
                   isHover={isHover}
                   isInActiveZone={isInActive}
+                  isHeadquarters={isHeadquartersCell(r, c, config.boardSize)}
                   gamePhase={turn.phase}
                   isMyTurn={isMyTurn}
                   onClick={(e) => handleClick(r, c, e)}
@@ -187,11 +241,12 @@ export function Board({
           <div className={styles.zoneLegend}>
             <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
             <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
+            <span className={styles.legendHeadquarters}>🏰 Штаб</span>
           </div>
         )}
         {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
           <div className={styles.hint}>
-            🔧 <strong>Ctrl+Click</strong> на вражескую клетку в зоне 5×5 — разминировать
+            🔧 <strong>Ctrl+Click</strong> на вражескую клетку в зоне 5×5 — разминировать. Захват — только по общей стороне.
           </div>
         )}
         {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
