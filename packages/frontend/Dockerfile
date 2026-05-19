@@ -5,9 +5,10 @@ WORKDIR /app
 # Копируем корневые файлы
 COPY package.json yarn.lock tsconfig.base.json ./
 
-# Копируем shared и frontend
+# Копируем shared, frontend и общие ассеты
 COPY packages/shared/   packages/shared/
 COPY packages/frontend/ packages/frontend/
+COPY packages/content/  packages/content/
 
 # Устанавливаем зависимости
 RUN yarn install --frozen-lockfile
