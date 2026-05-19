@@ -68,6 +68,7 @@ function clearSession() {
 
 export function useSocket() {
   const socketRef = useRef<AppSocket | null>(null);
+  const myNameRef = useRef('');
 
   const [screen,    setScreen]    = useState<GameScreen>('lobby');
   const [roomId,    setRoomId]    = useState('');
@@ -90,20 +91,35 @@ export function useSocket() {
 
     socketRef.current = socket;
 
+    const restoreSavedSession = (reason: string) => {
+      if (!socket.connected) return;
+      const session = loadSession();
+      if (!session) return;
+
+      console.log(`[socket] restoring session (${reason}):`, session);
+      setRestoring(true);
+      socket.emit('restoreSession', {
+        roomId:      session.roomId,
+        playerColor: session.playerColor,
+        tabId:       TAB_ID,
+      });
+    };
+
     // При каждом (пере)подключении пробуем восстановить сессию этой вкладки
     socket.on('connect', () => {
       console.log('[socket] connected, tabId:', TAB_ID);
-      const session = loadSession();
-      if (session) {
-        console.log('[socket] restoring session:', session);
-        setRestoring(true);
-        socket.emit('restoreSession', {
-          roomId:      session.roomId,
-          playerColor: session.playerColor,
-          tabId:       TAB_ID,
-        });
-      }
+      restoreSavedSession('connect');
     });
+
+    const handleFocusResync = () => restoreSavedSession('focus');
+    const handleVisibilityResync = () => {
+      if (document.visibilityState === 'visible') restoreSavedSession('visible');
+    };
+    const handlePageShowResync = () => restoreSavedSession('pageshow');
+
+    window.addEventListener('focus', handleFocusResync);
+    document.addEventListener('visibilitychange', handleVisibilityResync);
+    window.addEventListener('pageshow', handlePageShowResync);
 
     socket.on('sessionRestored', ({ playerColor, roomId }) => {
       const session = loadSession();
@@ -117,6 +133,8 @@ export function useSocket() {
     socket.on('roomCreated', ({ roomId, playerColor }) => {
       setRoomId(roomId);
       setMyColor(playerColor);
+      setGameOver(null);
+      if (myNameRef.current) saveSession({ roomId, playerColor, playerName: myNameRef.current });
     });
 
     socket.on('waitingForOpponent', () => setScreen('waiting'));
@@ -124,6 +142,8 @@ export function useSocket() {
     socket.on('roomJoined', ({ roomId, playerColor }) => {
       setRoomId(roomId);
       setMyColor(playerColor);
+      setGameOver(null);
+      if (myNameRef.current) saveSession({ roomId, playerColor, playerName: myNameRef.current });
     });
 
     socket.on('gameState', (state) => {
@@ -158,23 +178,29 @@ export function useSocket() {
     });
 
     return () => {
+      window.removeEventListener('focus', handleFocusResync);
+      document.removeEventListener('visibilitychange', handleVisibilityResync);
+      window.removeEventListener('pageshow', handlePageShowResync);
       socket.disconnect();
     };
   }, []);
 
   // Сохраняем сессию когда все три значения известны
   useEffect(() => {
+    myNameRef.current = myName;
     if (roomId && myColor && myName) {
       saveSession({ roomId, playerColor: myColor, playerName: myName });
     }
   }, [roomId, myColor, myName]);
 
   const createRoom = (name: string) => {
+    myNameRef.current = name;
     setMyName(name);
     socketRef.current?.emit('createRoom', { playerName: name });
   };
 
   const joinRoom = (id: string, name: string) => {
+    myNameRef.current = name;
     setMyName(name);
     socketRef.current?.emit('joinRoom', { roomId: id, playerName: name });
   };
