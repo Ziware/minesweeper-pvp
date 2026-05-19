@@ -144,7 +144,9 @@ export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameI
       {/* Разминирование */}
       {turn.phase === 'phase2' && (
         <div className={`${styles.defuseStatus} ${turn.canDefuse ? styles.defuseAvailable : styles.defuseUsed}`}>
-          {turn.canDefuse ? '🔧 Разминирование доступно' : '🔧 Разминирование использовано'}
+          {turn.canDefuse
+            ? `🔧 Разминирований доступно: ${turn.defusesAllowedThisTurn - turn.defusesUsedThisTurn} / ${turn.defusesAllowedThisTurn}`
+            : `🔧 Разминирования использованы: ${turn.defusesUsedThisTurn} / ${turn.defusesAllowedThisTurn}`}
         </div>
       )}
 

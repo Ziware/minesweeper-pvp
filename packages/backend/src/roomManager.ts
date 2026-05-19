@@ -6,6 +6,7 @@ import {
   TurnState,
   CellMark,
 } from '@minesweeper-pvp/shared';
+import { createGameLogger, GameLogger } from './gameLogger';
 import {
   DEFAULT_CONFIG,
   createBoard,
@@ -24,6 +25,7 @@ import {
   computeBoardStats,
   getHeadquartersOwner,
   isPlayerCellReachable,
+  actionZoneContainsHeadquarters,
 } from './gameLogic';
 
 export interface PlayerState {
@@ -31,6 +33,7 @@ export interface PlayerState {
   tabId: string;       // уникальный id вкладки браузера
   color: PlayerColor;
   name: string;
+  ip?: string;
   lives: number;
   minesPlaced: number;
   connected: boolean;
@@ -48,6 +51,8 @@ export interface Room {
   winner?: PlayerColor;
   winReason?: 'lives' | 'headquarters' | 'territory';
   marks: Record<PlayerColor, Record<string, CellMark>>;
+  logger: GameLogger;
+  gameOverLogged: boolean;
 }
 
 const EMPTY_ROOM_TTL_MS = 60 * 60 * 1000;
@@ -65,11 +70,17 @@ export class RoomManager {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   }
 
-  createRoom(socketId: string, tabId: string, playerName: string): Room {
+  createRoom(socketId: string, tabId: string, playerName: string, ip: string): Room {
     const roomId     = this.generateRoomId();
     const fullConfig = { ...DEFAULT_CONFIG };
     const board      = createBoard(fullConfig.boardSize);
     initBoard(board, fullConfig);
+
+    const logger = createGameLogger(roomId, {
+      color: 'red',
+      name: playerName,
+      ip,
+    });
 
     const room: Room = {
       id: roomId,
@@ -80,6 +91,7 @@ export class RoomManager {
         tabId,
         color: 'red',
         name: playerName,
+        ip,
         lives: fullConfig.maxLives,
         minesPlaced: 0,
         connected: true,
@@ -92,6 +104,8 @@ export class RoomManager {
         selectedZone: null,
         actionZone: null,
         canDefuse: true,
+        defusesUsedThisTurn: 0,
+        defusesAllowedThisTurn: 1,
         minesPlacedThisTurn: 0,
         capturedThisTurn: new Set(),
         lastActionMessage: null,
@@ -99,6 +113,8 @@ export class RoomManager {
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
+      logger,
+      gameOverLogged: false,
     };
 
     this.rooms.set(roomId, room);
@@ -107,7 +123,7 @@ export class RoomManager {
     return room;
   }
 
-  joinRoom(socketId: string, tabId: string, roomId: string, playerName: string): Room | null {
+  joinRoom(socketId: string, tabId: string, roomId: string, playerName: string, ip: string): Room | null {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length >= 2) return null;
 
@@ -116,6 +132,7 @@ export class RoomManager {
       tabId,
       color: 'blue',
       name: playerName,
+      ip,
       lives: room.config.maxLives,
       minesPlaced: 0,
       connected: true,
@@ -123,6 +140,14 @@ export class RoomManager {
     });
     room.phase      = 'setup';
     room.turn.phase = 'setup';
+    room.logger.setPlayers(room.players.map((player) => ({
+      color: player.color,
+      name: player.name,
+      ip: player.ip,
+    })));
+    room.logger.event('player_joined', {
+      player: { color: 'blue', name: playerName, ip },
+    });
 
     this.socketToRoom.set(socketId, roomId);
     this.socketToPlayer.set(socketId, 'blue');
@@ -164,6 +189,11 @@ export class RoomManager {
     this.socketToRoom.set(newSocketId, roomId);
     this.socketToPlayer.set(newSocketId, playerColor);
 
+    room.logger.event('session_restored', {
+      player: { color: playerColor, name: player.name, ip: player.ip },
+      tabId,
+    });
+
     return { room };
   }
 
@@ -186,7 +216,12 @@ export class RoomManager {
     const color = this.getPlayerColor(socketId);
     if (room) {
       const player = room.players.find((p) => p.id === socketId);
-      if (player) player.connected = false;
+      if (player) {
+        player.connected = false;
+        room.logger.event('player_disconnected', {
+          player: { color: player.color, name: player.name, ip: player.ip },
+        });
+      }
     }
     this.socketToRoom.delete(socketId);
     this.socketToPlayer.delete(socketId);
@@ -233,11 +268,29 @@ export class RoomManager {
         this.socketToPlayer.delete(player.id);
       }
     }
+    room.logger.event('room_deleted', { reason: 'empty_room_cleanup' });
     return this.rooms.delete(roomId);
   }
 
   getOpponentSocketId(room: Room, color: PlayerColor): string | null {
     return room.players.find((p) => p.color !== color)?.id || null;
+  }
+
+  logGameFinishedIfNeeded(room: Room): void {
+    if (!room.winner || room.gameOverLogged) return;
+
+    const winner = room.players.find((p) => p.color === room.winner);
+    const loser = room.players.find((p) => p.color !== room.winner);
+    const stats = computeBoardStats(room.board);
+
+    room.logger.event('game_finished', {
+      winner: winner ? { color: winner.color, name: winner.name, ip: winner.ip } : { color: room.winner },
+      loser: loser ? { color: loser.color, name: loser.name, ip: loser.ip } : null,
+      reason: room.winReason || 'lives',
+      stats,
+      turnsPlayed: room.turn.turnsPlayed,
+    });
+    room.gameOverLogged = true;
   }
 
   placeMineSetup(room: Room, color: PlayerColor, row: number, col: number) {
@@ -253,6 +306,13 @@ export class RoomManager {
     if (cell.hasMine) {
       cell.hasMine = false;
       player.minesPlaced--;
+      room.logger.event('setup_mine_toggled', {
+        player: { color, name: player.name, ip: player.ip },
+        row,
+        col,
+        hasMine: false,
+        minesPlaced: player.minesPlaced,
+      });
       return { ok: true };
     }
     if (player.minesPlaced >= room.config.initialMines) {
@@ -260,6 +320,13 @@ export class RoomManager {
     }
     cell.hasMine = true;
     player.minesPlaced++;
+    room.logger.event('setup_mine_toggled', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      hasMine: true,
+      minesPlaced: player.minesPlaced,
+    });
     return { ok: true };
   }
 
@@ -271,10 +338,18 @@ export class RoomManager {
     }
     player.setupConfirmed = true;
     room.setupConfirmed.add(color);
+    room.logger.event('setup_confirmed', {
+      player: { color, name: player.name, ip: player.ip },
+      minesPlaced: player.minesPlaced,
+    });
     const bothConfirmed = room.setupConfirmed.size === 2;
     if (bothConfirmed) {
       room.phase = 'phase1';
       room.turn  = createInitialTurnState('red');
+      room.logger.event('game_started', {
+        firstPlayer: 'red',
+        players: room.players.map((p) => ({ color: p.color, name: p.name, ip: p.ip })),
+      });
     }
     return { ok: true, bothConfirmed };
   }
@@ -287,8 +362,25 @@ export class RoomManager {
     if (!isValidZoneSelection(room.board, displayZone.row, displayZone.col, color, room.config)) {
       return { ok: false, error: 'В зоне 3×3 нет доступных клеток вашей территории' };
     }
+    const defusesAllowed = actionZoneContainsHeadquarters(
+      actionZone.row, actionZone.col, color, room.config
+    ) ? 2 : 1;
+
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('zone_selected', {
+      player: { color, name: player.name, ip: player.ip },
+      clicked: { row: clickedRow, col: clickedCol },
+      displayZone,
+      actionZone,
+      defensive: defusesAllowed === 2,
+      defusesAllowed,
+    });
+
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
+    room.turn.defusesAllowedThisTurn = defusesAllowed;
+    room.turn.defusesUsedThisTurn = 0;
+    room.turn.canDefuse = defusesAllowed > 0;
     revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
@@ -311,6 +403,12 @@ export class RoomManager {
       cell.hasMine = false;
       const player = room.players.find((p) => p.color === color)!;
       player.lives--;
+      room.logger.event('mine_exploded', {
+        player: { color, name: player.name, ip: player.ip },
+        row,
+        col,
+        livesLeft: player.lives,
+      });
       refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
       if (player.lives <= 0) {
         const opp      = room.players.find((p) => p.color !== color)!;
@@ -327,6 +425,13 @@ export class RoomManager {
       this.clearMarkOnCell(room, row, col);
       cell.owner = color;
       captured.add(`${row},${col}`);
+      const player = room.players.find((p) => p.color === color)!;
+      room.logger.event('cell_captured', {
+        player: { color, name: player.name, ip: player.ip },
+        row,
+        col,
+        capturedThisTurn: captured.size,
+      });
       const inDisplayZone =
         row >= displayZone.row && row < displayZone.row + 3 &&
         col >= displayZone.col && col < displayZone.col + 3 &&
@@ -352,8 +457,8 @@ export class RoomManager {
     if (room.turn.currentPlayer !== color) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Not your turn' };
     }
-    if (!room.turn.canDefuse) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Already defused this turn' };
+    if (!room.turn.canDefuse || room.turn.defusesUsedThisTurn >= room.turn.defusesAllowedThisTurn) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Разминирования на этот ход уже использованы' };
     }
 
     const actionZone  = room.turn.actionZone!;
@@ -369,8 +474,18 @@ export class RoomManager {
       return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse own cell' };
     }
 
-    room.turn.canDefuse = false;
+    room.turn.defusesUsedThisTurn++;
+    room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesAllowedThisTurn;
     const hadMine = cell.hasMine;
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('cell_defused', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      hadMine,
+      defusesUsed: room.turn.defusesUsedThisTurn,
+      defusesAllowed: room.turn.defusesAllowedThisTurn,
+    });
 
     if (hadMine) {
       this.clearMarkOnCell(room, row, col);
@@ -415,6 +530,13 @@ export class RoomManager {
   endPhase2(room: Room, color: PlayerColor) {
     if (room.turn.phase !== 'phase2') return { ok: false, error: 'Not phase 2' };
     if (room.turn.currentPlayer !== color) return { ok: false, error: 'Not your turn' };
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('phase2_ended', {
+      player: { color, name: player.name, ip: player.ip },
+      capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
+      defusesUsed: room.turn.defusesUsedThisTurn,
+      defusesAllowed: room.turn.defusesAllowedThisTurn,
+    });
     this.startPhase3(room);
     return { ok: true };
   }
@@ -446,8 +568,20 @@ export class RoomManager {
     if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('phase3_mine_placed', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
+    });
     const done = room.turn.minesPlacedThisTurn >= room.config.minesPerTurn;
     if (done) {
+      room.logger.event('phase3_ended', {
+        player: { color, name: player.name, ip: player.ip },
+        minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
+        reason: 'mine_limit_reached',
+      });
       const gameOver = this.checkAndFinishTurn(room);
       return { ok: true, done: true, gameOver };
     }
@@ -457,6 +591,11 @@ export class RoomManager {
   endPhase3(room: Room, color: PlayerColor) {
     if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Not phase 3' };
     if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Not your turn' };
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('phase3_ended', {
+      player: { color, name: player.name, ip: player.ip },
+      minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
+    });
     const gameOver = this.checkAndFinishTurn(room);
     return { ok: true, gameOver };
   }
@@ -513,6 +652,13 @@ export class RoomManager {
     const cell = room.board[row][col];
     if (cell.owner === color) return { ok: false, error: 'Cannot mark own cell' };
     room.marks[color][`${row},${col}`] = mark;
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('mark_toggled', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      mark,
+    });
     return { ok: true };
   }
 
@@ -529,7 +675,7 @@ export class RoomManager {
   getGameStateForPlayer(room: Room, color: PlayerColor) {
     return {
       board:       this.getBoardForPlayer(room, color),
-      players:     room.players,
+      players:     room.players.map(({ ip, ...player }) => player),
       turn: {
         ...room.turn,
         capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),

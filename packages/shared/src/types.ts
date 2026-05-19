@@ -56,6 +56,8 @@ export interface TurnState {
   selectedZone: { row: number; col: number } | null;
   actionZone: { row: number; col: number } | null;
   canDefuse: boolean;
+  defusesUsedThisTurn: number;
+  defusesAllowedThisTurn: number;
   minesPlacedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
   lastActionMessage: string | null;

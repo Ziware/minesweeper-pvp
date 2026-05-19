@@ -10,6 +10,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - GAME_LOG_DIR=/app/logs
+    volumes:
+      - ./logs:/app/logs
     networks:
       - minesweeper-net
 

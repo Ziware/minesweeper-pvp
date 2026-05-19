@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { ServerToClientEvents, ClientToServerEvents } from '@minesweeper-pvp/shared';
 import { RoomManager } from './roomManager';
+import { getClientIp } from './gameLogger';
 
 const app = express();
 app.use(cors());
@@ -24,6 +25,7 @@ function broadcastGameState(roomId: string) {
     io.to(player.id).emit('gameState', state as any);
   }
   if (room.winner) {
+    roomManager.logGameFinishedIfNeeded(room);
     for (const player of room.players) {
       io.to(player.id).emit('gameOver', {
         winnerColor: room.winner!,
@@ -54,7 +56,8 @@ io.on('connection', (socket) => {
     // При createRoom tabId не нужен — он придёт при первом restoreSession
     // Используем socket.id как временный tabId до получения реального
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
-    const room  = roomManager.createRoom(socket.id, tabId, playerName);
+    const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip);
     socket.join(room.id);
     socket.emit('roomCreated', { roomId: room.id, playerColor: 'red' });
     socket.emit('waitingForOpponent');
@@ -62,7 +65,8 @@ io.on('connection', (socket) => {
 
   socket.on('joinRoom', ({ roomId, playerName }) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
-    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName);
+    const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName, ip);
     if (!room) {
       socket.emit('error', { message: 'Room not found or full' });
       return;

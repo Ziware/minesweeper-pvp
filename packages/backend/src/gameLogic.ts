@@ -332,6 +332,19 @@ export function getBoardForPlayer(
   );
 }
 
+export function actionZoneContainsHeadquarters(
+  actionZoneRow: number,
+  actionZoneCol: number,
+  playerColor: PlayerColor,
+  config: GameConfig,
+): boolean {
+  return getHeadquartersCells(playerColor, config).some(({ row, col }) => (
+    row >= actionZoneRow && row < actionZoneRow + 5 &&
+    col >= actionZoneCol && col < actionZoneCol + 5 &&
+    isInBounds(row, col, config.boardSize)
+  ));
+}
+
 export function createInitialTurnState(
   currentPlayer: PlayerColor,
   turnsPlayed: Record<PlayerColor, number> = { red: 0, blue: 0 },
@@ -342,6 +355,8 @@ export function createInitialTurnState(
     selectedZone: null,
     actionZone: null,
     canDefuse: true,
+    defusesUsedThisTurn: 0,
+    defusesAllowedThisTurn: 1,
     minesPlacedThisTurn: 0,
     capturedThisTurn: new Set<string>(),
     lastActionMessage: null,

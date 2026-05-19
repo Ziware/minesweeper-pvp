@@ -1,0 +1,3 @@
+{"ts":"2026-05-19T13:25:35.304Z","roomId":"XQAO6F","event":"room_created","players":[{"color":"red","name":"JWNB4M","ip":"::1"}],"creator":{"color":"red","name":"JWNB4M","ip":"::1"}}
+{"ts":"2026-05-19T13:25:42.033Z","roomId":"XQAO6F","event":"player_disconnected","players":[{"color":"red","name":"JWNB4M","ip":"::1"}],"player":{"color":"red","name":"JWNB4M","ip":"::1"}}
+{"ts":"2026-05-19T13:25:42.110Z","roomId":"XQAO6F","event":"session_restored","players":[{"color":"red","name":"JWNB4M","ip":"::1"}],"player":{"color":"red","name":"JWNB4M","ip":"::1"},"tabId":"tab_1779197122897_vf5w0t40jrr"}

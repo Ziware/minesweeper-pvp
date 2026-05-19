@@ -246,7 +246,7 @@ export function Board({
         )}
         {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
           <div className={styles.hint}>
-            🔧 <strong>Ctrl+Click</strong> на вражескую клетку в зоне 5×5 — разминировать. Захват — только по общей стороне.
+            🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesAllowedThisTurn - turn.defusesUsedThisTurn} / {turn.defusesAllowedThisTurn}. Захват — только по общей стороне.
           </div>
         )}
         {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (

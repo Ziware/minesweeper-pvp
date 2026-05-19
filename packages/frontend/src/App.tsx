@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from './hooks/useSocket';
+import { useSound } from './hooks/useSound';
 import { Lobby }     from './components/Lobby/Lobby';
 import { MineSetup } from './components/MineSetup/MineSetup';
 import { Board }     from './components/Board/Board';
@@ -16,14 +17,68 @@ export default function App() {
   } = useSocket();
 
   const [showHelp, setShowHelp] = useState(false);
+  const { muted, play, preload, toggleMuted } = useSound();
+  const previousLivesRef = useRef<Record<string, number> | null>(null);
+  const previousCapturedCountRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    preload();
+  }, [preload]);
+
+  useEffect(() => {
+    if (!gameState) return;
+
+    const currentLives = Object.fromEntries(
+      gameState.players.map((player) => [player.color, player.lives])
+    );
+    const previousLives = previousLivesRef.current;
+
+    const hasExplosion = previousLives
+      ? gameState.players.some(
+        (player) => player.lives < (previousLives[player.color] ?? player.lives)
+      )
+      : false;
+
+    if (hasExplosion) {
+      play('explosion');
+    } else if (
+      previousCapturedCountRef.current !== null &&
+      gameState.turn.capturedThisTurn.length > previousCapturedCountRef.current
+    ) {
+      play('click');
+    }
+
+    previousLivesRef.current = currentLives;
+    previousCapturedCountRef.current = gameState.turn.capturedThisTurn.length;
+  }, [gameState, play]);
+
+  const playClick = () => play('click');
 
   const renderHeader = (content?: React.ReactNode) => (
     <div className={styles.gameHeader}>
       <h2 className={styles.logo}>💣 Minesweeper PvP</h2>
       {content}
-      <button className={styles.helpBtn} onClick={() => setShowHelp(true)}>
-        ❓ Правила
-      </button>
+      <div className={styles.headerActions}>
+        <button
+          className={styles.headerBtn}
+          onClick={() => {
+            playClick();
+            toggleMuted();
+          }}
+          title={muted ? 'Включить звук' : 'Выключить звук'}
+        >
+          {muted ? '🔇 Звук' : '🔊 Звук'}
+        </button>
+        <button
+          className={styles.headerBtn}
+          onClick={() => {
+            playClick();
+            setShowHelp(true);
+          }}
+        >
+          ❓ Правила
+        </button>
+      </div>
     </div>
   );
 
@@ -43,7 +98,16 @@ export default function App() {
   if (screen === 'lobby') {
     return renderShell(
       <div className={styles.screenBody}>
-        <Lobby onCreateRoom={createRoom} onJoinRoom={joinRoom} />
+        <Lobby
+          onCreateRoom={(name) => {
+            playClick();
+            createRoom(name);
+          }}
+          onJoinRoom={(id, name) => {
+            playClick();
+            joinRoom(id, name);
+          }}
+        />
       </div>
     );
   }
@@ -65,8 +129,14 @@ export default function App() {
       <MineSetup
         gameState={gameState}
         myColor={myColor}
-        onPlaceMine={placeMineSetup}
-        onConfirm={confirmSetup}
+        onPlaceMine={(row, col) => {
+          playClick();
+          placeMineSetup(row, col);
+        }}
+        onConfirm={() => {
+          playClick();
+          confirmSetup();
+        }}
       />
     );
   }
@@ -88,7 +158,13 @@ export default function App() {
           {gameOver?.reason === 'lives'        && <p>Причина: потеряны все жизни</p>}
           {gameOver?.reason === 'headquarters' && <p>Причина: захвачен штаб</p>}
           {gameOver?.reason === 'territory'    && <p>Причина: истёк лимит ходов, больше территории у победителя</p>}
-          <button className={styles.replayBtn} onClick={() => window.location.reload()}>
+          <button
+            className={styles.replayBtn}
+            onClick={() => {
+              playClick();
+              window.location.reload();
+            }}
+          >
             Играть снова
           </button>
         </div>
@@ -126,15 +202,39 @@ export default function App() {
 
     return renderShell(
       <div className={styles.gameBody}>
-        <GameInfo  gameState={gameState} myColor={myColor} onEndPhase2={endPhase2} onEndPhase3={endPhase3} />
+        <GameInfo
+          gameState={gameState}
+          myColor={myColor}
+          onEndPhase2={() => {
+            playClick();
+            endPhase2();
+          }}
+          onEndPhase3={() => {
+            playClick();
+            endPhase3();
+          }}
+        />
         <Board
           gameState={gameState}
           myColor={myColor}
-          onSelectZone={selectZone}
-          onCaptureCell={captureCell}
-          onDefuseCell={defuseCell}
-          onPlaceMinePhase3={placeMinePhase3}
-          onToggleMark={toggleMark}
+          onSelectZone={(row, col) => {
+            play('scan');
+            selectZone(row, col);
+          }}
+          onCaptureCell={(row, col) => {
+            captureCell(row, col);
+          }}
+          onDefuseCell={(row, col) => {
+            defuseCell(row, col);
+          }}
+          onPlaceMinePhase3={(row, col) => {
+            playClick();
+            placeMinePhase3(row, col);
+          }}
+          onToggleMark={(row, col, mark) => {
+            playClick();
+            toggleMark(row, col, mark);
+          }}
         />
         <div className={styles.legend}>
           <h3>Управление</h3>

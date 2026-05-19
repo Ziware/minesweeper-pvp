@@ -93,8 +93,14 @@
   font-weight: bold;
 }
 
-.helpBtn {
+.headerActions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerBtn {
   padding: 5px 12px;
   border-radius: 8px;
   border: 1px solid #0f3460;
@@ -105,7 +111,7 @@
   font-weight: 600;
   transition: background 0.2s;
 }
-.helpBtn:hover { background: #1a4f80; }
+.headerBtn:hover { background: #1a4f80; }
 
 .gameBody {
   display: flex;
