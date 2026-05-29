@@ -11,6 +11,7 @@ interface BoardProps {
   onDefuseCell: (row: number, col: number) => void;
   onPlaceMinePhase3: (row: number, col: number) => void;
   onToggleMark: (row: number, col: number, mark: CellMark) => void;
+  onWrapperRef?: (el: HTMLDivElement | null) => void;
 }
 
 function inZoneWithCenter(
@@ -75,8 +76,8 @@ function useCellSize(boardSize: number): number {
 
   React.useEffect(() => {
     function calc() {
-      // Оставляем место для GameInfo (260px) + Legend (210px) + gaps + padding
-      const reservedW = 260 + 210 + 24 * 4 + 32;
+      // Оставляем место для двух боковых колонок по 260px + gaps + padding
+      const reservedW = 260 * 2 + 24 * 3 + 32;
       const reservedH = 60 + 44 + 80; // header + bottomBar + padding
       const availW = window.innerWidth  - reservedW;
       const availH = window.innerHeight - reservedH;
@@ -101,17 +102,20 @@ export function Board({
   onDefuseCell,
   onPlaceMinePhase3,
   onToggleMark,
+  onWrapperRef,
 }: BoardProps) {
   const { board, turn, config } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
 
   const cellSize = useCellSize(config.boardSize);
 
-  // Центр зон из selectedZone/actionZone
-  const displayCenter = turn.selectedZone
+  const isFinished = turn.phase === 'finished';
+
+  // Центр зон из selectedZone/actionZone (скрываем после окончания игры)
+  const displayCenter = !isFinished && turn.selectedZone
     ? { row: turn.selectedZone.row + 1, col: turn.selectedZone.col + 1 }
     : null;
-  const actionCenter = turn.actionZone
+  const actionCenter = !isFinished && turn.actionZone
     ? { row: turn.actionZone.row + 2, col: turn.actionZone.col + 2 }
     : null;
 
@@ -141,6 +145,7 @@ export function Board({
 
   const handleClick = (r: number, c: number, e: React.MouseEvent) => {
     if (!isMyTurn) return;
+    if (turn.phase === 'finished') return;
     const cell  = board[r][c];
     const phase = turn.phase;
 
@@ -171,6 +176,7 @@ export function Board({
 
   const handleRightClick = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
+    if (turn.phase === 'finished') return;
     const cell = board[r][c];
     const next: Record<CellMark, CellMark> = {
       none: 'flag', flag: 'question', question: 'none',
@@ -193,7 +199,7 @@ export function Board({
   const showLegend = !!(displayCenter || (hoverCell && turn.phase === 'phase1' && isMyTurn));
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapper} ref={onWrapperRef}>
       <div
         className={styles.board}
         style={{
@@ -241,7 +247,7 @@ export function Board({
           <div className={styles.zoneLegend}>
             <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
             <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
-            <span className={styles.legendHeadquarters}>🏰 Штаб</span>
+            <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
           </div>
         )}
         {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (

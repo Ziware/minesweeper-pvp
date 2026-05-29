@@ -41,7 +41,8 @@ io.on('connection', (socket) => {
   socket.on('restoreSession', ({ roomId, playerColor, tabId }) => {
     const result = roomManager.restoreSession(socket.id, roomId, playerColor, tabId);
     if (!result.room) {
-      socket.emit('error', { message: result.error || 'Session expired or room not found' });
+      // Отдельное событие — клиент молча очистит сессию и вернётся в лобби
+      socket.emit('sessionInvalid', { message: result.error || 'Сессия истекла' });
       return;
     }
     socket.join(result.room.id);
@@ -68,7 +69,7 @@ io.on('connection', (socket) => {
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
     const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName, ip);
     if (!room) {
-      socket.emit('error', { message: 'Room not found or full' });
+      socket.emit('error', { message: 'Комната не найдена или заполнена' });
       return;
     }
     socket.join(room.id);

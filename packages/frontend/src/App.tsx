@@ -14,18 +14,71 @@ export default function App() {
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    returnToMenu,
   } = useSocket();
 
   const [showHelp, setShowHelp] = useState(false);
-  const { muted, play, preload, toggleMuted } = useSound();
+  const [boardHeight, setBoardHeight] = useState<number | null>(null);
+  const { muted, play, playDelayed, preload, toggleMuted } = useSound();
+
   const previousLivesRef = useRef<Record<string, number> | null>(null);
   const previousCapturedCountRef = useRef<number | null>(null);
   const previousActionMessageRef = useRef<string | null>(null);
   const previousTurnKeyRef = useRef<string | null>(null);
+  const previousDefusesUsedRef = useRef<number | null>(null);
+  const previousMinesPlacedRef = useRef<number | null>(null);
+  const previousWinnerColorRef = useRef<string | null>(null);
+  const primaryActionRef = useRef<(() => void) | null>(null);
+
+  const playButton = () => play('button');
+  const closeHelp = () => {
+    playButton();
+    setShowHelp(false);
+  };
+
+  // Сбрасываем hotkey-действие на каждом рендере; конкретный экран ниже
+  // может переустановить его. Это гарантирует, что Space не сработает,
+  // когда нет видимой кнопки слева от доски (лобби, ожидание, setup).
+  primaryActionRef.current = null;
+
+  // Глобальный hotkey Space — нажимает основную кнопку слева от доски
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      // Не перехватывать в input/textarea/contenteditable
+      const target = e.target as HTMLElement | null;
+      if (target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      )) return;
+      if (showHelp) return;
+      if (!primaryActionRef.current) return;
+      e.preventDefault();
+      primaryActionRef.current();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showHelp]);
 
   useEffect(() => {
     preload();
   }, [preload]);
+
+  // Звуки победы / поражения — с задержкой 500 мс
+  useEffect(() => {
+    if (!gameState) return;
+    const winner = gameState.winnerColor ?? null;
+    const prev = previousWinnerColorRef.current;
+    if (winner && !prev) {
+      if (myColor && winner === myColor) {
+        playDelayed('victory', 500);
+      } else {
+        playDelayed('defeat', 500);
+      }
+    }
+    previousWinnerColorRef.current = winner;
+  }, [gameState, myColor, playDelayed]);
 
   useEffect(() => {
     if (!gameState) return;
@@ -34,15 +87,14 @@ export default function App() {
       gameState.players.map((player) => [player.color, player.lives])
     );
     const previousLives = previousLivesRef.current;
-    const phase = gameState.turn.phase;
-    const turnKey = `${gameState.turn.currentPlayer}:${gameState.turn.turnsPlayed}`;
+    const turn = gameState.turn;
+    const phase = turn.phase;
+    const turnKey = `${turn.currentPlayer}:${turn.turnsPlayed}`;
     const turnChanged = previousTurnKeyRef.current !== turnKey;
-    const message = gameState.turn.lastActionMessage;
+    const message = turn.lastActionMessage;
     const messageChanged = message !== previousActionMessageRef.current;
 
-    // Звук взрыва возможен только при наступлении на мину во время захвата.
-    // Триггерим его явно по новому сообщению сервера, чтобы исключить ложные
-    // срабатывания при выборе зоны или восстановлении сессии.
+    // Взрыв: жизни упали + сообщение начинается с 💥
     const livesDecreased = previousLives
       ? gameState.players.some(
         (player) => player.lives < (previousLives[player.color] ?? player.lives)
@@ -53,10 +105,10 @@ export default function App() {
       livesDecreased &&
       isExplosionMessage &&
       messageChanged &&
-      // Сервер сразу переключает фазу: после взрыва уходим в phase3.
       (phase === 'phase2' || phase === 'phase3' || phase === 'finished');
 
-    const capturedCount = gameState.turn.capturedThisTurn.length;
+    // Захват клетки без мины
+    const capturedCount = turn.capturedThisTurn.length;
     const previousCaptured = previousCapturedCountRef.current;
     const newCellsCaptured =
       !turnChanged &&
@@ -64,19 +116,35 @@ export default function App() {
       capturedCount > previousCaptured &&
       (phase === 'phase2' || phase === 'phase3');
 
+    // Разминирование (используется счётчик defusesUsedThisTurn)
+    const defusesUsed = turn.defusesUsedThisTurn;
+    const previousDefusesUsed = previousDefusesUsedRef.current;
+    const newDefuse =
+      !turnChanged &&
+      previousDefusesUsed !== null &&
+      defusesUsed > previousDefusesUsed;
+
+    // Установка мины в фазе 3 проигрывается прямо в обработчике клика
+    // (последняя мина завершает ход и сбрасывает minesPlacedThisTurn —
+    // эффект бы её не «увидел»). Поэтому здесь только обновляем счётчик.
+    const minesPlaced = turn.minesPlacedThisTurn;
+
+    // Один звук за обновление состояния — приоритет от самого «громкого» события
     if (hasExplosion) {
       play('explosion');
+    } else if (newDefuse) {
+      play('disarm');
     } else if (newCellsCaptured) {
-      play('click');
+      play('locked_cell');
     }
 
     previousLivesRef.current = currentLives;
     previousCapturedCountRef.current = capturedCount;
     previousActionMessageRef.current = message;
     previousTurnKeyRef.current = turnKey;
+    previousDefusesUsedRef.current = defusesUsed;
+    previousMinesPlacedRef.current = minesPlaced;
   }, [gameState, play]);
-
-  const playClick = () => play('click');
 
   const renderHeader = (content?: React.ReactNode) => (
     <div className={styles.gameHeader}>
@@ -86,7 +154,7 @@ export default function App() {
         <button
           className={styles.headerBtn}
           onClick={() => {
-            playClick();
+            playButton();
             toggleMuted();
           }}
           title={muted ? 'Включить звук' : 'Выключить звук'}
@@ -96,7 +164,7 @@ export default function App() {
         <button
           className={styles.headerBtn}
           onClick={() => {
-            playClick();
+            playButton();
             setShowHelp(true);
           }}
         >
@@ -115,7 +183,7 @@ export default function App() {
       {renderHeader(headerContent)}
       {content}
       {renderErrorToast()}
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showHelp && <HelpModal onClose={closeHelp} />}
     </div>
   );
 
@@ -124,11 +192,11 @@ export default function App() {
       <div className={styles.screenBody}>
         <Lobby
           onCreateRoom={(name) => {
-            playClick();
+            playButton();
             createRoom(name);
           }}
           onJoinRoom={(id, name) => {
-            playClick();
+            playButton();
             joinRoom(id, name);
           }}
         />
@@ -154,51 +222,60 @@ export default function App() {
         gameState={gameState}
         myColor={myColor}
         onPlaceMine={(row, col) => {
-          playClick();
+          play('plant_mine');
           placeMineSetup(row, col);
         }}
         onConfirm={() => {
-          playClick();
+          playButton();
           confirmSetup();
         }}
       />
     );
   }
 
-  if (screen === 'finished') {
-    const winner   = gameOver?.winnerColor ?? gameState?.winnerColor;
-    const isWinner = winner === myColor;
-    const winnerPlayer = gameState?.players.find((p) => p.color === winner);
-    return renderShell(
-      <div className={styles.centered}>
-        <div className={styles.waitCard}>
-          <h1>{isWinner ? '🏆 Победа!' : '💀 Поражение!'}</h1>
-          <p>
-            Победитель:{' '}
-            <span style={{ color: winner === 'red' ? '#e74c3c' : '#3498db' }}>
-              {winner === 'red' ? '🔴' : '🔵'} {winnerPlayer?.name ?? winner}
-            </span>
-          </p>
-          {gameOver?.reason === 'lives'        && <p>Причина: потеряны все жизни</p>}
-          {gameOver?.reason === 'headquarters' && <p>Причина: захвачен штаб</p>}
-          {gameOver?.reason === 'territory'    && <p>Причина: истёк лимит ходов, больше территории у победителя</p>}
-          <button
-            className={styles.replayBtn}
-            onClick={() => {
-              playClick();
-              window.location.reload();
-            }}
-          >
-            Играть снова
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (screen === 'game' && gameState && myColor) {
+  if ((screen === 'game' || screen === 'finished') && gameState && myColor) {
     const me       = gameState.players.find((p) => p.color === myColor);
     const opponent = gameState.players.find((p) => p.color !== myColor);
+
+    const turn = gameState.turn;
+    const isMyTurn = turn.currentPlayer === myColor;
+    const isFinished = turn.phase === 'finished' || !!gameState.winnerColor;
+
+    type PrimaryAction = {
+      label: string;
+      onClick: () => void;
+      variant?: 'menu';
+    } | null;
+
+    let primaryAction: PrimaryAction = null;
+    if (isFinished) {
+      primaryAction = {
+        label: '← Вернуться в меню',
+        onClick: () => {
+          playButton();
+          returnToMenu();
+        },
+        variant: 'menu',
+      };
+    } else if (isMyTurn && turn.phase === 'phase2') {
+      primaryAction = {
+        label: 'Завершить захват →',
+        onClick: () => {
+          playButton();
+          endPhase2();
+        },
+      };
+    } else if (isMyTurn && turn.phase === 'phase3') {
+      primaryAction = {
+        label: 'Завершить расстановку →',
+        onClick: () => {
+          playButton();
+          endPhase3();
+        },
+      };
+    }
+
+    primaryActionRef.current = primaryAction ? primaryAction.onClick : null;
 
     const headerContent = (
       <>
@@ -224,54 +301,73 @@ export default function App() {
       </>
     );
 
+    const leftColumnStyle = boardHeight ? { height: boardHeight } : undefined;
+
+    const boardWrapperRefSetter = (el: HTMLDivElement | null) => {
+      // Сохраняем наблюдателя, чтобы один и тот же узел не подписывался дважды.
+      if (!el) return;
+      if ((el as any).__roAttached) return;
+      (el as any).__roAttached = true;
+      const update = () => {
+        const h = el.getBoundingClientRect().height;
+        if (h) setBoardHeight((prev) => (prev === h ? prev : h));
+      };
+      update();
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+    };
+
     return renderShell(
       <div className={styles.gameBody}>
-        <div className={styles.sideColumn}>
+        <div
+          className={`${styles.sideColumn} ${styles.sideColumnLeft}`}
+          style={leftColumnStyle}
+        >
           <GameInfo
             gameState={gameState}
             myColor={myColor}
             section="controls"
-            onEndPhase2={() => {
-              playClick();
-              endPhase2();
-            }}
-            onEndPhase3={() => {
-              playClick();
-              endPhase3();
-            }}
+            gameOver={gameOver}
           />
-          <div className={styles.legend}>
-            <h3>Управление</h3>
-            <div>🖱️ ЛКМ — действие</div>
-            <div>🖱️ ПКМ — флаг / ? / убрать</div>
-            <div>⌨️ Ctrl+Click — разминировать</div>
-            <div>🏰 Захват штаба — мгновенная победа</div>
-            <hr />
-            <h3>Фазы хода</h3>
-            <div>1️⃣ Выбор зоны 3×3</div>
-            <div>2️⃣ Захват по границе (зона 5×5)</div>
-            <div>3️⃣ Поставить 0–3 мины (+1 за штаб в зоне 5×5)</div>
+          <div className={styles.actionButtonSlot}>
+            {primaryAction && (
+              <button
+                className={`${styles.primaryActionBtn} ${
+                  primaryAction.variant === 'menu' ? styles.menuVariant : ''
+                }`}
+                onClick={primaryAction.onClick}
+              >
+                {primaryAction.label}
+              </button>
+            )}
           </div>
         </div>
         <Board
           gameState={gameState}
           myColor={myColor}
+          onWrapperRef={boardWrapperRefSetter}
           onSelectZone={(row, col) => {
             play('scan');
             selectZone(row, col);
           }}
           onCaptureCell={(row, col) => {
+            // Звук появится из эффекта по обновлению gameState
+            // (locked_cell или explosion — в зависимости от результата)
             captureCell(row, col);
           }}
           onDefuseCell={(row, col) => {
+            // Звук disarm появится из эффекта при росте defusesUsedThisTurn
             defuseCell(row, col);
           }}
           onPlaceMinePhase3={(row, col) => {
-            playClick();
+            // Играем сразу: последняя мина завершает ход, и счётчик
+            // minesPlacedThisTurn сбрасывается до следующего рендера —
+            // эффект по состоянию его «не увидит».
+            play('plant_mine');
             placeMinePhase3(row, col);
           }}
           onToggleMark={(row, col, mark) => {
-            playClick();
+            playButton();
             toggleMark(row, col, mark);
           }}
         />
@@ -280,8 +376,6 @@ export default function App() {
             gameState={gameState}
             myColor={myColor}
             section="stats"
-            onEndPhase2={() => {}}
-            onEndPhase3={() => {}}
           />
         </div>
       </div>,

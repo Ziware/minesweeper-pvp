@@ -115,7 +115,7 @@ export function MineSetup({
       <div className={styles.header}>
         <h2 className={styles.title}>{colorLabel} — Расстановка мин</h2>
         <p className={styles.subtitle}>
-          Поставьте ровно <strong>{config.initialMines}</strong> мин на доступные клетки своей половины. 🏰 отмечает штабы.&nbsp;
+          Поставьте ровно <strong>{config.initialMines}</strong> мин на доступные клетки своей половины. 🏛️ отмечает штабы.&nbsp;
           Поставлено: <strong>{me.minesPlaced}/{config.initialMines}</strong>
         </p>
         <p className={styles.opponentLine}>

@@ -167,16 +167,16 @@ export class RoomManager {
     tabId: string,
   ): { room: Room | null; error?: string } {
     const room = this.rooms.get(roomId);
-    if (!room) return { room: null, error: 'Session expired or room not found' };
+    if (!room) return { room: null, error: 'Сессия истекла или комната не найдена' };
 
     const player = room.players.find((p) => p.color === playerColor);
-    if (!player) return { room: null, error: 'Player not found in room' };
+    if (!player) return { room: null, error: 'Игрок не найден в комнате' };
 
     // Проверяем tabId — вкладка должна совпадать
     if (player.tabId !== tabId) {
       return {
         room: null,
-        error: 'Session belongs to a different tab',
+        error: 'Сессия принадлежит другой вкладке',
       };
     }
 
@@ -298,11 +298,11 @@ export class RoomManager {
   }
 
   placeMineSetup(room: Room, color: PlayerColor, row: number, col: number) {
-    if (room.phase !== 'setup') return { ok: false, error: 'Not setup phase' };
+    if (room.phase !== 'setup') return { ok: false, error: 'Сейчас не фаза расстановки' };
     const player = room.players.find((p) => p.color === color)!;
-    if (player.setupConfirmed) return { ok: false, error: 'Already confirmed' };
+    if (player.setupConfirmed) return { ok: false, error: 'Расстановка уже подтверждена' };
     const cell = room.board[row][col];
-    if (cell.owner !== color) return { ok: false, error: 'Not your cell' };
+    if (cell.owner !== color) return { ok: false, error: 'Это не ваша клетка' };
     if (getHeadquartersOwner(row, col, room.config)) return { ok: false, error: 'Штаб нельзя заминировать' };
     if (!isPlayerCellReachable(room.board, row, col, color, room.config)) {
       return { ok: false, error: 'Мины можно ставить только в доступные клетки' };
@@ -320,7 +320,7 @@ export class RoomManager {
       return { ok: true };
     }
     if (player.minesPlaced >= room.config.initialMines) {
-      return { ok: false, error: 'Max mines placed' };
+      return { ok: false, error: 'Достигнут лимит мин для расстановки' };
     }
     cell.hasMine = true;
     player.minesPlaced++;
@@ -335,7 +335,7 @@ export class RoomManager {
   }
 
   confirmSetup(room: Room, color: PlayerColor) {
-    if (room.phase !== 'setup') return { ok: false, bothConfirmed: false, error: 'Not setup phase' };
+    if (room.phase !== 'setup') return { ok: false, bothConfirmed: false, error: 'Сейчас не фаза расстановки' };
     const player = room.players.find((p) => p.color === color)!;
     if (player.minesPlaced !== room.config.initialMines) {
       return { ok: false, bothConfirmed: false, error: `Place exactly ${room.config.initialMines} mines` };
@@ -359,8 +359,8 @@ export class RoomManager {
   }
 
   selectZone(room: Room, color: PlayerColor, clickedRow: number, clickedCol: number) {
-    if (room.turn.phase !== 'phase1') return { ok: false, error: 'Not phase 1' };
-    if (room.turn.currentPlayer !== color) return { ok: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase1') return { ok: false, error: 'Сейчас не фаза разведки' };
+    if (room.turn.currentPlayer !== color) return { ok: false, error: 'Сейчас не ваш ход' };
     const displayZone = getDisplayZoneTopLeft(clickedRow, clickedCol);
     const actionZone  = getActionZoneTopLeft(clickedRow, clickedCol);
     if (!isValidZoneSelection(room.board, displayZone.row, displayZone.col, color, room.config)) {
@@ -396,8 +396,8 @@ export class RoomManager {
   }
 
   captureCell(room: Room, color: PlayerColor, row: number, col: number) {
-    if (room.turn.phase !== 'phase2') return { ok: false, hitMine: false, gameOver: false, error: 'Not phase 2' };
-    if (room.turn.currentPlayer !== color) return { ok: false, hitMine: false, gameOver: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase2') return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не фаза захвата' };
+    if (room.turn.currentPlayer !== color) return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
     const captured    = room.turn.capturedThisTurn as Set<string>;
@@ -459,10 +459,10 @@ export class RoomManager {
     room: Room, color: PlayerColor, row: number, col: number
   ): { ok: boolean; hadMine: boolean; gameOver: boolean; error?: string } {
     if (room.turn.phase !== 'phase2') {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Not phase 2' };
+      return { ok: false, hadMine: false, gameOver: false, error: 'Сейчас не фаза захвата' };
     }
     if (room.turn.currentPlayer !== color) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Not your turn' };
+      return { ok: false, hadMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
     }
     if (!room.turn.canDefuse || room.turn.defusesUsedThisTurn >= room.turn.defusesPerTurn) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Лимит разминирований на ход исчерпан' };
@@ -478,7 +478,7 @@ export class RoomManager {
 
     const cell = room.board[row][col];
     if (cell.owner === color) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse own cell' };
+      return { ok: false, hadMine: false, gameOver: false, error: 'Нельзя разминировать свою клетку' };
     }
 
     room.turn.defusesUsedThisTurn++;
@@ -535,8 +535,8 @@ export class RoomManager {
   }
 
   endPhase2(room: Room, color: PlayerColor) {
-    if (room.turn.phase !== 'phase2') return { ok: false, error: 'Not phase 2' };
-    if (room.turn.currentPlayer !== color) return { ok: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase2') return { ok: false, error: 'Сейчас не фаза захвата' };
+    if (room.turn.currentPlayer !== color) return { ok: false, error: 'Сейчас не ваш ход' };
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('phase2_ended', {
       player: { color, name: player.name, ip: player.ip },
@@ -559,20 +559,20 @@ export class RoomManager {
   }
 
   placeMinePhase3(room: Room, color: PlayerColor, row: number, col: number) {
-    if (room.turn.phase !== 'phase3') return { ok: false, done: false, gameOver: false, error: 'Not phase 3' };
-    if (room.turn.currentPlayer !== color) return { ok: false, done: false, gameOver: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase3') return { ok: false, done: false, gameOver: false, error: 'Сейчас не фаза минирования' };
+    if (room.turn.currentPlayer !== color) return { ok: false, done: false, gameOver: false, error: 'Сейчас не ваш ход' };
     if (room.turn.minesPlacedThisTurn >= room.turn.minesAllowedThisTurn) {
-      return { ok: false, done: false, gameOver: false, error: 'Mine limit reached' };
+      return { ok: false, done: false, gameOver: false, error: 'Достигнут лимит мин на этот ход' };
     }
     const cell = room.board[row][col];
-    if (cell.owner !== color) return { ok: false, done: false, gameOver: false, error: 'Not your cell' };
+    if (cell.owner !== color) return { ok: false, done: false, gameOver: false, error: 'Это не ваша клетка' };
     if (getHeadquartersOwner(row, col, room.config)) {
       return { ok: false, done: false, gameOver: false, error: 'Штаб нельзя заминировать' };
     }
     if (!isPlayerCellReachable(room.board, row, col, color, room.config)) {
       return { ok: false, done: false, gameOver: false, error: 'Мины можно ставить только в доступные клетки' };
     }
-    if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Already has mine' };
+    if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Здесь уже стоит мина' };
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
     const player = room.players.find((p) => p.color === color)!;
@@ -596,8 +596,8 @@ export class RoomManager {
   }
 
   endPhase3(room: Room, color: PlayerColor) {
-    if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Not phase 3' };
-    if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Not your turn' };
+    if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Сейчас не фаза минирования' };
+    if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Сейчас не ваш ход' };
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('phase3_ended', {
       player: { color, name: player.name, ip: player.ip },
@@ -665,7 +665,7 @@ export class RoomManager {
 
   toggleMark(room: Room, color: PlayerColor, row: number, col: number, mark: CellMark) {
     const cell = room.board[row][col];
-    if (cell.owner === color) return { ok: false, error: 'Cannot mark own cell' };
+    if (cell.owner === color) return { ok: false, error: 'Нельзя ставить метку на свою клетку' };
     room.marks[color][`${row},${col}`] = mark;
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('mark_toggled', {
@@ -678,6 +678,20 @@ export class RoomManager {
   }
 
   getBoardForPlayer(room: Room, color: PlayerColor) {
+    // По окончании партии открываем расположение всех мин обоим игрокам и
+    // убираем флажки/вопросы — это превращает финальное поле в «итоговую карту».
+    if (room.phase === 'finished') {
+      return room.board.map((row) =>
+        row.map((cell) => ({
+          owner: cell.owner,
+          hasMine: cell.hasMine,
+          isRevealed: cell.isRevealed,
+          number: cell.number,
+          mark: 'none' as const,
+        })),
+      );
+    }
+
     const board   = getBoardForPlayer(room.board, color);
     const myMarks = room.marks[color];
     for (const [key, mark] of Object.entries(myMarks)) {

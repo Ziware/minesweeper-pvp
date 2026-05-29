@@ -156,15 +156,15 @@ export function useSocket() {
     });
 
     socket.on('error', ({ message }) => {
-      if (message.includes('Session expired') || message.includes('not found')) {
-        console.warn('[socket] session invalid, clearing');
-        clearSession();
-        setRestoring(false);
-        setScreen('lobby');
-        return;
-      }
       setErrorMsg(message);
       setTimeout(() => setErrorMsg(''), 3000);
+    });
+
+    socket.on('sessionInvalid', ({ message }) => {
+      console.warn('[socket] session invalid, clearing:', message);
+      clearSession();
+      setRestoring(false);
+      setScreen('lobby');
     });
 
     socket.on('gameOver', (info) => {
@@ -224,10 +224,22 @@ export function useSocket() {
   const toggleMark      = (row: number, col: number, mark: CellMark) =>
     socketRef.current?.emit('toggleMark',      { row, col, mark });
 
+  const returnToMenu = () => {
+    clearSession();
+    setScreen('lobby');
+    setRoomId('');
+    setMyColor(null);
+    setGameState(null);
+    setGameOver(null);
+    setErrorMsg('');
+    setRestoring(false);
+  };
+
   return {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    returnToMenu,
   };
 }

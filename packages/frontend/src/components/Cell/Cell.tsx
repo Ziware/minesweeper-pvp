@@ -35,7 +35,7 @@ function getCellContent(
   isInActiveZone: boolean,
   isHeadquarters: boolean,
 ): React.ReactNode {
-  if (isHeadquarters) return <span className={styles.icon}>🏰</span>;
+  if (isHeadquarters) return <span className={styles.icon}>🏛️</span>;
 
   if (cell.mark === 'flag')     return <span className={styles.icon}>🚩</span>;
   if (cell.mark === 'question') return <span className={styles.icon}>❓</span>;
@@ -58,6 +58,27 @@ function getCellContent(
   // Цвет фона (mineRed/mineBlue) остаётся всегда через CSS-класс
   if (cell.hasMine === true && cell.owner === myColor && !isInActiveZone) {
     return <span className={styles.icon}>💣</span>;
+  }
+
+  return null;
+}
+
+function getCellContentForFinished(cell: ClientCellState, isHeadquarters: boolean): React.ReactNode {
+  if (isHeadquarters) return <span className={styles.icon}>🏛️</span>;
+  if (cell.hasMine === true) {
+    return <span className={styles.icon}>💣</span>;
+  }
+  if (cell.isRevealed && cell.number !== null) {
+    return (
+      <span style={{
+        color: NUMBER_COLORS[cell.number] ?? '#eee',
+        fontWeight: 'bold',
+        fontSize: '1rem',
+        lineHeight: 1,
+      }}>
+        {cell.number}
+      </span>
+    );
   }
 
   return null;
@@ -97,9 +118,13 @@ export function Cell({
     gamePhase === 'phase3' && isMyTurn && isOwn && !cell.hasMine && !isHeadquarters ? styles.phase3Target : '',
   ].filter(Boolean).join(' ');
 
+  const content = gamePhase === 'finished'
+    ? getCellContentForFinished(cell, isHeadquarters)
+    : getCellContent(cell, myColor, isInActiveZone, isHeadquarters);
+
   return (
     <div className={classNames} onClick={onClick} onContextMenu={onRightClick}>
-      {getCellContent(cell, myColor, isInActiveZone, isHeadquarters)}
+      {content}
     </div>
   );
 }

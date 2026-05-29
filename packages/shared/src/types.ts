@@ -104,6 +104,9 @@ export interface ServerToClientEvents {
   gameOver:           (data: S2C_GameOver) => void;
   waitingForOpponent: () => void;
   sessionRestored:    (data: { playerColor: PlayerColor; roomId: string }) => void;
+  // Сессия больше невалидна (комната исчезла / игрок не найден / другая вкладка),
+  // клиент должен очистить сохранённое состояние и вернуться в лобби без тоста.
+  sessionInvalid:     (data: S2C_Error) => void;
 }
 
 export interface ClientToServerEvents {

@@ -1,17 +1,50 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import clickUrl from '../../../content/click.wav?url';
+import buttonUrl from '../../../content/button.wav?url';
+import defeatUrl from '../../../content/defeat.wav?url';
+import disarmUrl from '../../../content/disarm.wav?url';
 import explosionUrl from '../../../content/explosion.wav?url';
+import lockedCellUrl from '../../../content/locked_cell.wav?url';
+import plantMineUrl from '../../../content/plant_mine.wav?url';
 import scanUrl from '../../../content/scan.wav?url';
+import victoryUrl from '../../../content/victory.wav?url';
 
-type SoundName = 'click' | 'explosion' | 'scan';
+export type SoundName =
+  | 'button'
+  | 'defeat'
+  | 'disarm'
+  | 'explosion'
+  | 'locked_cell'
+  | 'plant_mine'
+  | 'scan'
+  | 'victory';
+
+// Базовая громкость для каждого звука (в дБ). Отрицательные значения = тише.
+const BASE_GAIN_DB: Record<SoundName, number> = {
+  button: -10,
+  defeat: -10,
+  disarm: -10,
+  explosion: -10,
+  locked_cell: -8,
+  plant_mine: -10,
+  scan: -5,
+  victory: -10,
+};
+
+// Диапазон случайной вариации к базовой громкости.
+const GAIN_VARIATION_DB = 1;
 
 type SoundBuffers = Partial<Record<SoundName, AudioBuffer>>;
 
 const SOUND_URLS: Record<SoundName, string> = {
-  click: clickUrl,
+  button: buttonUrl,
+  defeat: defeatUrl,
+  disarm: disarmUrl,
   explosion: explosionUrl,
+  locked_cell: lockedCellUrl,
+  plant_mine: plantMineUrl,
   scan: scanUrl,
+  victory: victoryUrl,
 };
 
 const STORAGE_KEY = 'minesweeper_sound_muted';
@@ -82,16 +115,17 @@ export function useSound() {
         const gain = context.createGain();
 
         source.buffer = buffer;
-        source.playbackRate.value = randomBetween(0.9, 1.1);
+        source.playbackRate.value = randomBetween(0.97, 1.03);
 
         filter.type = 'lowpass';
-        filter.frequency.value = randomBetween(6500, 18000);
-        filter.Q.value = randomBetween(0.25, 1.4);
+        filter.frequency.value = randomBetween(8000, 18000);
+        filter.Q.value = randomBetween(0.25, 1.2);
 
         const panner = context.createStereoPanner();
-        panner.pan.value = randomBetween(-0.08, 0.08);
+        panner.pan.value = randomBetween(-0.05, 0.05);
 
-        gain.gain.value = dbToGain(randomBetween(-4, 3));
+        const baseDb = BASE_GAIN_DB[name];
+        gain.gain.value = dbToGain(baseDb + randomBetween(-GAIN_VARIATION_DB, GAIN_VARIATION_DB));
 
         source.connect(filter);
         filter.connect(panner);
@@ -104,9 +138,14 @@ export function useSound() {
     })();
   }, [getAudioContext, loadSound]);
 
+  // Отложенное воспроизведение (например, для победы/поражения с задержкой 0.5с).
+  const playDelayed = useCallback((name: SoundName, delayMs: number) => {
+    window.setTimeout(() => play(name), delayMs);
+  }, [play]);
+
   const toggleMuted = useCallback(() => {
     setMuted((current) => !current);
   }, []);
 
-  return { muted, play, preload, toggleMuted };
+  return { muted, play, playDelayed, preload, toggleMuted };
 }

@@ -6,9 +6,44 @@
   background: #16213e;
   border-radius: 14px;
   color: #eee;
-  min-width: 230px;
-  max-width: 260px;
+  width: 260px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* Баннер победы / поражения */
+.winnerBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #1a472a, #27ae60);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(39, 174, 96, 0.55);
+}
+.loserBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, #2c2c3a, #4a4a5a);
+  color: #cfd0d6;
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.45);
+}
+.bannerHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bannerName {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* Статус хода */
@@ -140,6 +175,55 @@
 
 .phase3Row { color: #f0c040; }
 .phase3Row strong { color: #ffe066; }
+
+/* Блок «Управление» в правой колонке, по стилю как statsBlock */
+.controlsBlock {
+  background: #0d1f36;
+  border-radius: 10px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: #bbb;
+}
+.controlsBlock .controlsTitle {
+  font-size: 0.82rem;
+  font-weight: bold;
+  color: #aac;
+  margin-bottom: 3px;
+}
+.controlsBlock .controlsHeader {
+  font-size: 0.75rem;
+  color: #778;
+  font-weight: 600;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.controlsBlock .controlsRow {
+  font-size: 0.82rem;
+  color: #bbb;
+  line-height: 1.35;
+}
+.controlsDivider {
+  height: 1px;
+  background: #1e3050;
+  margin: 3px 0;
+}
+
+.hotkeyKey {
+  display: inline-block;
+  padding: 1px 8px;
+  background: #0f3460;
+  border: 1px solid #1e4f80;
+  border-radius: 5px;
+  color: #cde;
+  font-family: monospace;
+  font-weight: 600;
+  margin-right: 4px;
+  font-size: 0.78rem;
+}
 
 /* Разминирование */
 .defuseStatus {

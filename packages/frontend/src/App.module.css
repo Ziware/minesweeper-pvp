@@ -120,7 +120,8 @@
   padding: 14px;
   align-items: flex-start;
   justify-content: center;
-  overflow: hidden;
+  /* overflow visible — иначе тени боковых панелей и кнопки обрезаются */
+  overflow: visible;
   min-height: 0;
 }
 
@@ -128,28 +129,62 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 230px;
-  max-width: 280px;
+  width: 260px;
   flex-shrink: 0;
-  overflow-y: auto;
+  align-self: flex-start;
   max-height: 100%;
+  /* overflow visible — иначе у вложенных панелей обрезаются тени */
+  overflow: visible;
+  /* небольшие отступы, чтобы тени не упирались в края .gameBody */
+  padding: 4px;
+  margin: -4px;
 }
 
-.legend {
-  background: #16213e;
-  border-radius: 12px;
-  padding: 14px;
-  font-size: 0.82rem;
-  color: #bbb;
+.sideColumnLeft {
+  /* высота задаётся inline-стилем (равной высоте доски),
+     чтобы кнопка прижалась к нижнему краю доски */
+  justify-content: space-between;
+}
+
+.actionButtonSlot {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-width: 170px;
-  max-width: 195px;
-  flex-shrink: 0;
+  gap: 8px;
 }
-.legend h3 { margin: 0; color: #eee; font-size: 0.86rem; }
-.legend hr  { border: none; border-top: 1px solid #333; margin: 3px 0; }
+
+.primaryActionBtn {
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: none;
+  background: #e67e22;
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 4px 16px rgba(230, 126, 34, 0.35);
+}
+.primaryActionBtn:hover { background: #f39c12; }
+.primaryActionBtn:active { transform: translateY(1px); }
+
+.primaryActionBtn.menuVariant {
+  background: #27ae60;
+  box-shadow: 0 4px 16px rgba(39, 174, 96, 0.35);
+}
+.primaryActionBtn.menuVariant:hover { background: #2ecc71; }
+
+.hotkeyKey {
+  display: inline-block;
+  padding: 1px 8px;
+  background: #0f3460;
+  border: 1px solid #1e4f80;
+  border-radius: 5px;
+  color: #cde;
+  font-family: monospace;
+  font-weight: 600;
+  margin: 0 3px;
+  font-size: 0.78rem;
+}
 
 .toastError {
   position: fixed;
