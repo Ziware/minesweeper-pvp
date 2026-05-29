@@ -19,6 +19,7 @@ export type GameLogEvent =
   | 'cell_captured'
   | 'mine_exploded'
   | 'cell_defused'
+  | 'defuses_granted'
   | 'phase2_ended'
   | 'phase3_mine_placed'
   | 'phase3_ended'

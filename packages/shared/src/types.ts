@@ -56,12 +56,13 @@ export interface TurnState {
   selectedZone: { row: number; col: number } | null;
   actionZone: { row: number; col: number } | null;
   canDefuse: boolean;
-  defusesUsedThisTurn: number;
-  defusesAllowedThisTurn: number;
   minesPlacedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
   lastActionMessage: string | null;
-  turnsPlayed: Record<PlayerColor, number>;
+  // Общий счётчик ходов обоих игроков (1 ход = одно завершение хода любым игроком)
+  turnsPlayed: number;
+  // Накопительный запас разминирований каждого игрока
+  defusesAvailable: Record<PlayerColor, number>;
 }
 
 export interface S2C_RoomCreated { roomId: string; playerColor: PlayerColor; }

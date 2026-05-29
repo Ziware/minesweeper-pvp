@@ -332,34 +332,24 @@ export function getBoardForPlayer(
   );
 }
 
-export function actionZoneContainsHeadquarters(
-  actionZoneRow: number,
-  actionZoneCol: number,
-  playerColor: PlayerColor,
-  config: GameConfig,
-): boolean {
-  return getHeadquartersCells(playerColor, config).some(({ row, col }) => (
-    row >= actionZoneRow && row < actionZoneRow + 5 &&
-    col >= actionZoneCol && col < actionZoneCol + 5 &&
-    isInBounds(row, col, config.boardSize)
-  ));
-}
+export const INITIAL_DEFUSES = 1;
+export const DEFUSE_GRANT_INTERVAL = 5;
 
 export function createInitialTurnState(
   currentPlayer: PlayerColor,
-  turnsPlayed: Record<PlayerColor, number> = { red: 0, blue: 0 },
+  turnsPlayed: number = 0,
+  defusesAvailable: Record<PlayerColor, number> = { red: INITIAL_DEFUSES, blue: INITIAL_DEFUSES },
 ): TurnState {
   return {
     phase: 'phase1',
     currentPlayer,
     selectedZone: null,
     actionZone: null,
-    canDefuse: true,
-    defusesUsedThisTurn: 0,
-    defusesAllowedThisTurn: 1,
+    canDefuse: defusesAvailable[currentPlayer] > 0,
     minesPlacedThisTurn: 0,
     capturedThisTurn: new Set<string>(),
     lastActionMessage: null,
-    turnsPlayed: { ...turnsPlayed },
+    turnsPlayed,
+    defusesAvailable: { ...defusesAvailable },
   };
 }

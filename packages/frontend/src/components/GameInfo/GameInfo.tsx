@@ -93,14 +93,20 @@ export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameI
       <div className={styles.statsBlock}>
         <div className={styles.statsTitle}>📊 Статистика</div>
 
-        <div className={styles.statHeader}>Лимит ходов</div>
+        <div className={styles.statHeader}>Раунды</div>
+        <div className={styles.statRow}>
+          <span>🔁 Сыграно ходов:</span>
+          <strong>{turn.turnsPlayed} / {config.turnLimitPerPlayer * 2}</strong>
+        </div>
+
+        <div className={styles.statHeader}>Запас разминирований</div>
         <div className={styles.statRow}>
           <span className={styles.redLabel}>🔴 Красный:</span>
-          <strong className={styles.redVal}>{turn.turnsPlayed.red} / {config.turnLimitPerPlayer}</strong>
+          <strong className={styles.redVal}>{turn.defusesAvailable.red}</strong>
         </div>
         <div className={styles.statRow}>
           <span className={styles.blueLabel}>🔵 Синий:</span>
-          <strong className={styles.blueVal}>{turn.turnsPlayed.blue} / {config.turnLimitPerPlayer}</strong>
+          <strong className={styles.blueVal}>{turn.defusesAvailable.blue}</strong>
         </div>
 
         {/* Строка: мины */}
@@ -145,8 +151,8 @@ export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameI
       {turn.phase === 'phase2' && (
         <div className={`${styles.defuseStatus} ${turn.canDefuse ? styles.defuseAvailable : styles.defuseUsed}`}>
           {turn.canDefuse
-            ? `🔧 Разминирований доступно: ${turn.defusesAllowedThisTurn - turn.defusesUsedThisTurn} / ${turn.defusesAllowedThisTurn}`
-            : `🔧 Разминирования использованы: ${turn.defusesUsedThisTurn} / ${turn.defusesAllowedThisTurn}`}
+            ? `🔧 Разминирований в запасе: ${turn.defusesAvailable[myColor]}`
+            : `🔧 Разминирования закончились`}
         </div>
       )}
 

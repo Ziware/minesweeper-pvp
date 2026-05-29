@@ -25,7 +25,8 @@ import {
   computeBoardStats,
   getHeadquartersOwner,
   isPlayerCellReachable,
-  actionZoneContainsHeadquarters,
+  INITIAL_DEFUSES,
+  DEFUSE_GRANT_INTERVAL,
 } from './gameLogic';
 
 export interface PlayerState {
@@ -104,12 +105,11 @@ export class RoomManager {
         selectedZone: null,
         actionZone: null,
         canDefuse: true,
-        defusesUsedThisTurn: 0,
-        defusesAllowedThisTurn: 1,
         minesPlacedThisTurn: 0,
         capturedThisTurn: new Set(),
         lastActionMessage: null,
-        turnsPlayed: { red: 0, blue: 0 },
+        turnsPlayed: 0,
+        defusesAvailable: { red: INITIAL_DEFUSES, blue: INITIAL_DEFUSES },
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
@@ -362,9 +362,6 @@ export class RoomManager {
     if (!isValidZoneSelection(room.board, displayZone.row, displayZone.col, color, room.config)) {
       return { ok: false, error: 'В зоне 3×3 нет доступных клеток вашей территории' };
     }
-    const defusesAllowed = actionZoneContainsHeadquarters(
-      actionZone.row, actionZone.col, color, room.config
-    ) ? 2 : 1;
 
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('zone_selected', {
@@ -372,15 +369,12 @@ export class RoomManager {
       clicked: { row: clickedRow, col: clickedCol },
       displayZone,
       actionZone,
-      defensive: defusesAllowed === 2,
-      defusesAllowed,
+      defusesAvailable: room.turn.defusesAvailable[color],
     });
 
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
-    room.turn.defusesAllowedThisTurn = defusesAllowed;
-    room.turn.defusesUsedThisTurn = 0;
-    room.turn.canDefuse = defusesAllowed > 0;
+    room.turn.canDefuse = room.turn.defusesAvailable[color] > 0;
     revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
@@ -457,8 +451,8 @@ export class RoomManager {
     if (room.turn.currentPlayer !== color) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Not your turn' };
     }
-    if (!room.turn.canDefuse || room.turn.defusesUsedThisTurn >= room.turn.defusesAllowedThisTurn) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'Разминирования на этот ход уже использованы' };
+    if (!room.turn.canDefuse || room.turn.defusesAvailable[color] <= 0) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'У вас закончились разминирования' };
     }
 
     const actionZone  = room.turn.actionZone!;
@@ -474,8 +468,8 @@ export class RoomManager {
       return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse own cell' };
     }
 
-    room.turn.defusesUsedThisTurn++;
-    room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesAllowedThisTurn;
+    room.turn.defusesAvailable[color]--;
+    room.turn.canDefuse = room.turn.defusesAvailable[color] > 0;
     const hadMine = cell.hasMine;
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('cell_defused', {
@@ -483,8 +477,7 @@ export class RoomManager {
       row,
       col,
       hadMine,
-      defusesUsed: room.turn.defusesUsedThisTurn,
-      defusesAllowed: room.turn.defusesAllowedThisTurn,
+      defusesAvailable: room.turn.defusesAvailable[color],
     });
 
     if (hadMine) {
@@ -534,8 +527,7 @@ export class RoomManager {
     room.logger.event('phase2_ended', {
       player: { color, name: player.name, ip: player.ip },
       capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
-      defusesUsed: room.turn.defusesUsedThisTurn,
-      defusesAllowed: room.turn.defusesAllowedThisTurn,
+      defusesAvailable: room.turn.defusesAvailable[color],
     });
     this.startPhase3(room);
     return { ok: true };
@@ -623,27 +615,35 @@ export class RoomManager {
       return true;
     }
 
-    const turnsPlayed = {
-      ...room.turn.turnsPlayed,
-      [room.turn.currentPlayer]: room.turn.turnsPlayed[room.turn.currentPlayer] + 1,
-    };
+    const turnsPlayed = room.turn.turnsPlayed + 1;
+    const defusesAvailable = { ...room.turn.defusesAvailable };
 
-    if (
-      turnsPlayed.red >= room.config.turnLimitPerPlayer &&
-      turnsPlayed.blue >= room.config.turnLimitPerPlayer
-    ) {
+    // Каждые DEFUSE_GRANT_INTERVAL завершённых ходов оба игрока получают +1 разминирование.
+    if (turnsPlayed > 0 && turnsPlayed % DEFUSE_GRANT_INTERVAL === 0) {
+      defusesAvailable.red++;
+      defusesAvailable.blue++;
+      room.logger.event('defuses_granted', {
+        turnsPlayed,
+        amount: 1,
+        defusesAvailable,
+      });
+    }
+
+    const totalTurnLimit = room.config.turnLimitPerPlayer * 2;
+    if (turnsPlayed >= totalTurnLimit) {
       const stats = computeBoardStats(room.board);
       room.winner = stats.redCells >= stats.blueCells ? 'red' : 'blue';
       room.winReason = 'territory';
       room.phase = 'finished';
       room.turn.phase = 'finished';
       room.turn.turnsPlayed = turnsPlayed;
+      room.turn.defusesAvailable = defusesAvailable;
       clearRevealedNumbers(room.board);
       return true;
     }
 
     const nextColor: PlayerColor = room.turn.currentPlayer === 'red' ? 'blue' : 'red';
-    room.turn  = createInitialTurnState(nextColor, turnsPlayed);
+    room.turn  = createInitialTurnState(nextColor, turnsPlayed, defusesAvailable);
     room.phase = 'phase1';
     return false;
   }
