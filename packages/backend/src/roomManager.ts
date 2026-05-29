@@ -28,6 +28,7 @@ import {
   INITIAL_DEFUSES_PER_TURN,
   DEFUSE_GRANT_INTERVAL,
   defusesPerTurnFor,
+  actionZoneContainsHeadquarters,
 } from './gameLogic';
 
 export interface PlayerState {
@@ -107,6 +108,7 @@ export class RoomManager {
         actionZone: null,
         canDefuse: true,
         minesPlacedThisTurn: 0,
+        minesAllowedThisTurn: fullConfig.minesPerTurn,
         capturedThisTurn: new Set(),
         lastActionMessage: null,
         turnsPlayed: 0,
@@ -365,6 +367,12 @@ export class RoomManager {
       return { ok: false, error: 'В зоне 3×3 нет доступных клеток вашей территории' };
     }
 
+    // Бонус за «защитную» зону: если в 5×5 попадает свой штаб — +1 мина в фазе 3.
+    const defensiveZone = actionZoneContainsHeadquarters(
+      actionZone.row, actionZone.col, color, room.config,
+    );
+    const minesAllowedThisTurn = room.config.minesPerTurn + (defensiveZone ? 1 : 0);
+
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('zone_selected', {
       player: { color, name: player.name, ip: player.ip },
@@ -372,11 +380,14 @@ export class RoomManager {
       displayZone,
       actionZone,
       defusesPerTurn: room.turn.defusesPerTurn,
+      defensiveZone,
+      minesAllowedThisTurn,
     });
 
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
     room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesPerTurn;
+    room.turn.minesAllowedThisTurn = minesAllowedThisTurn;
     revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
@@ -550,7 +561,7 @@ export class RoomManager {
   placeMinePhase3(room: Room, color: PlayerColor, row: number, col: number) {
     if (room.turn.phase !== 'phase3') return { ok: false, done: false, gameOver: false, error: 'Not phase 3' };
     if (room.turn.currentPlayer !== color) return { ok: false, done: false, gameOver: false, error: 'Not your turn' };
-    if (room.turn.minesPlacedThisTurn >= room.config.minesPerTurn) {
+    if (room.turn.minesPlacedThisTurn >= room.turn.minesAllowedThisTurn) {
       return { ok: false, done: false, gameOver: false, error: 'Mine limit reached' };
     }
     const cell = room.board[row][col];
@@ -571,7 +582,7 @@ export class RoomManager {
       col,
       minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
     });
-    const done = room.turn.minesPlacedThisTurn >= room.config.minesPerTurn;
+    const done = room.turn.minesPlacedThisTurn >= room.turn.minesAllowedThisTurn;
     if (done) {
       room.logger.event('phase3_ended', {
         player: { color, name: player.name, ip: player.ip },

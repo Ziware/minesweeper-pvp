@@ -57,6 +57,8 @@ export interface TurnState {
   actionZone: { row: number; col: number } | null;
   canDefuse: boolean;
   minesPlacedThisTurn: number;
+  // Лимит мин на 3-ю фазу для текущего игрока (база + бонус за зону над штабом)
+  minesAllowedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
   lastActionMessage: string | null;
   // Общий счётчик завершённых ходов обоих игроков (1 ход = одно завершение хода любым игроком)

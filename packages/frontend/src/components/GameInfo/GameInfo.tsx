@@ -7,6 +7,7 @@ interface GameInfoProps {
   myColor: PlayerColor;
   onEndPhase2: () => void;
   onEndPhase3: () => void;
+  section?: 'controls' | 'stats';
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -18,20 +19,28 @@ const PHASE_LABELS: Record<string, string> = {
 const PHASE_DESCRIPTIONS: Record<string, string> = {
   phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша доступная клетка, соединённая со штабом.',
   phase2: 'Захватывайте вражеские клетки в зоне 5×5 рядом с доступной клеткой. Ctrl+Click — разминировать.',
-  phase3: 'Поставьте от 0 до 3 мин на свои свободные доступные клетки и завершите ход.',
+  phase3: 'Поставьте от 0 до лимита мин на свои свободные доступные клетки и завершите ход.',
 };
 
 const DEFUSE_GRANT_INTERVAL = 5;
 
-export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameInfoProps) {
+function pluralize(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+  return forms[2];
+}
+
+export function GameInfo({
+  gameState,
+  myColor,
+  onEndPhase2,
+  onEndPhase3,
+  section = 'controls',
+}: GameInfoProps) {
   const { players, turn, config, stats } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
-
-  const totalTurnLimit = config.turnLimitPerPlayer * 2;
-  const turnsUntilNextDefuse =
-    DEFUSE_GRANT_INTERVAL - (turn.turnsPlayed % DEFUSE_GRANT_INTERVAL);
-  const willGetMoreDefuses = turn.turnsPlayed + turnsUntilNextDefuse < totalTurnLimit;
-  const defusesLeftThisTurn = Math.max(0, turn.defusesPerTurn - turn.defusesUsedThisTurn);
 
   const redPlayer  = players.find((p) => p.color === 'red')!;
   const bluePlayer = players.find((p) => p.color === 'blue')!;
@@ -39,12 +48,88 @@ export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameI
   // Флажки — из доски
   const flagCount = gameState.board.flat().filter((c) => c.mark === 'flag').length;
 
+  const totalTurnLimit = config.turnLimitPerPlayer * 2;
+  const turnsUntilNextDefuse =
+    DEFUSE_GRANT_INTERVAL - (turn.turnsPlayed % DEFUSE_GRANT_INTERVAL);
+  const willGetMoreDefuses = turn.turnsPlayed + turnsUntilNextDefuse < totalTurnLimit;
+  const defusesLeftThisTurn = Math.max(0, turn.defusesPerTurn - turn.defusesUsedThisTurn);
+  const minesBonus = Math.max(0, turn.minesAllowedThisTurn - config.minesPerTurn);
+
   const renderHearts = (lives: number, max: number) =>
     Array.from({ length: max }, (_, i) => (
       <span key={i} className={i < lives ? styles.heartFull : styles.heartEmpty}>
         {i < lives ? '❤️' : '🖤'}
       </span>
     ));
+
+  if (section === 'stats') {
+    return (
+      <div className={styles.panel}>
+        <div className={styles.statsBlock}>
+          <div className={styles.statsTitle}>📊 Статистика</div>
+
+          <div className={styles.statHeader}>Раунды</div>
+          <div className={styles.statRow}>
+            <span>🔁 Сыграно ходов:</span>
+            <strong>{turn.turnsPlayed} / {totalTurnLimit}</strong>
+          </div>
+
+          <div className={styles.statHeader}>Разминирований на ход</div>
+          <div className={styles.statRow}>
+            <span>🔧 Лимит:</span>
+            <strong>{turn.defusesPerTurn}</strong>
+          </div>
+          {willGetMoreDefuses && (
+            <div className={styles.statRow}>
+              <span>⏭️ +1 через:</span>
+              <strong>
+                {turnsUntilNextDefuse} {pluralize(turnsUntilNextDefuse, ['ход', 'хода', 'ходов'])}
+              </strong>
+            </div>
+          )}
+
+          <div className={styles.statHeader}>Мины на поле</div>
+          <div className={styles.statRow}>
+            <span className={styles.redLabel}>🔴 Красный:</span>
+            <strong className={styles.redVal}>{stats.redMines}</strong>
+          </div>
+          <div className={styles.statRow}>
+            <span className={styles.blueLabel}>🔵 Синий:</span>
+            <strong className={styles.blueVal}>{stats.blueMines}</strong>
+          </div>
+
+          <div className={styles.statHeader}>Клеток во владении</div>
+          <div className={styles.statRow}>
+            <span className={styles.redLabel}>🔴 Красный:</span>
+            <strong className={styles.redVal}>{stats.redCells}</strong>
+          </div>
+          <div className={styles.statRow}>
+            <span className={styles.blueLabel}>🔵 Синий:</span>
+            <strong className={styles.blueVal}>{stats.blueCells}</strong>
+          </div>
+
+          <div className={styles.statDivider} />
+          <div className={styles.statRow}>
+            <span>🚩 Флажков:</span>
+            <strong>{flagCount}</strong>
+          </div>
+
+          {turn.phase === 'phase3' && isMyTurn && (
+            <div className={`${styles.statRow} ${styles.phase3Row}`}>
+              <span>📍 Поставлено мин:</span>
+              <strong>{turn.minesPlacedThisTurn} / {turn.minesAllowedThisTurn}</strong>
+            </div>
+          )}
+          {turn.phase === 'phase3' && isMyTurn && minesBonus > 0 && (
+            <div className={`${styles.statRow} ${styles.phase3Row}`}>
+              <span>🏰 Бонус за штаб:</span>
+              <strong>+{minesBonus}</strong>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.panel}>
@@ -96,66 +181,6 @@ export function GameInfo({ gameState, myColor, onEndPhase2, onEndPhase3 }: GameI
           {turn.lastActionMessage}
         </div>
       )}
-
-      {/* ===== Статистика — открытая для обоих ===== */}
-      <div className={styles.statsBlock}>
-        <div className={styles.statsTitle}>📊 Статистика</div>
-
-        <div className={styles.statHeader}>Раунды</div>
-        <div className={styles.statRow}>
-          <span>🔁 Сыграно ходов:</span>
-          <strong>{turn.turnsPlayed} / {totalTurnLimit}</strong>
-        </div>
-
-        <div className={styles.statHeader}>Разминирований на ход</div>
-        <div className={styles.statRow}>
-          <span>🔧 Лимит:</span>
-          <strong>{turn.defusesPerTurn}</strong>
-        </div>
-        {willGetMoreDefuses && (
-          <div className={styles.statRow}>
-            <span>⏭️ +1 через:</span>
-            <strong>{turnsUntilNextDefuse} {turnsUntilNextDefuse === 1 ? 'ход' : 'ход(ов)'}</strong>
-          </div>
-        )}
-
-        {/* Строка: мины */}
-        <div className={styles.statHeader}>Мины на поле</div>
-        <div className={styles.statRow}>
-          <span className={styles.redLabel}>🔴 Красный:</span>
-          <strong className={styles.redVal}>{stats.redMines}</strong>
-        </div>
-        <div className={styles.statRow}>
-          <span className={styles.blueLabel}>🔵 Синий:</span>
-          <strong className={styles.blueVal}>{stats.blueMines}</strong>
-        </div>
-
-        {/* Строка: клетки */}
-        <div className={styles.statHeader}>Клеток во владении</div>
-        <div className={styles.statRow}>
-          <span className={styles.redLabel}>🔴 Красный:</span>
-          <strong className={styles.redVal}>{stats.redCells}</strong>
-        </div>
-        <div className={styles.statRow}>
-          <span className={styles.blueLabel}>🔵 Синий:</span>
-          <strong className={styles.blueVal}>{stats.blueCells}</strong>
-        </div>
-
-        {/* Флажки */}
-        <div className={styles.statDivider} />
-        <div className={styles.statRow}>
-          <span>🚩 Флажков:</span>
-          <strong>{flagCount}</strong>
-        </div>
-
-        {/* Фаза 3 */}
-        {turn.phase === 'phase3' && isMyTurn && (
-          <div className={`${styles.statRow} ${styles.phase3Row}`}>
-            <span>📍 Поставлено мин:</span>
-            <strong>{turn.minesPlacedThisTurn} / {config.minesPerTurn}</strong>
-          </div>
-        )}
-      </div>
 
       {/* Разминирование */}
       {turn.phase === 'phase2' && (

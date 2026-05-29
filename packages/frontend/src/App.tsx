@@ -20,6 +20,8 @@ export default function App() {
   const { muted, play, preload, toggleMuted } = useSound();
   const previousLivesRef = useRef<Record<string, number> | null>(null);
   const previousCapturedCountRef = useRef<number | null>(null);
+  const previousActionMessageRef = useRef<string | null>(null);
+  const previousTurnKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     preload();
@@ -32,24 +34,46 @@ export default function App() {
       gameState.players.map((player) => [player.color, player.lives])
     );
     const previousLives = previousLivesRef.current;
+    const phase = gameState.turn.phase;
+    const turnKey = `${gameState.turn.currentPlayer}:${gameState.turn.turnsPlayed}`;
+    const turnChanged = previousTurnKeyRef.current !== turnKey;
+    const message = gameState.turn.lastActionMessage;
+    const messageChanged = message !== previousActionMessageRef.current;
 
-    const hasExplosion = previousLives
+    // Звук взрыва возможен только при наступлении на мину во время захвата.
+    // Триггерим его явно по новому сообщению сервера, чтобы исключить ложные
+    // срабатывания при выборе зоны или восстановлении сессии.
+    const livesDecreased = previousLives
       ? gameState.players.some(
         (player) => player.lives < (previousLives[player.color] ?? player.lives)
       )
       : false;
+    const isExplosionMessage = !!message && message.startsWith('💥');
+    const hasExplosion =
+      livesDecreased &&
+      isExplosionMessage &&
+      messageChanged &&
+      // Сервер сразу переключает фазу: после взрыва уходим в phase3.
+      (phase === 'phase2' || phase === 'phase3' || phase === 'finished');
+
+    const capturedCount = gameState.turn.capturedThisTurn.length;
+    const previousCaptured = previousCapturedCountRef.current;
+    const newCellsCaptured =
+      !turnChanged &&
+      previousCaptured !== null &&
+      capturedCount > previousCaptured &&
+      (phase === 'phase2' || phase === 'phase3');
 
     if (hasExplosion) {
       play('explosion');
-    } else if (
-      previousCapturedCountRef.current !== null &&
-      gameState.turn.capturedThisTurn.length > previousCapturedCountRef.current
-    ) {
+    } else if (newCellsCaptured) {
       play('click');
     }
 
     previousLivesRef.current = currentLives;
-    previousCapturedCountRef.current = gameState.turn.capturedThisTurn.length;
+    previousCapturedCountRef.current = capturedCount;
+    previousActionMessageRef.current = message;
+    previousTurnKeyRef.current = turnKey;
   }, [gameState, play]);
 
   const playClick = () => play('click');
@@ -202,18 +226,33 @@ export default function App() {
 
     return renderShell(
       <div className={styles.gameBody}>
-        <GameInfo
-          gameState={gameState}
-          myColor={myColor}
-          onEndPhase2={() => {
-            playClick();
-            endPhase2();
-          }}
-          onEndPhase3={() => {
-            playClick();
-            endPhase3();
-          }}
-        />
+        <div className={styles.sideColumn}>
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            section="controls"
+            onEndPhase2={() => {
+              playClick();
+              endPhase2();
+            }}
+            onEndPhase3={() => {
+              playClick();
+              endPhase3();
+            }}
+          />
+          <div className={styles.legend}>
+            <h3>Управление</h3>
+            <div>🖱️ ЛКМ — действие</div>
+            <div>🖱️ ПКМ — флаг / ? / убрать</div>
+            <div>⌨️ Ctrl+Click — разминировать</div>
+            <div>🏰 Захват штаба — мгновенная победа</div>
+            <hr />
+            <h3>Фазы хода</h3>
+            <div>1️⃣ Выбор зоны 3×3</div>
+            <div>2️⃣ Захват по границе (зона 5×5)</div>
+            <div>3️⃣ Поставить 0–3 мины (+1 за штаб в зоне 5×5)</div>
+          </div>
+        </div>
         <Board
           gameState={gameState}
           myColor={myColor}
@@ -236,17 +275,14 @@ export default function App() {
             toggleMark(row, col, mark);
           }}
         />
-        <div className={styles.legend}>
-          <h3>Управление</h3>
-          <div>🖱️ ЛКМ — действие</div>
-          <div>🖱️ ПКМ — флаг / ? / убрать</div>
-          <div>⌨️ Ctrl+Click — разминировать</div>
-          <div>🏰 Захват штаба — мгновенная победа</div>
-          <hr />
-          <h3>Фазы хода</h3>
-          <div>1️⃣ Выбор зоны 3×3</div>
-          <div>2️⃣ Захват по границе (зона 5×5)</div>
-          <div>3️⃣ Поставить 0–3 мины</div>
+        <div className={styles.sideColumn}>
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            section="stats"
+            onEndPhase2={() => {}}
+            onEndPhase3={() => {}}
+          />
         </div>
       </div>,
       headerContent

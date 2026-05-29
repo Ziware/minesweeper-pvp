@@ -124,6 +124,17 @@
   min-height: 0;
 }
 
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 230px;
+  max-width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
 .legend {
   background: #16213e;
   border-radius: 12px;

@@ -11,7 +11,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   totalMines: 7,
   maxLives: 3,
   minesPerTurn: 3,
-  initialMines: 7,
+  initialMines: 8,
   turnLimitPerPlayer: 15,
 };
 
@@ -341,9 +341,23 @@ export function defusesPerTurnFor(turnsPlayed: number): number {
   return INITIAL_DEFUSES_PER_TURN + Math.floor(turnsPlayed / DEFUSE_GRANT_INTERVAL);
 }
 
+export function actionZoneContainsHeadquarters(
+  actionZoneRow: number,
+  actionZoneCol: number,
+  playerColor: PlayerColor,
+  config: GameConfig,
+): boolean {
+  return getHeadquartersCells(playerColor, config).some(({ row, col }) => (
+    row >= actionZoneRow && row < actionZoneRow + 5 &&
+    col >= actionZoneCol && col < actionZoneCol + 5 &&
+    isInBounds(row, col, config.boardSize)
+  ));
+}
+
 export function createInitialTurnState(
   currentPlayer: PlayerColor,
   turnsPlayed: number = 0,
+  minesAllowedThisTurn: number = 0,
 ): TurnState {
   const defusesPerTurn = defusesPerTurnFor(turnsPlayed);
   return {
@@ -353,6 +367,7 @@ export function createInitialTurnState(
     actionZone: null,
     canDefuse: defusesPerTurn > 0,
     minesPlacedThisTurn: 0,
+    minesAllowedThisTurn,
     capturedThisTurn: new Set<string>(),
     lastActionMessage: null,
     turnsPlayed,
