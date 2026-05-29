@@ -25,8 +25,9 @@ import {
   computeBoardStats,
   getHeadquartersOwner,
   isPlayerCellReachable,
-  INITIAL_DEFUSES,
+  INITIAL_DEFUSES_PER_TURN,
   DEFUSE_GRANT_INTERVAL,
+  defusesPerTurnFor,
 } from './gameLogic';
 
 export interface PlayerState {
@@ -109,7 +110,8 @@ export class RoomManager {
         capturedThisTurn: new Set(),
         lastActionMessage: null,
         turnsPlayed: 0,
-        defusesAvailable: { red: INITIAL_DEFUSES, blue: INITIAL_DEFUSES },
+        defusesPerTurn: INITIAL_DEFUSES_PER_TURN,
+        defusesUsedThisTurn: 0,
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
@@ -369,12 +371,12 @@ export class RoomManager {
       clicked: { row: clickedRow, col: clickedCol },
       displayZone,
       actionZone,
-      defusesAvailable: room.turn.defusesAvailable[color],
+      defusesPerTurn: room.turn.defusesPerTurn,
     });
 
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
-    room.turn.canDefuse = room.turn.defusesAvailable[color] > 0;
+    room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesPerTurn;
     revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
@@ -451,8 +453,8 @@ export class RoomManager {
     if (room.turn.currentPlayer !== color) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Not your turn' };
     }
-    if (!room.turn.canDefuse || room.turn.defusesAvailable[color] <= 0) {
-      return { ok: false, hadMine: false, gameOver: false, error: 'У вас закончились разминирования' };
+    if (!room.turn.canDefuse || room.turn.defusesUsedThisTurn >= room.turn.defusesPerTurn) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Лимит разминирований на ход исчерпан' };
     }
 
     const actionZone  = room.turn.actionZone!;
@@ -468,8 +470,8 @@ export class RoomManager {
       return { ok: false, hadMine: false, gameOver: false, error: 'Cannot defuse own cell' };
     }
 
-    room.turn.defusesAvailable[color]--;
-    room.turn.canDefuse = room.turn.defusesAvailable[color] > 0;
+    room.turn.defusesUsedThisTurn++;
+    room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesPerTurn;
     const hadMine = cell.hasMine;
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('cell_defused', {
@@ -477,7 +479,8 @@ export class RoomManager {
       row,
       col,
       hadMine,
-      defusesAvailable: room.turn.defusesAvailable[color],
+      defusesUsedThisTurn: room.turn.defusesUsedThisTurn,
+      defusesPerTurn: room.turn.defusesPerTurn,
     });
 
     if (hadMine) {
@@ -527,7 +530,8 @@ export class RoomManager {
     room.logger.event('phase2_ended', {
       player: { color, name: player.name, ip: player.ip },
       capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
-      defusesAvailable: room.turn.defusesAvailable[color],
+      defusesUsedThisTurn: room.turn.defusesUsedThisTurn,
+      defusesPerTurn: room.turn.defusesPerTurn,
     });
     this.startPhase3(room);
     return { ok: true };
@@ -616,16 +620,16 @@ export class RoomManager {
     }
 
     const turnsPlayed = room.turn.turnsPlayed + 1;
-    const defusesAvailable = { ...room.turn.defusesAvailable };
+    const prevDefusesPerTurn = room.turn.defusesPerTurn;
+    const nextDefusesPerTurn = defusesPerTurnFor(turnsPlayed);
 
-    // Каждые DEFUSE_GRANT_INTERVAL завершённых ходов оба игрока получают +1 разминирование.
-    if (turnsPlayed > 0 && turnsPlayed % DEFUSE_GRANT_INTERVAL === 0) {
-      defusesAvailable.red++;
-      defusesAvailable.blue++;
+    // Каждые DEFUSE_GRANT_INTERVAL завершённых совместных ходов оба игрока
+    // получают +1 к лимиту разминирований на ход.
+    if (nextDefusesPerTurn > prevDefusesPerTurn) {
       room.logger.event('defuses_granted', {
         turnsPlayed,
-        amount: 1,
-        defusesAvailable,
+        defusesPerTurn: nextDefusesPerTurn,
+        delta: nextDefusesPerTurn - prevDefusesPerTurn,
       });
     }
 
@@ -637,13 +641,13 @@ export class RoomManager {
       room.phase = 'finished';
       room.turn.phase = 'finished';
       room.turn.turnsPlayed = turnsPlayed;
-      room.turn.defusesAvailable = defusesAvailable;
+      room.turn.defusesPerTurn = nextDefusesPerTurn;
       clearRevealedNumbers(room.board);
       return true;
     }
 
     const nextColor: PlayerColor = room.turn.currentPlayer === 'red' ? 'blue' : 'red';
-    room.turn  = createInitialTurnState(nextColor, turnsPlayed, defusesAvailable);
+    room.turn  = createInitialTurnState(nextColor, turnsPlayed);
     room.phase = 'phase1';
     return false;
   }

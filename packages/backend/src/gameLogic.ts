@@ -332,24 +332,31 @@ export function getBoardForPlayer(
   );
 }
 
-export const INITIAL_DEFUSES = 1;
+export const INITIAL_DEFUSES_PER_TURN = 1;
 export const DEFUSE_GRANT_INTERVAL = 5;
+
+// Каждые DEFUSE_GRANT_INTERVAL завершённых совместных ходов лимит разминирований
+// на ход увеличивается на 1. Начальное значение — INITIAL_DEFUSES_PER_TURN.
+export function defusesPerTurnFor(turnsPlayed: number): number {
+  return INITIAL_DEFUSES_PER_TURN + Math.floor(turnsPlayed / DEFUSE_GRANT_INTERVAL);
+}
 
 export function createInitialTurnState(
   currentPlayer: PlayerColor,
   turnsPlayed: number = 0,
-  defusesAvailable: Record<PlayerColor, number> = { red: INITIAL_DEFUSES, blue: INITIAL_DEFUSES },
 ): TurnState {
+  const defusesPerTurn = defusesPerTurnFor(turnsPlayed);
   return {
     phase: 'phase1',
     currentPlayer,
     selectedZone: null,
     actionZone: null,
-    canDefuse: defusesAvailable[currentPlayer] > 0,
+    canDefuse: defusesPerTurn > 0,
     minesPlacedThisTurn: 0,
     capturedThisTurn: new Set<string>(),
     lastActionMessage: null,
     turnsPlayed,
-    defusesAvailable: { ...defusesAvailable },
+    defusesPerTurn,
+    defusesUsedThisTurn: 0,
   };
 }

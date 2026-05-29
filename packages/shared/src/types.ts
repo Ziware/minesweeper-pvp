@@ -59,10 +59,12 @@ export interface TurnState {
   minesPlacedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
   lastActionMessage: string | null;
-  // Общий счётчик ходов обоих игроков (1 ход = одно завершение хода любым игроком)
+  // Общий счётчик завершённых ходов обоих игроков (1 ход = одно завершение хода любым игроком)
   turnsPlayed: number;
-  // Накопительный запас разминирований каждого игрока
-  defusesAvailable: Record<PlayerColor, number>;
+  // Сколько разминирований доступно текущему игроку в этом ходу
+  defusesPerTurn: number;
+  // Сколько уже использовано в этом ходу
+  defusesUsedThisTurn: number;
 }
 
 export interface S2C_RoomCreated { roomId: string; playerColor: PlayerColor; }
