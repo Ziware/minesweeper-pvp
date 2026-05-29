@@ -14,16 +14,16 @@ echo "[1/4] Обновляем код из репозитория..."
 git fetch --all
 git reset --hard origin/main
 
-# 2. Останавливаем старые контейнеры
-echo "[2/4] Останавливаем старые контейнеры..."
-docker compose -p "$COMPOSE_PROJECT" down --remove-orphans || true
-
-# 3. Пересобираем образы
+# 2. Пересобираем образы
 # yarn install, tsc, vite build — всё происходит внутри Dockerfile
-echo "[3/4] Собираем образы..."
+echo "[2/4] Собираем образы..."
 docker compose -p "$COMPOSE_PROJECT" build --no-cache
 
-# 4. Запускаем
+# 3. Останавливаем старые контейнеры
+echo "[3/4] Останавливаем старые контейнеры..."
+docker compose -p "$COMPOSE_PROJECT" down --remove-orphans || true
+
+# 4. Запускаем новые контейнеры из свежесобранных образов
 echo "[4/4] Запускаем контейнеры..."
 docker compose -p "$COMPOSE_PROJECT" up -d
 
