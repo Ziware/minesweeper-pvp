@@ -5,8 +5,8 @@ services:
       dockerfile: packages/backend/Dockerfile
     container_name: minesweeper-backend
     restart: unless-stopped
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -24,8 +24,38 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      # DOMAIN читается из .env-файла рядом с docker-compose.yml.
+      # Используется и nginx-entrypoint, и certbot ниже.
+      - DOMAIN=${DOMAIN}
+    volumes:
+      # Сертификаты Let's Encrypt (общая папка с certbot).
+      - ./letsencrypt/etc:/etc/letsencrypt
+      - ./letsencrypt/var:/var/lib/letsencrypt
+      # Webroot для ACME http-01 challenge.
+      - ./letsencrypt/www:/var/www/certbot
     depends_on:
       - backend
+    networks:
+      - minesweeper-net
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: minesweeper-certbot
+    restart: unless-stopped
+    volumes:
+      - ./letsencrypt/etc:/etc/letsencrypt
+      - ./letsencrypt/var:/var/lib/letsencrypt
+      - ./letsencrypt/www:/var/www/certbot
+    # Каждые 12 часов пытается обновить сертификат.
+    # Первоначальный выпуск делается отдельным скриптом init-letsencrypt.sh.
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+                  while :; do
+                    certbot renew --webroot --webroot-path=/var/www/certbot --quiet;
+                    sleep 12h & wait $${!};
+                  done"
     networks:
       - minesweeper-net
 

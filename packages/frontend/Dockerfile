@@ -20,12 +20,18 @@ RUN yarn build
 # ─── Production: раздаём через nginx ────────────────────────
 FROM nginx:alpine AS production
 
+# envsubst для подстановки ${DOMAIN} в nginx-конфиг
+RUN apk add --no-cache gettext
+
 # Копируем собранный dist
 COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
 
-# Конфиг nginx с поддержкой SPA и проксирования Socket.IO
-COPY packages/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Шаблон production-конфига и bootstrap-конфиг для первого запуска без сертификата
+COPY packages/frontend/nginx.conf.template     /etc/nginx/templates/nginx.conf.template
+COPY packages/frontend/nginx.bootstrap.conf    /etc/nginx/templates/nginx.bootstrap.conf
+COPY packages/frontend/docker-entrypoint.sh    /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-EXPOSE 80
+EXPOSE 80 443
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
