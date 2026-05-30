@@ -94,6 +94,32 @@
 
 .playerHeader { display: flex; align-items: center; justify-content: space-between; }
 .playerLabel  { font-weight: bold; font-size: 0.92rem; }
+
+.playerClock {
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #cfd0d6;
+  background: rgba(0, 0, 0, 0.32);
+  padding: 3px 8px;
+  border-radius: 6px;
+  align-self: flex-start;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.playerClockRunning {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.18);
+}
+.playerClockLow {
+  color: #ffcf6e;
+}
+.playerClockRunning.playerClockLow {
+  color: #ff6e6e;
+  background: rgba(231, 76, 60, 0.25);
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.55);
+}
 .activeBadge  {
   font-size: 0.7rem;
   background: rgba(255,255,255,0.22);

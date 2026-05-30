@@ -1,4 +1,5 @@
 import React from 'react';
+import { BALANCE, formatTimeControlPresetsList } from '@minesweeper-pvp/shared';
 import styles from './HelpModal.module.css';
 
 interface HelpModalProps {
@@ -6,6 +7,16 @@ interface HelpModalProps {
 }
 
 export function HelpModal({ onClose }: HelpModalProps) {
+  const boardSize         = BALANCE.board.size;
+  const initialMines      = BALANCE.board.initialMines;
+  const maxLives          = BALANCE.player.maxLives;
+  const minesPerTurn      = BALANCE.phase3.minesPerTurn;
+  const hqBonusMines      = BALANCE.phase3.hqInActionZoneBonusMines;
+  const minesWithBonus    = minesPerTurn + hqBonusMines;
+  const initialDefuses    = BALANCE.defuse.initialPerTurn;
+  const defuseGrantEvery  = BALANCE.defuse.grantInterval;
+  const presetsList       = formatTimeControlPresetsList();
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -18,19 +29,27 @@ export function HelpModal({ onClose }: HelpModalProps) {
             <p>
               Главная цель — захватить штаб противника: зону 1×2 клетки по центру
               края доски. Захват любой клетки штаба сразу приносит победу.
-              Если за 30 совместных ходов (по 15 на каждого игрока) штаб не взят —
-              побеждает тот, кто контролирует больше поля.
+              Если у одного из игроков закончится время на партию — он проигрывает.
+            </p>
+            <p>
+              Партия играется с шахматными часами: <strong>X минут на всю партию
+              + Y секунд за каждый завершённый ход</strong>. Перед созданием комнаты
+              можно выбрать одну из вариаций: <strong>{presetsList}</strong>.
+              Часы запускаются после фазы расстановки мин и идут на протяжении
+              всех трёх фаз хода вплоть до передачи хода противнику.
+              Часы не идут на этапе расстановки первых мин.
             </p>
           </section>
 
           <section>
             <h3>🗺️ Поле</h3>
             <p>
-              Поле 10×10. Красный владеет верхней половиной, синий — нижней.
-              Штаб красного находится по центру верхнего края, штаб синего — по
-              центру нижнего края. Штаб нельзя заминировать. В начале каждый
-              расставляет по <strong>8 мин</strong> на своей половине. Мины противника скрыты. 
-              Ходить начинает красный.
+              Поле {boardSize}×{boardSize}. Красный владеет верхней половиной,
+              синий — нижней. Штаб красного находится по центру верхнего края,
+              штаб синего — по центру нижнего края. Штаб нельзя заминировать.
+              В начале каждый расставляет по <strong>{initialMines} мин</strong>
+              {' '}на своей половине. Мины противника скрыты. Ходить начинает
+              красный. У каждого игрока <strong>{maxLives} жизни</strong>.
             </p>
           </section>
 
@@ -65,9 +84,9 @@ export function HelpModal({ onClose }: HelpModalProps) {
               <p>
                 Доступную для захвата клетку можно <strong>разминировать</strong>
                 (<kbd>Ctrl+Click</kbd>) в пределах лимита разминирований на этот ход.
-                В начале игры лимит — <strong>1 разминирование на ход</strong> для каждого игрока.
-                После каждых <strong>5 совместных ходов</strong> (после 5-го, 10-го, 15-го хода
-                и т. д.) лимит увеличивается на <strong>+1 для обоих игроков</strong>.
+                В начале игры лимит — <strong>{initialDefuses} разминирование на ход</strong>
+                {' '}для каждого игрока. После каждых <strong>{defuseGrantEvery} совместных
+                ходов</strong> лимит увеличивается на <strong>+1 для обоих игроков</strong>.
                 Неиспользованные разминирования сгорают в конце хода —
                 накопить их нельзя.
               </p>
@@ -84,10 +103,11 @@ export function HelpModal({ onClose }: HelpModalProps) {
             <div className={styles.phase}>
               <div className={styles.phaseTitle}>Фаза 3 — Расстановка мин</div>
               <p>
-                Можно поставить от <strong>0 до 3 мин</strong> на свободные доступные клетки
-                своей территории. Если выбранная в фазе 1 зона <strong>5×5</strong> 
-                содержала хотя бы одну клетку <em>вашего</em> штаба — лимит
-                увеличивается до <strong>4 мин</strong> (+1 за защитную зону).
+                Можно поставить от <strong>0 до {minesPerTurn} мин</strong> на свободные
+                доступные клетки своей территории. Если выбранная в фазе 1 зона
+                <strong> 5×5</strong> содержала хотя бы одну клетку <em>вашего</em> штаба —
+                лимит увеличивается до <strong>{minesWithBonus} мин</strong>
+                {' '}(+{hqBonusMines} за защитную зону).
                 Завершить расстановку можно вручную; поражения из-за нехватки
                 места для мин больше нет.
               </p>
@@ -98,8 +118,8 @@ export function HelpModal({ onClose }: HelpModalProps) {
             <h3>🏁 Завершение игры</h3>
             <ul>
               <li>Мгновенная победа за захват любой клетки штаба противника.</li>
-              <li>Победа противника, если потеряны все <strong>3 жизни</strong> (взрывы на минах).</li>
-              <li>После 30 совместных ходов (по 15 у каждого игрока) побеждает игрок с большей территорией.</li>
+              <li>Победа противника, если потеряны все <strong>{maxLives} жизни</strong> (взрывы на минах).</li>
+              <li>Поражение у того, чьё время на партию первым истечёт (шахматные часы).</li>
             </ul>
           </section>
 

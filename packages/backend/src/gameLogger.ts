@@ -9,6 +9,7 @@ interface GameLoggerPlayer {
 }
 
 export type GameLogEvent =
+  | 'time_out'
   | 'room_created'
   | 'player_joined'
   | 'session_restored'

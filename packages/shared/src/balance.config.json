@@ -1,0 +1,26 @@
+{
+  "$schema": "Game balance configuration. Edit values here to tune the game. After changes run `yarn balance:gen` (or any yarn dev/build script, which runs it automatically) to regenerate balance.generated.ts.",
+  "board": {
+    "size": 10,
+    "initialMines": 8
+  },
+  "player": {
+    "maxLives": 3
+  },
+  "phase3": {
+    "minesPerTurn": 3,
+    "hqInActionZoneBonusMines": 1
+  },
+  "defuse": {
+    "initialPerTurn": 1,
+    "grantInterval": 3
+  },
+  "timeControls": {
+    "defaultPresetIndex": 1,
+    "presets": [
+      { "label": "1 + 0", "baseMinutes": 1, "incrementSeconds": 0 },
+      { "label": "2 + 1", "baseMinutes": 2, "incrementSeconds": 1 },
+      { "label": "3 + 2", "baseMinutes": 5, "incrementSeconds": 7 }
+    ]
+  }
+}

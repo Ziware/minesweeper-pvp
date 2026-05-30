@@ -5,10 +5,13 @@ import {
   PlayerColor,
   TurnState,
   CellMark,
+  TimeControl,
+  ALLOWED_TIME_CONTROLS as SHARED_ALLOWED_TIME_CONTROLS,
 } from '@minesweeper-pvp/shared';
 import { createGameLogger, GameLogger } from './gameLogger';
 import {
   DEFAULT_CONFIG,
+  DEFAULT_TIME_CONTROL,
   createBoard,
   initBoard,
   revealNumbersInDisplayZone,
@@ -27,6 +30,7 @@ import {
   isPlayerCellReachable,
   INITIAL_DEFUSES_PER_TURN,
   DEFUSE_GRANT_INTERVAL,
+  HQ_ACTION_ZONE_BONUS_MINES,
   defusesPerTurnFor,
   actionZoneContainsHeadquarters,
 } from './gameLogic';
@@ -41,7 +45,11 @@ export interface PlayerState {
   minesPlaced: number;
   connected: boolean;
   setupConfirmed: boolean;
+  /** Оставшееся время на партию в миллисекундах. */
+  timeMs: number;
 }
+
+export type WinReason = 'lives' | 'headquarters' | 'territory' | 'time';
 
 export interface Room {
   id: string;
@@ -52,10 +60,21 @@ export interface Room {
   turn: TurnState;
   setupConfirmed: Set<PlayerColor>;
   winner?: PlayerColor;
-  winReason?: 'lives' | 'headquarters' | 'territory';
+  winReason?: WinReason;
   marks: Record<PlayerColor, Record<string, CellMark>>;
   logger: GameLogger;
   gameOverLogged: boolean;
+}
+
+/** Допустимые пресеты времени, которые сервер принимает от клиента. */
+const ALLOWED_TIME_CONTROLS: TimeControl[] = SHARED_ALLOWED_TIME_CONTROLS;
+
+function normalizeTimeControl(tc?: TimeControl | null): TimeControl {
+  if (!tc) return DEFAULT_TIME_CONTROL;
+  const match = ALLOWED_TIME_CONTROLS.find(
+    (t) => t.baseMs === tc.baseMs && t.incrementMs === tc.incrementMs,
+  );
+  return match ?? DEFAULT_TIME_CONTROL;
 }
 
 const EMPTY_ROOM_TTL_MS = 60 * 60 * 1000;
@@ -73,9 +92,16 @@ export class RoomManager {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   }
 
-  createRoom(socketId: string, tabId: string, playerName: string, ip: string): Room {
+  createRoom(
+    socketId: string,
+    tabId: string,
+    playerName: string,
+    ip: string,
+    timeControl?: TimeControl,
+  ): Room {
     const roomId     = this.generateRoomId();
-    const fullConfig = { ...DEFAULT_CONFIG };
+    const tc         = normalizeTimeControl(timeControl);
+    const fullConfig: GameConfig = { ...DEFAULT_CONFIG, timeControl: tc };
     const board      = createBoard(fullConfig.boardSize);
     initBoard(board, fullConfig);
 
@@ -99,6 +125,7 @@ export class RoomManager {
         minesPlaced: 0,
         connected: true,
         setupConfirmed: false,
+        timeMs: tc.baseMs,
       }],
       phase: 'waiting',
       turn: {
@@ -114,6 +141,8 @@ export class RoomManager {
         turnsPlayed: 0,
         defusesPerTurn: INITIAL_DEFUSES_PER_TURN,
         defusesUsedThisTurn: 0,
+        currentTurnStartedAtMs: null,
+        serverNowMs: Date.now(),
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
@@ -141,6 +170,7 @@ export class RoomManager {
       minesPlaced: 0,
       connected: true,
       setupConfirmed: false,
+      timeMs: room.config.timeControl.baseMs,
     });
     room.phase      = 'setup';
     room.turn.phase = 'setup';
@@ -350,9 +380,12 @@ export class RoomManager {
     if (bothConfirmed) {
       room.phase = 'phase1';
       room.turn  = createInitialTurnState('red');
+      // Старт часов первого игрока
+      room.turn.currentTurnStartedAtMs = Date.now();
       room.logger.event('game_started', {
         firstPlayer: 'red',
         players: room.players.map((p) => ({ color: p.color, name: p.name, ip: p.ip })),
+        timeControl: room.config.timeControl,
       });
     }
     return { ok: true, bothConfirmed };
@@ -371,7 +404,8 @@ export class RoomManager {
     const defensiveZone = actionZoneContainsHeadquarters(
       actionZone.row, actionZone.col, color, room.config,
     );
-    const minesAllowedThisTurn = room.config.minesPerTurn + (defensiveZone ? 1 : 0);
+    const minesAllowedThisTurn =
+      room.config.minesPerTurn + (defensiveZone ? HQ_ACTION_ZONE_BONUS_MINES : 0);
 
     const player = room.players.find((p) => p.color === color)!;
     room.logger.event('zone_selected', {
@@ -630,6 +664,20 @@ export class RoomManager {
       return true;
     }
 
+    // Списываем потраченное на ход время и начисляем инкремент
+    this.commitTurnTime(room);
+    if (cur.timeMs <= 0) {
+      const opp = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
+      room.winner = opp.color;
+      room.winReason = 'time';
+      room.phase = 'finished';
+      room.turn.phase = 'finished';
+      cur.timeMs = 0;
+      clearRevealedNumbers(room.board);
+      return true;
+    }
+    cur.timeMs += room.config.timeControl.incrementMs;
+
     const turnsPlayed = room.turn.turnsPlayed + 1;
     const prevDefusesPerTurn = room.turn.defusesPerTurn;
     const nextDefusesPerTurn = defusesPerTurnFor(turnsPlayed);
@@ -644,23 +692,67 @@ export class RoomManager {
       });
     }
 
-    const totalTurnLimit = room.config.turnLimitPerPlayer * 2;
-    if (turnsPlayed >= totalTurnLimit) {
-      const stats = computeBoardStats(room.board);
-      room.winner = stats.redCells >= stats.blueCells ? 'red' : 'blue';
-      room.winReason = 'territory';
-      room.phase = 'finished';
-      room.turn.phase = 'finished';
-      room.turn.turnsPlayed = turnsPlayed;
-      room.turn.defusesPerTurn = nextDefusesPerTurn;
-      clearRevealedNumbers(room.board);
-      return true;
-    }
-
     const nextColor: PlayerColor = room.turn.currentPlayer === 'red' ? 'blue' : 'red';
     room.turn  = createInitialTurnState(nextColor, turnsPlayed);
+    // Старт часов следующего игрока
+    room.turn.currentTurnStartedAtMs = Date.now();
     room.phase = 'phase1';
     return false;
+  }
+
+  /**
+   * Списать с текущего игрока время, прошедшее с начала его хода.
+   * Сбрасывает currentTurnStartedAtMs — после вызова часы не идут.
+   */
+  private commitTurnTime(room: Room): void {
+    const startedAt = room.turn.currentTurnStartedAtMs;
+    if (startedAt === null) return;
+    const elapsed = Math.max(0, Date.now() - startedAt);
+    const cur = room.players.find((p) => p.color === room.turn.currentPlayer);
+    if (cur) {
+      cur.timeMs = Math.max(0, cur.timeMs - elapsed);
+    }
+    room.turn.currentTurnStartedAtMs = null;
+  }
+
+  /**
+   * Проверка тайм-аута: если у текущего игрока ушло всё время,
+   * партия завершается, возвращается true.
+   * Вызывается из периодического тика сервера.
+   */
+  checkTimeout(room: Room): boolean {
+    if (room.phase === 'waiting' || room.phase === 'setup' || room.phase === 'finished') {
+      return false;
+    }
+    const startedAt = room.turn.currentTurnStartedAtMs;
+    if (startedAt === null) return false;
+    const cur = room.players.find((p) => p.color === room.turn.currentPlayer);
+    if (!cur) return false;
+    const elapsed = Date.now() - startedAt;
+    if (cur.timeMs - elapsed > 0) return false;
+
+    // Тайм-аут: списываем остаток в ноль, завершаем партию
+    cur.timeMs = 0;
+    room.turn.currentTurnStartedAtMs = null;
+    const opp = room.players.find((p) => p.color !== cur.color)!;
+    room.winner = opp.color;
+    room.winReason = 'time';
+    room.phase = 'finished';
+    room.turn.phase = 'finished';
+    clearRevealedNumbers(room.board);
+    room.logger.event('time_out', {
+      player: { color: cur.color, name: cur.name, ip: cur.ip },
+    });
+    return true;
+  }
+
+  /** Перебрать все комнаты, вернуть те, где сработал тайм-аут — нужно разослать gameState/gameOver. */
+  tickTimeouts(): Room[] {
+    const finished: Room[] = [];
+    for (const room of this.rooms.values()) {
+      if (this.checkTimeout(room)) finished.push(room);
+    }
+    return finished;
   }
 
   toggleMark(room: Room, color: PlayerColor, row: number, col: number, mark: CellMark) {
@@ -708,6 +800,7 @@ export class RoomManager {
       turn: {
         ...room.turn,
         capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
+        serverNowMs: Date.now(),
       },
       config:      room.config,
       stats:       computeBoardStats(room.board),

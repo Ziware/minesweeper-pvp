@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
+import { TimeControl, TIME_CONTROL_PRESETS, BALANCE } from '@minesweeper-pvp/shared';
 import styles from './Lobby.module.css';
 
 interface LobbyProps {
-  onCreateRoom: (name: string) => void;
-  onJoinRoom:   (roomId: string, name: string) => void;
+  onCreateRoom:        (name: string, timeControl: TimeControl) => void;
+  onJoinRoom:          (roomId: string, name: string) => void;
+  /** Опциональный звук-эффект «клик», прокидывается из App. */
+  onUiClick?:          () => void;
 }
 
-export function Lobby({ onCreateRoom, onJoinRoom }: LobbyProps) {
+const DEFAULT_PRESET_INDEX = BALANCE.timeControls.defaultPresetIndex;
+
+export function Lobby({ onCreateRoom, onJoinRoom, onUiClick }: LobbyProps) {
   const [name,   setName]   = useState('');
   const [joinId, setJoinId] = useState('');
   const [nameErr, setNameErr] = useState('');
+  const [presetIdx, setPresetIdx] = useState(DEFAULT_PRESET_INDEX);
 
   const handleCreate = () => {
     if (!name.trim()) { setNameErr('Введите имя'); return; }
     setNameErr('');
-    onCreateRoom(name.trim());
+    onCreateRoom(name.trim(), TIME_CONTROL_PRESETS[presetIdx].timeControl);
   };
 
   const handleJoin = () => {
@@ -44,6 +50,22 @@ export function Lobby({ onCreateRoom, onJoinRoom }: LobbyProps) {
         <div className={styles.card}>
           <h2>Создать комнату</h2>
           <p className={styles.hint}>Вы будете играть за 🔴 Красного</p>
+          <div className={styles.tcLabel}>⏱️ Контроль времени (минуты + секунды)</div>
+          <div className={styles.tcOptions}>
+            {TIME_CONTROL_PRESETS.map((preset, idx) => (
+              <button
+                key={preset.label}
+                className={`${styles.tcOption} ${idx === presetIdx ? styles.tcOptionActive : ''}`}
+                onClick={() => {
+                  if (idx !== presetIdx) onUiClick?.();
+                  setPresetIdx(idx);
+                }}
+                type="button"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <button className={styles.btnRed} onClick={handleCreate}>
             Создать комнату
           </button>

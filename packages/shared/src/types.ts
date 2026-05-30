@@ -32,15 +32,25 @@ export interface PlayerState {
   minesPlaced: number;
   connected: boolean;
   setupConfirmed: boolean;
+  /** Оставшееся время на партию в миллисекундах. */
+  timeMs: number;
+}
+
+/** Шахматные настройки времени: базовое время + инкремент за ход. */
+export interface TimeControl {
+  /** Базовое время на всю партию, миллисекунды. */
+  baseMs: number;
+  /** Прибавка за каждый завершённый ход, миллисекунды. */
+  incrementMs: number;
 }
 
 export interface GameConfig {
   boardSize: number;
-  totalMines: number;
   maxLives: number;
   minesPerTurn: number;
   initialMines: number;
-  turnLimitPerPlayer: number;
+  /** Настройки шахматных часов. */
+  timeControl: TimeControl;
 }
 
 export interface BoardStats {
@@ -67,6 +77,10 @@ export interface TurnState {
   defusesPerTurn: number;
   // Сколько уже использовано в этом ходу
   defusesUsedThisTurn: number;
+  /** Время сервера (ms), когда стартовал отсчёт текущего хода. null — часы не идут (фаза setup). */
+  currentTurnStartedAtMs: number | null;
+  /** Текущее серверное время на момент рассылки gameState — для синхронизации часов на клиенте. */
+  serverNowMs: number;
 }
 
 export interface S2C_RoomCreated { roomId: string; playerColor: PlayerColor; }
@@ -84,10 +98,10 @@ export interface S2C_GameState {
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor;
-  reason: 'lives' | 'headquarters' | 'territory';
+  reason: 'lives' | 'headquarters' | 'territory' | 'time';
 }
 
-export interface C2S_CreateRoom { playerName: string; }
+export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; }
 export interface C2S_JoinRoom   { roomId: string; playerName: string; }
 export interface C2S_PlaceMine  { row: number; col: number; }
 export interface C2S_SelectZone { row: number; col: number; }

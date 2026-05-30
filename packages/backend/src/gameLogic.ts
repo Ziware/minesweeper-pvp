@@ -17,15 +17,19 @@ import {
   getHeadquartersOwner as sharedGetHeadquartersOwner,
   getDisplayZoneTopLeft as sharedGetDisplayZoneTopLeft,
   getActionZoneTopLeft as sharedGetActionZoneTopLeft,
+  BALANCE,
+  DEFAULT_TIME_CONTROL as BALANCE_DEFAULT_TIME_CONTROL,
 } from '@minesweeper-pvp/shared';
 
+// Реэкспорт значения из shared, чтобы существующие импорты не сломались.
+export const DEFAULT_TIME_CONTROL = BALANCE_DEFAULT_TIME_CONTROL;
+
 export const DEFAULT_CONFIG: GameConfig = {
-  boardSize: 10,
-  totalMines: 7,
-  maxLives: 3,
-  minesPerTurn: 3,
-  initialMines: 8,
-  turnLimitPerPlayer: 15,
+  boardSize:    BALANCE.board.size,
+  maxLives:     BALANCE.player.maxLives,
+  minesPerTurn: BALANCE.phase3.minesPerTurn,
+  initialMines: BALANCE.board.initialMines,
+  timeControl:  DEFAULT_TIME_CONTROL,
 };
 
 export function createBoard(size: number): CellState[][] {
@@ -288,8 +292,9 @@ export function getBoardForPlayer(
   );
 }
 
-export const INITIAL_DEFUSES_PER_TURN = 1;
-export const DEFUSE_GRANT_INTERVAL = 5;
+export const INITIAL_DEFUSES_PER_TURN = BALANCE.defuse.initialPerTurn;
+export const DEFUSE_GRANT_INTERVAL    = BALANCE.defuse.grantInterval;
+export const HQ_ACTION_ZONE_BONUS_MINES = BALANCE.phase3.hqInActionZoneBonusMines;
 
 // Каждые DEFUSE_GRANT_INTERVAL завершённых совместных ходов лимит разминирований
 // на ход увеличивается на 1. Начальное значение — INITIAL_DEFUSES_PER_TURN.
@@ -329,5 +334,7 @@ export function createInitialTurnState(
     turnsPlayed,
     defusesPerTurn,
     defusesUsedThisTurn: 0,
+    currentTurnStartedAtMs: null,
+    serverNowMs: Date.now(),
   };
 }

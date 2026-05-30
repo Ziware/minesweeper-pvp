@@ -2,7 +2,9 @@
   "name": "@minesweeper-pvp/backend",
   "version": "1.0.0",
   "scripts": {
+    "predev": "node ../shared/scripts/gen-balance.js",
     "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
+    "prebuild": "node ../shared/scripts/gen-balance.js",
     "build": "tsc",
     "start": "node dist/index.js"
   },

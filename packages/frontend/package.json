@@ -2,7 +2,9 @@
   "name": "@minesweeper-pvp/frontend",
   "version": "1.0.0",
   "scripts": {
+    "predev": "node ../shared/scripts/gen-balance.js",
     "dev": "vite",
+    "prebuild": "node ../shared/scripts/gen-balance.js",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

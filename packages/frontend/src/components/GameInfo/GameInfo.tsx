@@ -1,5 +1,12 @@
-import React from 'react';
-import { S2C_GameState, S2C_GameOver, PlayerColor } from '@minesweeper-pvp/shared';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  S2C_GameState,
+  S2C_GameOver,
+  PlayerColor,
+  PlayerState,
+  TurnState,
+  BALANCE,
+} from '@minesweeper-pvp/shared';
 import styles from './GameInfo.module.css';
 
 // Единый тип для информации об окончании игры — определён в shared.
@@ -26,7 +33,7 @@ const PHASE_DESCRIPTIONS: Record<string, string> = {
   phase3: 'Поставьте от 0 до лимита мин на свои свободные доступные клетки и завершите ход.',
 };
 
-const DEFUSE_GRANT_INTERVAL = 5;
+const DEFUSE_GRANT_INTERVAL = BALANCE.defuse.grantInterval;
 
 function pluralize(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10;
@@ -34,6 +41,35 @@ function pluralize(n: number, forms: [string, string, string]): string {
   if (mod10 === 1 && mod100 !== 11) return forms[0];
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
   return forms[2];
+}
+
+function formatTime(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Вычисляет оставшееся время игрока с учётом смещения локальных часов
+ * относительно сервера.
+ *
+ * Если игрок сейчас ходит и часы запущены — вычитаем прошедшее с начала хода.
+ */
+function computeRemainingMs(
+  player: PlayerState,
+  turn: Pick<TurnState, 'currentPlayer' | 'currentTurnStartedAtMs'>,
+  serverClientOffsetMs: number,
+): number {
+  if (
+    player.color !== turn.currentPlayer ||
+    turn.currentTurnStartedAtMs === null
+  ) {
+    return player.timeMs;
+  }
+  const serverNow = Date.now() + serverClientOffsetMs;
+  const elapsed = Math.max(0, serverNow - turn.currentTurnStartedAtMs);
+  return Math.max(0, player.timeMs - elapsed);
 }
 
 export function GameInfo({
@@ -52,12 +88,30 @@ export function GameInfo({
   // Флажки — из доски
   const flagCount = gameState.board.flat().filter((c) => c.mark === 'flag').length;
 
-  const totalTurnLimit = config.turnLimitPerPlayer * 2;
   const turnsUntilNextDefuse =
     DEFUSE_GRANT_INTERVAL - (turn.turnsPlayed % DEFUSE_GRANT_INTERVAL);
-  const willGetMoreDefuses = turn.turnsPlayed + turnsUntilNextDefuse < totalTurnLimit;
   const defusesLeftThisTurn = Math.max(0, turn.defusesPerTurn - turn.defusesUsedThisTurn);
   const minesBonus = Math.max(0, turn.minesAllowedThisTurn - config.minesPerTurn);
+
+  // ─── Шахматные часы: локальный тик ──────────────────────────────────────────
+  // Смещение между серверным и клиентским временем фиксируем при каждом
+  // обновлении gameState: offset = serverNow - clientNow.
+  const serverClientOffsetRef = useRef(0);
+  useEffect(() => {
+    serverClientOffsetRef.current = turn.serverNowMs - Date.now();
+  }, [turn.serverNowMs]);
+
+  // Используем "tick" чтобы перерисовывать компонент каждые 250мс
+  // во время хода (только для отображения секундомера).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (turn.currentTurnStartedAtMs === null) return;
+    const id = setInterval(() => setTick((t) => (t + 1) % 1_000_000), 250);
+    return () => clearInterval(id);
+  }, [turn.currentTurnStartedAtMs]);
+
+  const redRemaining  = computeRemainingMs(redPlayer,  turn, serverClientOffsetRef.current);
+  const blueRemaining = computeRemainingMs(bluePlayer, turn, serverClientOffsetRef.current);
 
   const renderHearts = (lives: number, max: number) =>
     Array.from({ length: max }, (_, i) => (
@@ -75,7 +129,7 @@ export function GameInfo({
           <div className={styles.statHeader}>Раунды</div>
           <div className={styles.statRow}>
             <span>🔁 Сыграно ходов:</span>
-            <strong>{turn.turnsPlayed} / {totalTurnLimit}</strong>
+            <strong>{turn.turnsPlayed}</strong>
           </div>
 
           <div className={styles.statHeader}>Разминирований на ход</div>
@@ -83,14 +137,20 @@ export function GameInfo({
             <span>🔧 Лимит:</span>
             <strong>{turn.defusesPerTurn}</strong>
           </div>
-          {willGetMoreDefuses && (
-            <div className={styles.statRow}>
-              <span>⏭️ +1 через:</span>
-              <strong>
-                {turnsUntilNextDefuse} {pluralize(turnsUntilNextDefuse, ['ход', 'хода', 'ходов'])}
-              </strong>
-            </div>
-          )}
+          <div className={styles.statRow}>
+            <span>⏭️ +1 через:</span>
+            <strong>
+              {turnsUntilNextDefuse} {pluralize(turnsUntilNextDefuse, ['ход', 'хода', 'ходов'])}
+            </strong>
+          </div>
+
+          <div className={styles.statHeader}>Контроль времени</div>
+          <div className={styles.statRow}>
+            <span>⏱️ База + инкремент:</span>
+            <strong>
+              {Math.round(config.timeControl.baseMs / 60_000)} + {Math.round(config.timeControl.incrementMs / 1000)}
+            </strong>
+          </div>
 
           <div className={styles.statHeader}>Мины на поле</div>
           <div className={styles.statRow}>
@@ -166,6 +226,11 @@ export function GameInfo({
   const opponentConfirmed = opponent?.setupConfirmed ?? false;
   const minesLeft = Math.max(0, config.initialMines - (me?.minesPlaced ?? 0));
 
+  // Часы тикают только когда они "запущены" (currentTurnStartedAtMs !== null)
+  // т.е. вне фазы setup и finished.
+  const clockActive = turn.currentTurnStartedAtMs !== null && !isFinished;
+  const isLowTime = (ms: number) => ms < 30_000;
+
   return (
     <div className={styles.panel}>
       {/* Статус хода / Победитель / Подготовка */}
@@ -198,6 +263,13 @@ export function GameInfo({
             <span className={styles.playerLabel}>🔴 Красный</span>
             {turn.currentPlayer === 'red' && <span className={styles.activeBadge}>ходит</span>}
           </div>
+          <div className={[
+            styles.playerClock,
+            clockActive && turn.currentPlayer === 'red' ? styles.playerClockRunning : '',
+            isLowTime(redRemaining) ? styles.playerClockLow : '',
+          ].join(' ')}>
+            ⏱ {formatTime(redRemaining)}
+          </div>
           <div className={styles.hearts}>{renderHearts(redPlayer.lives, config.maxLives)}</div>
         </div>
 
@@ -208,6 +280,13 @@ export function GameInfo({
           <div className={styles.playerHeader}>
             <span className={styles.playerLabel}>🔵 Синий</span>
             {turn.currentPlayer === 'blue' && <span className={styles.activeBadge}>ходит</span>}
+          </div>
+          <div className={[
+            styles.playerClock,
+            clockActive && turn.currentPlayer === 'blue' ? styles.playerClockRunning : '',
+            isLowTime(blueRemaining) ? styles.playerClockLow : '',
+          ].join(' ')}>
+            ⏱ {formatTime(blueRemaining)}
           </div>
           <div className={styles.hearts}>{renderHearts(bluePlayer.lives, config.maxLives)}</div>
         </div>
@@ -260,7 +339,8 @@ export function GameInfo({
           <div className={styles.phaseDesc}>
             {reason === 'lives' && 'Причина: потеряны все жизни'}
             {reason === 'headquarters' && 'Причина: захвачен штаб'}
-            {reason === 'territory' && 'Причина: истёк лимит ходов, больше территории у победителя'}
+            {reason === 'territory' && 'Причина: больше территории'}
+            {reason === 'time' && 'Причина: истекло время на партию'}
           </div>
         </div>
       )}

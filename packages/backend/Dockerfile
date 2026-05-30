@@ -9,8 +9,9 @@ COPY packages/backend/ packages/backend/
 RUN yarn install --frozen-lockfile
 
 # Сначала собираем shared (его dist/ нужен в проде для require('@minesweeper-pvp/shared'))
+# `yarn build` запускает prebuild → balance:gen, генерируя balance.generated.ts из balance.json.
 WORKDIR /app/packages/shared
-RUN yarn tsc -b
+RUN yarn build
 
 # Затем собираем backend
 WORKDIR /app/packages/backend

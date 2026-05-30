@@ -72,6 +72,38 @@
 .btnBlue:hover  { background: #3498db; }
 .btnBlue:disabled { background: #444; cursor: not-allowed; }
 
+.tcLabel {
+  font-size: 0.85rem;
+  color: #aab;
+  margin-top: 4px;
+}
+
+.tcOptions {
+  display: flex;
+  gap: 8px;
+}
+
+.tcOption {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #0f3460;
+  color: #cfd0d6;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.tcOption:hover { background: #154480; }
+
+.tcOptionActive {
+  background: #1f6fb2;
+  color: #fff;
+  border-color: #3498db;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+}
+
 .error {
   color: #e74c3c;
   background: #2c1515;

@@ -1,1 +1,1 @@
-{"root":["./src/board.ts","./src/index.ts","./src/types.ts"],"version":"5.9.3"}
+{"root":["./src/balance.generated.ts","./src/balance.ts","./src/board.ts","./src/index.ts","./src/types.ts"],"version":"5.9.3"}

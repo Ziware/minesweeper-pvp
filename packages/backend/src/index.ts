@@ -52,13 +52,10 @@ io.on('connection', (socket) => {
     console.log(`[restore] ${playerColor} tab=${tabId} room=${roomId}`);
   });
 
-  socket.on('createRoom', ({ playerName }) => {
-    // tabId берём из handshake query если нужен, но проще получить через restoreSession
-    // При createRoom tabId не нужен — он придёт при первом restoreSession
-    // Используем socket.id как временный tabId до получения реального
+  socket.on('createRoom', ({ playerName, timeControl }) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
-    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip);
+    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip, timeControl);
     socket.join(room.id);
     socket.emit('roomCreated', { roomId: room.id, playerColor: 'red' });
     socket.emit('waitingForOpponent');
@@ -165,6 +162,13 @@ io.on('connection', (socket) => {
 });
 
 app.get('/health', (_, res) => res.json({ ok: true }));
+
+setInterval(() => {
+  const finished = roomManager.tickTimeouts();
+  for (const room of finished) {
+    broadcastGameState(room.id);
+  }
+}, 1000).unref?.();
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => console.log(`Server on port ${PORT}`));

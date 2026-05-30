@@ -7,6 +7,7 @@ import {
   S2C_GameOver,
   PlayerColor,
   CellMark,
+  TimeControl,
 } from '@minesweeper-pvp/shared';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -226,10 +227,10 @@ export function useSocket() {
     }
   }, [roomId, myColor, myName]);
 
-  const createRoom = (name: string) => {
+  const createRoom = (name: string, timeControl: TimeControl) => {
     myNameRef.current = name;
     setMyName(name);
-    socketRef.current?.emit('createRoom', { playerName: name });
+    socketRef.current?.emit('createRoom', { playerName: name, timeControl });
   };
 
   const joinRoom = (id: string, name: string) => {

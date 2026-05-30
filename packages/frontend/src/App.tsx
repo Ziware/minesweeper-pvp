@@ -233,14 +233,15 @@ export default function App() {
     return renderShell(
       <div className={styles.screenBody}>
         <Lobby
-          onCreateRoom={(name) => {
+          onCreateRoom={(name, timeControl) => {
             playButton();
-            createRoom(name);
+            createRoom(name, timeControl);
           }}
           onJoinRoom={(id, name) => {
             playButton();
             joinRoom(id, name);
           }}
+          onUiClick={playButton}
         />
       </div>
     );

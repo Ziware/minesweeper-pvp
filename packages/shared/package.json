@@ -4,6 +4,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "balance:gen": "node scripts/gen-balance.js",
+    "prebuild": "yarn balance:gen",
     "build": "tsc -b"
   },
   "devDependencies": {
