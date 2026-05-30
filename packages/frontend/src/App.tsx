@@ -289,7 +289,10 @@ export default function App() {
         variant: 'menu',
       };
     } else if (isSetup && me && !me.setupConfirmed) {
-      const remaining = gameState.config.initialMines - me.minesPlaced;
+      const myInitialMines = me.color === 'red'
+        ? gameState.config.initialMinesRed
+        : gameState.config.initialMinesBlue;
+      const remaining = myInitialMines - me.minesPlaced;
       const canConfirm = remaining === 0;
       primaryAction = {
         label: canConfirm

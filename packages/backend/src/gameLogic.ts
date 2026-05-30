@@ -28,7 +28,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   boardSize:    BALANCE.board.size,
   maxLives:     BALANCE.player.maxLives,
   minesPerTurn: BALANCE.phase3.minesPerTurn,
-  initialMines: BALANCE.board.initialMines,
+  initialMinesRed:  BALANCE.board.initialMinesRed,
+  initialMinesBlue: BALANCE.board.initialMinesBlue,
   timeControl:  DEFAULT_TIME_CONTROL,
 };
 

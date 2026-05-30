@@ -224,7 +224,10 @@ export function GameInfo({
   const opponent = players.find((p) => p.color !== myColor);
   const iConfirmed = me?.setupConfirmed ?? false;
   const opponentConfirmed = opponent?.setupConfirmed ?? false;
-  const minesLeft = Math.max(0, config.initialMines - (me?.minesPlaced ?? 0));
+  const myInitialMines = me
+    ? (me.color === 'red' ? config.initialMinesRed : config.initialMinesBlue)
+    : 0;
+  const minesLeft = Math.max(0, myInitialMines - (me?.minesPlaced ?? 0));
 
   // Часы тикают только когда они "запущены" (currentTurnStartedAtMs !== null)
   // т.е. вне фазы setup и finished.
@@ -314,13 +317,13 @@ export function GameInfo({
               </>
             ) : (
               <>
-                Поставьте <strong>{config.initialMines}</strong> мин на доступные клетки своей половины.
+                Поставьте <strong>{myInitialMines}</strong> мин на доступные клетки своей половины.
                 {' '}🏛️ — штаб (нельзя заминировать).
               </>
             )}
           </div>
           <div className={styles.phaseDesc} style={{ marginTop: 6 }}>
-            Поставлено: <strong>{me?.minesPlaced ?? 0} / {config.initialMines}</strong>
+            Поставлено: <strong>{me?.minesPlaced ?? 0} / {myInitialMines}</strong>
             {!iConfirmed && minesLeft > 0 && <> · осталось <strong>{minesLeft}</strong></>}
           </div>
           <div className={styles.phaseDesc} style={{ marginTop: 6 }}>

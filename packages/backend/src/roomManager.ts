@@ -349,7 +349,8 @@ export class RoomManager {
       });
       return { ok: true };
     }
-    if (player.minesPlaced >= room.config.initialMines) {
+    const setupLimit = color === 'red' ? room.config.initialMinesRed : room.config.initialMinesBlue;
+    if (player.minesPlaced >= setupLimit) {
       return { ok: false, error: 'Достигнут лимит мин для расстановки' };
     }
     cell.hasMine = true;
@@ -367,8 +368,9 @@ export class RoomManager {
   confirmSetup(room: Room, color: PlayerColor) {
     if (room.phase !== 'setup') return { ok: false, bothConfirmed: false, error: 'Сейчас не фаза расстановки' };
     const player = room.players.find((p) => p.color === color)!;
-    if (player.minesPlaced !== room.config.initialMines) {
-      return { ok: false, bothConfirmed: false, error: `Place exactly ${room.config.initialMines} mines` };
+    const requiredMines = color === 'red' ? room.config.initialMinesRed : room.config.initialMinesBlue;
+    if (player.minesPlaced !== requiredMines) {
+      return { ok: false, bothConfirmed: false, error: `Place exactly ${requiredMines} mines` };
     }
     player.setupConfirmed = true;
     room.setupConfirmed.add(color);

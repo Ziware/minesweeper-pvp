@@ -48,7 +48,8 @@ export interface GameConfig {
   boardSize: number;
   maxLives: number;
   minesPerTurn: number;
-  initialMines: number;
+  initialMinesRed: number;
+  initialMinesBlue: number;
   /** Настройки шахматных часов. */
   timeControl: TimeControl;
 }

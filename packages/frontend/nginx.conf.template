@@ -18,6 +18,20 @@ server {
         root /var/www/certbot;
     }
 
+    location = /robots.txt {
+        root /usr/share/nginx/html;
+        access_log off;
+        log_not_found off;
+        add_header Cache-Control "public, max-age=3600";
+    }
+
+    location = /sitemap.xml {
+        root /usr/share/nginx/html;
+        access_log off;
+        log_not_found off;
+        add_header Cache-Control "public, max-age=3600";
+    }
+
     # Любой другой запрос — редирект на HTTPS.
     location / {
         return 301 https://$host$request_uri;

@@ -2,7 +2,8 @@
   "$schema": "Game balance configuration. Edit values here to tune the game. After changes run `yarn balance:gen` (or any yarn dev/build script, which runs it automatically) to regenerate balance.generated.ts.",
   "board": {
     "size": 10,
-    "initialMines": 8
+    "initialMinesRed": 7,
+    "initialMinesBlue": 10
   },
   "player": {
     "maxLives": 3

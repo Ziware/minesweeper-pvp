@@ -8,7 +8,8 @@ interface HelpModalProps {
 
 export function HelpModal({ onClose }: HelpModalProps) {
   const boardSize         = BALANCE.board.size;
-  const initialMines      = BALANCE.board.initialMines;
+  const initialMinesRed   = BALANCE.board.initialMinesRed;
+  const initialMinesBlue  = BALANCE.board.initialMinesBlue;
   const maxLives          = BALANCE.player.maxLives;
   const minesPerTurn      = BALANCE.phase3.minesPerTurn;
   const hqBonusMines      = BALANCE.phase3.hqInActionZoneBonusMines;
@@ -47,8 +48,9 @@ export function HelpModal({ onClose }: HelpModalProps) {
               Поле {boardSize}×{boardSize}. Красный владеет верхней половиной,
               синий — нижней. Штаб красного находится по центру верхнего края,
               штаб синего — по центру нижнего края. Штаб нельзя заминировать.
-              В начале каждый расставляет по <strong>{initialMines} мин</strong>
-              {' '}на своей половине. Мины противника скрыты. Ходить начинает
+              В начале красный расставляет <strong>{initialMinesRed} мин</strong>,
+              синий — <strong>{initialMinesBlue} мин</strong> на своей половине.
+              Мины противника скрыты. Ходить начинает
               красный. У каждого игрока <strong>{maxLives} жизни</strong>.
             </p>
           </section>
