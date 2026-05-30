@@ -3,15 +3,89 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Minesweeper PvP</title>
 
+    <!-- ───────── Базовые SEO ───────── -->
+    <title>Minesweeper PvP — онлайн-сапёр на двоих с шахматными часами</title>
+    <meta
+      name="description"
+      content="Многопользовательский сапёр (Minesweeper) для двух игроков. Минируйте поле, захватывайте клетки противника, штурмуйте штаб. Партии с шахматным контролем времени 2+3, 3+5, 5+7. Бесплатно, без регистрации, прямо в браузере."
+    />
+    <meta
+      name="keywords"
+      content="сапёр пвп, сапёр онлайн, minesweeper online, сапёр на двоих, multiplayer minesweeper, minesweeper pvp, онлайн игра в браузере, сапёр с другом, тактическая логическая игра, minesweeper duel, browser game, шахматный сапёр, blitz minesweeper, играть в сапёр, сапёр мультиплеер"
+    />
+    <meta name="author" content="Minesweeper PvP" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#1a1a2e" />
+    <link rel="canonical" href="https://minesweeper-pvp.ru/" />
+
+    <!-- ───────── Open Graph (Telegram, FB, Discord, Slack, LinkedIn) ───────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Minesweeper PvP" />
+    <meta property="og:title" content="Minesweeper PvP — онлайн-сапёр на двоих" />
+    <meta
+      property="og:description"
+      content="Дуэль в сапёре с шахматным таймером. Минируй поле, захватывай клетки, добивай штаб противника. Играй с другом в браузере без регистрации."
+    />
+    <meta property="og:url" content="https://minesweeper-pvp.ru/" />
+    <meta property="og:image" content="https://minesweeper-pvp.ru/og-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Скриншот игрового поля Minesweeper PvP" />
+    <meta property="og:locale" content="ru_RU" />
+
+    <!-- ───────── Twitter Cards ───────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Minesweeper PvP — онлайн-сапёр на двоих" />
+    <meta
+      name="twitter:description"
+      content="PvP-сапёр с шахматным таймером. Минируй, захватывай клетки и громи штаб противника."
+    />
+    <meta name="twitter:image" content="https://minesweeper-pvp.ru/og-preview.png" />
+
+    <!-- ───────── Иконки ───────── -->
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💣</text></svg>"
     />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- ───────── Schema.org / JSON-LD (rich results в Google) ───────── -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Minesweeper PvP",
+        "description": "Многопользовательский сапёр на двоих с шахматным контролем времени. Минируйте, захватывайте клетки, штурмуйте штаб.",
+        "url": "https://minesweeper-pvp.ru/",
+        "image": "https://minesweeper-pvp.ru/og-preview.png",
+        "applicationCategory": "GameApplication",
+        "genre": ["Puzzle", "Strategy", "Multiplayer"],
+        "operatingSystem": "Web Browser",
+        "playMode": "MultiPlayer",
+        "numberOfPlayers": "2",
+        "inLanguage": "ru",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "RUB"
+        }
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Фолбэк-контент для поисковых ботов и пользователей с отключённым JS.
+         React его перезапишет при загрузке, но краулеры успевают прочитать. -->
+    <div id="root">
+      <noscript>
+        <h1>Minesweeper PvP — онлайн-сапёр на двоих</h1>
+        <p>
+          Многопользовательский сапёр на двоих с шахматным контролем времени.
+          Минируйте поле, захватывайте клетки противника, штурмуйте штаб.
+          Для игры необходим JavaScript — включите его в настройках браузера.
+        </p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -182,7 +182,6 @@ export default function App() {
               volume={volume}
               hideControls={hideControls}
               onToggleMuted={() => {
-                playButton();
                 toggleMuted();
               }}
               onVolumeChange={(v) => setVolume(v)}
