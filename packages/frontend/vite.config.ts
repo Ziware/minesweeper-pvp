@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@minesweeper-pvp/shared': path.resolve(__dirname, '../shared/src/types'),
+      '@minesweeper-pvp/shared': path.resolve(__dirname, '../shared/src/index'),
     },
   },
   server: {

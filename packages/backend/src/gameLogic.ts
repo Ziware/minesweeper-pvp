@@ -4,6 +4,19 @@ import {
   GameConfig,
   PlayerColor,
   TurnState,
+  // Shared helpers / constants
+  ORTHOGONAL_DIRECTIONS,
+  ACTION_ZONE_SIZE,
+  DISPLAY_ZONE_SIZE,
+  isInBounds,
+  cellKey,
+  getReachablePlayerCells as sharedGetReachablePlayerCells,
+  isPlayerCellReachable as sharedIsPlayerCellReachable,
+  getHeadquartersCells as sharedGetHeadquartersCells,
+  isHeadquartersCellOf,
+  getHeadquartersOwner as sharedGetHeadquartersOwner,
+  getDisplayZoneTopLeft as sharedGetDisplayZoneTopLeft,
+  getActionZoneTopLeft as sharedGetActionZoneTopLeft,
 } from '@minesweeper-pvp/shared';
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -36,16 +49,8 @@ export function initBoard(board: CellState[][], config: GameConfig): void {
   }
 }
 
-export function isInBounds(row: number, col: number, size: number): boolean {
-  return row >= 0 && row < size && col >= 0 && col < size;
-}
-
-const ORTHOGONAL_DIRECTIONS = [
-  [-1, 0],
-  [1, 0],
-  [0, -1],
-  [0, 1],
-] as const;
+// Re-export shared bounds helper для обратной совместимости с остальным backend-кодом.
+export { isInBounds };
 
 export function countAdjacentEnemyMines(
   board: CellState[][],
@@ -78,8 +83,8 @@ export function revealNumbersInDisplayZone(
   playerColor: PlayerColor,
   config: GameConfig
 ): void {
-  for (let dr = 0; dr < 3; dr++) {
-    for (let dc = 0; dc < 3; dc++) {
+  for (let dr = 0; dr < DISPLAY_ZONE_SIZE; dr++) {
+    for (let dc = 0; dc < DISPLAY_ZONE_SIZE; dc++) {
       const r = displayZoneRow + dr;
       const c = displayZoneCol + dc;
       if (!isInBounds(r, c, config.boardSize)) continue;
@@ -103,8 +108,8 @@ export function refreshNumbersInDisplayZone(
   playerColor: PlayerColor,
   config: GameConfig
 ): void {
-  for (let dr = 0; dr < 3; dr++) {
-    for (let dc = 0; dc < 3; dc++) {
+  for (let dr = 0; dr < DISPLAY_ZONE_SIZE; dr++) {
+    for (let dc = 0; dc < DISPLAY_ZONE_SIZE; dc++) {
       const r = displayZoneRow + dr;
       const c = displayZoneCol + dc;
       if (!isInBounds(r, c, config.boardSize)) continue;
@@ -144,55 +149,15 @@ export function clearRevealedNumbers(board: CellState[][]): void {
   }
 }
 
-export function getDisplayZoneTopLeft(
-  clickedRow: number,
-  clickedCol: number,
-): { row: number; col: number } {
-  return { row: clickedRow - 1, col: clickedCol - 1 };
-}
-
-export function getActionZoneTopLeft(
-  clickedRow: number,
-  clickedCol: number,
-): { row: number; col: number } {
-  return { row: clickedRow - 2, col: clickedCol - 2 };
-}
+export const getDisplayZoneTopLeft = sharedGetDisplayZoneTopLeft;
+export const getActionZoneTopLeft = sharedGetActionZoneTopLeft;
 
 export function getReachablePlayerCells(
   board: CellState[][],
   playerColor: PlayerColor,
   config: GameConfig
 ): Set<string> {
-  const reachable = new Set<string>();
-  const queue: Array<{ row: number; col: number }> = [];
-
-  for (const headquartersCell of getHeadquartersCells(playerColor, config)) {
-    const { row, col } = headquartersCell;
-    if (!isInBounds(row, col, config.boardSize)) continue;
-    if (board[row][col].owner !== playerColor) continue;
-
-    const key = `${row},${col}`;
-    reachable.add(key);
-    queue.push(headquartersCell);
-  }
-
-  for (let index = 0; index < queue.length; index++) {
-    const current = queue[index];
-    for (const [dr, dc] of ORTHOGONAL_DIRECTIONS) {
-      const nr = current.row + dr;
-      const nc = current.col + dc;
-      if (!isInBounds(nr, nc, config.boardSize)) continue;
-      if (board[nr][nc].owner !== playerColor) continue;
-
-      const key = `${nr},${nc}`;
-      if (reachable.has(key)) continue;
-
-      reachable.add(key);
-      queue.push({ row: nr, col: nc });
-    }
-  }
-
-  return reachable;
+  return sharedGetReachablePlayerCells(board, playerColor, config.boardSize);
 }
 
 export function isPlayerCellReachable(
@@ -202,7 +167,7 @@ export function isPlayerCellReachable(
   playerColor: PlayerColor,
   config: GameConfig
 ): boolean {
-  return getReachablePlayerCells(board, playerColor, config).has(`${row},${col}`);
+  return sharedIsPlayerCellReachable(board, row, col, playerColor, config.boardSize);
 }
 
 export function isValidZoneSelection(
@@ -214,12 +179,12 @@ export function isValidZoneSelection(
 ): boolean {
   const reachableCells = getReachablePlayerCells(board, playerColor, config);
 
-  for (let dr = 0; dr < 3; dr++) {
-    for (let dc = 0; dc < 3; dc++) {
+  for (let dr = 0; dr < DISPLAY_ZONE_SIZE; dr++) {
+    for (let dc = 0; dc < DISPLAY_ZONE_SIZE; dc++) {
       const r = displayZoneRow + dr;
       const c = displayZoneCol + dc;
       if (!isInBounds(r, c, config.boardSize)) continue;
-      if (reachableCells.has(`${r},${c}`)) {
+      if (reachableCells.has(cellKey(r, c))) {
         return true;
       }
     }
@@ -240,8 +205,8 @@ export function canCaptureCell(
   if (cell.owner === playerColor) return false;
 
   const inActionZone =
-    row >= actionZoneRow && row < actionZoneRow + 5 &&
-    col >= actionZoneCol && col < actionZoneCol + 5 &&
+    row >= actionZoneRow && row < actionZoneRow + ACTION_ZONE_SIZE &&
+    col >= actionZoneCol && col < actionZoneCol + ACTION_ZONE_SIZE &&
     isInBounds(row, col, config.boardSize);
   if (!inActionZone) return false;
 
@@ -251,7 +216,7 @@ export function canCaptureCell(
     const nr = row + dr;
     const nc = col + dc;
     if (!isInBounds(nr, nc, config.boardSize)) continue;
-    if (reachableCells.has(`${nr},${nc}`)) {
+    if (reachableCells.has(cellKey(nr, nc))) {
       return true;
     }
   }
@@ -262,12 +227,7 @@ export function getHeadquartersCells(
   playerColor: PlayerColor,
   config: GameConfig
 ): Array<{ row: number; col: number }> {
-  const firstCol = Math.floor((config.boardSize - 2) / 2);
-  const row = playerColor === 'red' ? 0 : config.boardSize - 1;
-  return [
-    { row, col: firstCol },
-    { row, col: firstCol + 1 },
-  ];
+  return sharedGetHeadquartersCells(playerColor, config.boardSize);
 }
 
 export function isHeadquartersCell(
@@ -276,9 +236,7 @@ export function isHeadquartersCell(
   playerColor: PlayerColor,
   config: GameConfig
 ): boolean {
-  return getHeadquartersCells(playerColor, config).some(
-    (cell) => cell.row === row && cell.col === col
-  );
+  return isHeadquartersCellOf(row, col, playerColor, config.boardSize);
 }
 
 export function getHeadquartersOwner(
@@ -286,9 +244,7 @@ export function getHeadquartersOwner(
   col: number,
   config: GameConfig
 ): PlayerColor | null {
-  if (isHeadquartersCell(row, col, 'red', config)) return 'red';
-  if (isHeadquartersCell(row, col, 'blue', config)) return 'blue';
-  return null;
+  return sharedGetHeadquartersOwner(row, col, config.boardSize);
 }
 
 export interface BoardStats {
@@ -347,9 +303,9 @@ export function actionZoneContainsHeadquarters(
   playerColor: PlayerColor,
   config: GameConfig,
 ): boolean {
-  return getHeadquartersCells(playerColor, config).some(({ row, col }) => (
-    row >= actionZoneRow && row < actionZoneRow + 5 &&
-    col >= actionZoneCol && col < actionZoneCol + 5 &&
+  return sharedGetHeadquartersCells(playerColor, config.boardSize).some(({ row, col }) => (
+    row >= actionZoneRow && row < actionZoneRow + ACTION_ZONE_SIZE &&
+    col >= actionZoneCol && col < actionZoneCol + ACTION_ZONE_SIZE &&
     isInBounds(row, col, config.boardSize)
   ));
 }

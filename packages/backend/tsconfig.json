@@ -12,7 +12,7 @@
     "declaration": true,
     "sourceMap": true,
     "paths": {
-      "@minesweeper-pvp/shared": ["../shared/src/types"]
+      "@minesweeper-pvp/shared": ["../shared/src/index"]
     }
   },
   "include": ["src", "../shared/src"]

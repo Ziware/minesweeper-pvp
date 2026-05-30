@@ -4,6 +4,7 @@ import {
   ServerToClientEvents,
   ClientToServerEvents,
   S2C_GameState,
+  S2C_GameOver,
   PlayerColor,
   CellMark,
 } from '@minesweeper-pvp/shared';
@@ -11,10 +12,9 @@ import {
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 export type GameScreen = 'lobby' | 'waiting' | 'setup' | 'game' | 'finished';
 
-export interface GameOverInfo {
-  winnerColor: PlayerColor;
-  reason: 'lives' | 'headquarters' | 'territory';
-}
+// Алиас, чтобы не плодить одинаковые интерфейсы — единственный источник
+// правды лежит в @minesweeper-pvp/shared.
+export type GameOverInfo = S2C_GameOver;
 
 const SOCKET_URL =
   import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;

@@ -1,5 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { S2C_GameState, PlayerColor, CellMark } from '@minesweeper-pvp/shared';
+import {
+  S2C_GameState,
+  PlayerColor,
+  CellMark,
+  inZoneWithCenter,
+  isHeadquartersCell as sharedIsHeadquartersCell,
+} from '@minesweeper-pvp/shared';
 import { Cell } from '../Cell/Cell';
 import styles from './Board.module.css';
 
@@ -13,62 +19,6 @@ interface BoardProps {
   onPlaceMineSetup?: (row: number, col: number) => void;
   onToggleMark: (row: number, col: number, mark: CellMark) => void;
   onWrapperRef?: (el: HTMLDivElement | null) => void;
-}
-
-function inZoneWithCenter(
-  r: number, c: number,
-  centerRow: number, centerCol: number,
-  halfSize: number
-): boolean {
-  return (
-    r >= centerRow - halfSize && r <= centerRow + halfSize &&
-    c >= centerCol - halfSize && c <= centerCol + halfSize
-  );
-}
-
-function isHeadquartersCell(row: number, col: number, boardSize: number): boolean {
-  const firstCol = Math.floor((boardSize - 2) / 2);
-  return (row === 0 || row === boardSize - 1) && (col === firstCol || col === firstCol + 1);
-}
-
-function getReachableCells(
-  board: S2C_GameState['board'],
-  playerColor: PlayerColor,
-  boardSize: number,
-): Set<string> {
-  const firstCol = Math.floor((boardSize - 2) / 2);
-  const startRow = playerColor === 'red' ? 0 : boardSize - 1;
-  const starts = [
-    { row: startRow, col: firstCol },
-    { row: startRow, col: firstCol + 1 },
-  ];
-  const reachable = new Set<string>();
-  const queue: Array<{ row: number; col: number }> = [];
-
-  for (const start of starts) {
-    if (board[start.row]?.[start.col]?.owner !== playerColor) continue;
-    const key = `${start.row},${start.col}`;
-    reachable.add(key);
-    queue.push(start);
-  }
-
-  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
-  for (let i = 0; i < queue.length; i++) {
-    const current = queue[i];
-    for (const [dr, dc] of directions) {
-      const nr = current.row + dr;
-      const nc = current.col + dc;
-      if (nr < 0 || nr >= boardSize || nc < 0 || nc >= boardSize) continue;
-      if (board[nr][nc].owner !== playerColor) continue;
-
-      const key = `${nr},${nc}`;
-      if (reachable.has(key)) continue;
-      reachable.add(key);
-      queue.push({ row: nr, col: nc });
-    }
-  }
-
-  return reachable;
 }
 
 // Вычисляем размер клетки в зависимости от размера экрана и boardSize
@@ -154,16 +104,12 @@ export function Board({
 
     if (phase === 'setup') {
       if (iConfirmed) return;
-      const isOwn = cell.owner === myColor;
-      const reachable = getReachableCells(board, myColor, config.boardSize);
-      if (
-        isOwn &&
-        !isHeadquartersCell(r, c, config.boardSize) &&
-        reachable.has(`${r},${c}`) &&
-        onPlaceMineSetup
-      ) {
-        onPlaceMineSetup(r, c);
-      }
+      if (!onPlaceMineSetup) return;
+      // Шлём любой клик на сервер: тот вернёт причину, если ход неверный
+      // ("Это не ваша клетка", "Штаб нельзя заминировать",
+      // "Мины можно ставить только в доступные клетки",
+      // "Достигнут лимит мин для расстановки" и т. п.).
+      onPlaceMineSetup(r, c);
       return;
     }
 
@@ -250,7 +196,7 @@ export function Board({
                   zoneType={finalZone}
                   isHover={isHover}
                   isInActiveZone={isInActive}
-                  isHeadquarters={isHeadquartersCell(r, c, config.boardSize)}
+                  isHeadquarters={sharedIsHeadquartersCell(r, c, config.boardSize)}
                   gamePhase={turn.phase}
                   isMyTurn={isMyTurn}
                   onClick={(e) => handleClick(r, c, e)}
@@ -263,24 +209,20 @@ export function Board({
       </div>
 
       <div className={styles.bottomBar}>
-        {(
-          <>
-            {showLegend && (
-              <div className={styles.zoneLegend}>
-                <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
-                <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
-                <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
-              </div>
-            )}
-            {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
-              <div className={styles.hint}>
-                🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesPerTurn - turn.defusesUsedThisTurn} / {turn.defusesPerTurn}. Захват — только по общей стороне.
-              </div>
-            )}
-            {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
-              <div className={styles.placeholder} />
-            )}
-          </>
+        {showLegend && (
+          <div className={styles.zoneLegend}>
+            <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
+            <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
+            <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
+          </div>
+        )}
+        {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
+          <div className={styles.hint}>
+            🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesPerTurn - turn.defusesUsedThisTurn} / {turn.defusesPerTurn}. Захват — только по общей стороне.
+          </div>
+        )}
+        {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
+          <div className={styles.placeholder} />
         )}
       </div>
     </div>

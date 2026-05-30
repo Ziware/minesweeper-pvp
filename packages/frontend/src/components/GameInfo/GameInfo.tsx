@@ -1,11 +1,9 @@
 import React from 'react';
-import { S2C_GameState, PlayerColor } from '@minesweeper-pvp/shared';
+import { S2C_GameState, S2C_GameOver, PlayerColor } from '@minesweeper-pvp/shared';
 import styles from './GameInfo.module.css';
 
-export interface GameOverInfo {
-  winnerColor: PlayerColor;
-  reason: 'lives' | 'headquarters' | 'territory';
-}
+// Единый тип для информации об окончании игры — определён в shared.
+export type GameOverInfo = S2C_GameOver;
 
 interface GameInfoProps {
   gameState: S2C_GameState;
