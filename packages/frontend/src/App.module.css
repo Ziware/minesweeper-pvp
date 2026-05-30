@@ -216,3 +216,25 @@
   from { opacity: 0; transform: translateX(-50%) translateY(16px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+.offlineBanner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 16px;
+  background: #4a2410;
+  color: #ffc080;
+  text-align: center;
+  font-weight: bold;
+  font-size: 0.9rem;
+  border-top: 1px solid #e67e2255;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+  z-index: 1100;
+  animation: slideUpBanner 0.25s ease;
+}
+
+@keyframes slideUpBanner {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}

@@ -78,6 +78,7 @@ export function useSocket() {
   const [errorMsg,  setErrorMsg]  = useState('');
   const [gameOver,  setGameOver]  = useState<GameOverInfo | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [serverReachable, setServerReachable] = useState(true);
 
   useEffect(() => {
     const socket: AppSocket = io(SOCKET_URL, {
@@ -105,10 +106,40 @@ export function useSocket() {
       });
     };
 
+    // Таймер, который через 3 сек после потери коннекта помечает сервер недоступным
+    let unreachableTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleUnreachable = () => {
+      if (unreachableTimer) return;
+      unreachableTimer = setTimeout(() => {
+        setServerReachable(false);
+        unreachableTimer = null;
+      }, 3000);
+    };
+    const cancelUnreachable = () => {
+      if (unreachableTimer) {
+        clearTimeout(unreachableTimer);
+        unreachableTimer = null;
+      }
+      setServerReachable(true);
+    };
+
     // При каждом (пере)подключении пробуем восстановить сессию этой вкладки
     socket.on('connect', () => {
       console.log('[socket] connected, tabId:', TAB_ID);
+      cancelUnreachable();
       restoreSavedSession('connect');
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[socket] connect_error:', err.message);
+      scheduleUnreachable();
+    });
+
+    socket.io.on('reconnect_attempt', () => {
+      scheduleUnreachable();
+    });
+    socket.io.on('error', () => {
+      scheduleUnreachable();
     });
 
     const handleFocusResync = () => restoreSavedSession('focus');
@@ -175,9 +206,11 @@ export function useSocket() {
 
     socket.on('disconnect', (reason) => {
       console.log('[socket] disconnected:', reason);
+      scheduleUnreachable();
     });
 
     return () => {
+      if (unreachableTimer) clearTimeout(unreachableTimer);
       window.removeEventListener('focus', handleFocusResync);
       document.removeEventListener('visibilitychange', handleVisibilityResync);
       window.removeEventListener('pageshow', handlePageShowResync);
@@ -237,6 +270,7 @@ export function useSocket() {
 
   return {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
+    serverReachable,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,

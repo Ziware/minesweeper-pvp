@@ -11,7 +11,7 @@ import styles from './App.module.css';
 
 export default function App() {
   const {
-    screen, roomId, myColor, myName, gameState, errorMsg, gameOver,
+    screen, roomId, myColor, myName, gameState, errorMsg, gameOver, serverReachable,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
@@ -211,11 +211,20 @@ export default function App() {
     errorMsg ? <div className={styles.toastError}>{errorMsg}</div> : null
   );
 
+  const renderOfflineBanner = () => (
+    !serverReachable ? (
+      <div className={styles.offlineBanner}>
+        ⚠️ Сервер недоступен. Пытаемся переподключиться…
+      </div>
+    ) : null
+  );
+
   const renderShell = (content: React.ReactNode, headerContent?: React.ReactNode) => (
     <div className={styles.gameLayout}>
       {renderHeader(headerContent)}
       {content}
       {renderErrorToast()}
+      {renderOfflineBanner()}
       {showHelp && <HelpModal onClose={closeHelp} />}
     </div>
   );

@@ -1,7 +1,12 @@
 {
   "name": "@minesweeper-pvp/shared",
   "version": "1.0.0",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "scripts": {}
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
 }
