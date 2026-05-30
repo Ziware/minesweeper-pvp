@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSocket } from './hooks/useSocket';
 import { useSound } from './hooks/useSound';
+import { useSettings } from './hooks/useSettings';
 import { Lobby }     from './components/Lobby/Lobby';
-import { MineSetup } from './components/MineSetup/MineSetup';
 import { Board }     from './components/Board/Board';
 import { GameInfo }  from './components/GameInfo/GameInfo';
 import { HelpModal } from './components/HelpModal/HelpModal';
+import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
 import styles from './App.module.css';
 
 export default function App() {
@@ -18,8 +19,20 @@ export default function App() {
   } = useSocket();
 
   const [showHelp, setShowHelp] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [boardHeight, setBoardHeight] = useState<number | null>(null);
-  const { muted, play, playDelayed, preload, toggleMuted } = useSound();
+
+  const {
+    settings,
+    mutedRef,
+    volumeRef,
+    toggleMuted,
+    setVolume,
+    toggleHideControls,
+  } = useSettings();
+  const { muted, hideControls, volume } = settings;
+
+  const { play, playDelayed, preload } = useSound({ mutedRef, volumeRef });
 
   const previousLivesRef = useRef<Record<string, number> | null>(null);
   const previousCapturedCountRef = useRef<number | null>(null);
@@ -151,16 +164,36 @@ export default function App() {
       <h2 className={styles.logo}>💣 Minesweeper PvP</h2>
       {content}
       <div className={styles.headerActions}>
-        <button
-          className={styles.headerBtn}
-          onClick={() => {
-            playButton();
-            toggleMuted();
-          }}
-          title={muted ? 'Включить звук' : 'Выключить звук'}
-        >
-          {muted ? '🔇 Звук' : '🔊 Звук'}
-        </button>
+        <div className={styles.settingsAnchor} data-settings-anchor>
+          <button
+            className={`${styles.headerBtn} ${showSettings ? styles.headerBtnActive : ''}`}
+            onClick={() => {
+              playButton();
+              setShowSettings((v) => !v);
+            }}
+            aria-expanded={showSettings}
+            aria-haspopup="menu"
+          >
+            ⚙️ Настройки
+          </button>
+          {showSettings && (
+            <SettingsMenu
+              muted={muted}
+              volume={volume}
+              hideControls={hideControls}
+              onToggleMuted={() => {
+                playButton();
+                toggleMuted();
+              }}
+              onVolumeChange={(v) => setVolume(v)}
+              onToggleHideControls={() => {
+                playButton();
+                toggleHideControls();
+              }}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
+        </div>
         <button
           className={styles.headerBtn}
           onClick={() => {
@@ -216,35 +249,24 @@ export default function App() {
     );
   }
 
-  if (screen === 'setup' && gameState && myColor) {
-    return renderShell(
-      <MineSetup
-        gameState={gameState}
-        myColor={myColor}
-        onPlaceMine={(row, col) => {
-          play('plant_mine');
-          placeMineSetup(row, col);
-        }}
-        onConfirm={() => {
-          playButton();
-          confirmSetup();
-        }}
-      />
-    );
-  }
-
-  if ((screen === 'game' || screen === 'finished') && gameState && myColor) {
+  if (
+    (screen === 'game' || screen === 'finished' || screen === 'setup') &&
+    gameState &&
+    myColor
+  ) {
     const me       = gameState.players.find((p) => p.color === myColor);
     const opponent = gameState.players.find((p) => p.color !== myColor);
 
     const turn = gameState.turn;
     const isMyTurn = turn.currentPlayer === myColor;
     const isFinished = turn.phase === 'finished' || !!gameState.winnerColor;
+    const isSetup = turn.phase === 'setup';
 
     type PrimaryAction = {
       label: string;
       onClick: () => void;
       variant?: 'menu';
+      disabled?: boolean;
     } | null;
 
     let primaryAction: PrimaryAction = null;
@@ -256,6 +278,20 @@ export default function App() {
           returnToMenu();
         },
         variant: 'menu',
+      };
+    } else if (isSetup && me && !me.setupConfirmed) {
+      const remaining = gameState.config.initialMines - me.minesPlaced;
+      const canConfirm = remaining === 0;
+      primaryAction = {
+        label: canConfirm
+          ? 'Подтвердить ✓'
+          : `Поставьте ещё ${remaining} 💣 `,
+        onClick: () => {
+          if (!canConfirm) return;
+          playButton();
+          confirmSetup();
+        },
+        disabled: !canConfirm,
       };
     } else if (isMyTurn && turn.phase === 'phase2') {
       primaryAction = {
@@ -275,7 +311,8 @@ export default function App() {
       };
     }
 
-    primaryActionRef.current = primaryAction ? primaryAction.onClick : null;
+    primaryActionRef.current =
+      primaryAction && !primaryAction.disabled ? primaryAction.onClick : null;
 
     const headerContent = (
       <>
@@ -336,6 +373,7 @@ export default function App() {
                   primaryAction.variant === 'menu' ? styles.menuVariant : ''
                 }`}
                 onClick={primaryAction.onClick}
+                disabled={!!primaryAction.disabled}
               >
                 {primaryAction.label}
               </button>
@@ -366,6 +404,10 @@ export default function App() {
             play('plant_mine');
             placeMinePhase3(row, col);
           }}
+          onPlaceMineSetup={(row, col) => {
+            play('plant_mine');
+            placeMineSetup(row, col);
+          }}
           onToggleMark={(row, col, mark) => {
             playButton();
             toggleMark(row, col, mark);
@@ -376,6 +418,7 @@ export default function App() {
             gameState={gameState}
             myColor={myColor}
             section="stats"
+            hideControls={hideControls}
           />
         </div>
       </div>,

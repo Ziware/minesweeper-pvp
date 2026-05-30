@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
 import buttonUrl from '../../../content/button.wav?url';
 import defeatUrl from '../../../content/defeat.wav?url';
@@ -21,12 +21,12 @@ export type SoundName =
 
 // Базовая громкость для каждого звука (в дБ). Отрицательные значения = тише.
 const BASE_GAIN_DB: Record<SoundName, number> = {
-  button: -10,
+  button: -9,
   defeat: -10,
-  disarm: -10,
-  explosion: -10,
-  locked_cell: -8,
-  plant_mine: -10,
+  disarm: -9,
+  explosion: -7,
+  locked_cell: -6,
+  plant_mine: -9,
   scan: -5,
   victory: -10,
 };
@@ -47,8 +47,6 @@ const SOUND_URLS: Record<SoundName, string> = {
   victory: victoryUrl,
 };
 
-const STORAGE_KEY = 'minesweeper_sound_muted';
-
 function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
@@ -57,18 +55,17 @@ function dbToGain(db: number): number {
   return 10 ** (db / 20);
 }
 
-export function useSound() {
+export interface UseSoundOptions {
+  /** Ref на флаг «звук выключен». Читается на момент воспроизведения. */
+  mutedRef: React.MutableRefObject<boolean>;
+  /** Ref на множитель громкости (0..2). Читается на момент воспроизведения. */
+  volumeRef: React.MutableRefObject<number>;
+}
+
+export function useSound({ mutedRef, volumeRef }: UseSoundOptions) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const buffersRef = useRef<SoundBuffers>({});
   const loadingRef = useRef<Partial<Record<SoundName, Promise<void>>>>({});
-  const mutedRef = useRef(false);
-
-  const [muted, setMuted] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
-
-  useEffect(() => {
-    mutedRef.current = muted;
-    localStorage.setItem(STORAGE_KEY, String(muted));
-  }, [muted]);
 
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -125,7 +122,9 @@ export function useSound() {
         panner.pan.value = randomBetween(-0.05, 0.05);
 
         const baseDb = BASE_GAIN_DB[name];
-        gain.gain.value = dbToGain(baseDb + randomBetween(-GAIN_VARIATION_DB, GAIN_VARIATION_DB));
+        const baseGain = dbToGain(baseDb + randomBetween(-GAIN_VARIATION_DB, GAIN_VARIATION_DB));
+        // volumeRef.current — пользовательский множитель 0..2
+        gain.gain.value = baseGain * volumeRef.current;
 
         source.connect(filter);
         filter.connect(panner);
@@ -136,16 +135,12 @@ export function useSound() {
         console.warn('[sound] failed to play', name, error);
       }
     })();
-  }, [getAudioContext, loadSound]);
+  }, [getAudioContext, loadSound, mutedRef, volumeRef]);
 
   // Отложенное воспроизведение (например, для победы/поражения с задержкой 0.5с).
   const playDelayed = useCallback((name: SoundName, delayMs: number) => {
     window.setTimeout(() => play(name), delayMs);
   }, [play]);
 
-  const toggleMuted = useCallback(() => {
-    setMuted((current) => !current);
-  }, []);
-
-  return { muted, play, playDelayed, preload, toggleMuted };
+  return { play, playDelayed, preload };
 }

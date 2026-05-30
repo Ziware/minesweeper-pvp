@@ -112,6 +112,13 @@
   transition: background 0.2s;
 }
 .headerBtn:hover { background: #1a4f80; }
+.headerBtnActive { background: #1a4f80; }
+
+/* Якорь для выпадающего меню настроек */
+.settingsAnchor {
+  position: relative;
+  display: inline-block;
+}
 
 .gameBody {
   display: flex;

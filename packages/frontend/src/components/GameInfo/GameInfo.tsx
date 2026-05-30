@@ -12,6 +12,8 @@ interface GameInfoProps {
   myColor: PlayerColor;
   section?: 'controls' | 'stats';
   gameOver?: GameOverInfo | null;
+  /** Скрыть блок «Управление» внутри section='stats' */
+  hideControls?: boolean;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -41,6 +43,7 @@ export function GameInfo({
   myColor,
   section = 'controls',
   gameOver,
+  hideControls = false,
 }: GameInfoProps) {
   const { players, turn, config, stats } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
@@ -131,40 +134,54 @@ export function GameInfo({
           )}
         </div>
 
-        {/* Управление (по стилю как statsBlock) */}
-        <div className={styles.controlsBlock}>
-          <div className={styles.controlsTitle}>🎮 Управление</div>
-          <div className={styles.controlsRow}>🖱️ ЛКМ — действие</div>
-          <div className={styles.controlsRow}>🖱️ ПКМ — флаг / ? / убрать</div>
-          <div className={styles.controlsRow}>⌨️ Ctrl+Click — разминировать</div>
-          <div className={styles.controlsRow}>🏛️ Захват штаба — мгновенная победа</div>
-          <div className={styles.controlsRow}>
-            <span className={styles.hotkeyKey}>Space</span> — кнопка слева от доски
+        {/* Управление (по стилю как statsBlock) — можно скрыть через настройки */}
+        {!hideControls && (
+          <div className={styles.controlsBlock}>
+            <div className={styles.controlsTitle}>🎮 Управление</div>
+            <div className={styles.controlsRow}>🖱️ ЛКМ — действие</div>
+            <div className={styles.controlsRow}>🖱️ ПКМ — флаг / ? / убрать</div>
+            <div className={styles.controlsRow}>⌨️ Ctrl+Click — разминировать</div>
+            <div className={styles.controlsRow}>🏛️ Захват штаба — мгновенная победа</div>
+            <div className={styles.controlsRow}>
+              <span className={styles.hotkeyKey}>Space</span> — кнопка слева от доски
+            </div>
+            <div className={styles.controlsDivider} />
+            <div className={styles.controlsTitle}>📋 Фазы хода</div>
+            <div className={styles.controlsRow}>1️⃣ Выбор зоны 3×3</div>
+            <div className={styles.controlsRow}>2️⃣ Захват по границе (зона 5×5)</div>
+            <div className={styles.controlsRow}>3️⃣ Поставить 0–3 мины (+1 за штаб в зоне 5×5)</div>
           </div>
-          <div className={styles.controlsDivider} />
-          <div className={styles.controlsTitle}>📋 Фазы хода</div>
-          <div className={styles.controlsRow}>1️⃣ Выбор зоны 3×3</div>
-          <div className={styles.controlsRow}>2️⃣ Захват по границе (зона 5×5)</div>
-          <div className={styles.controlsRow}>3️⃣ Поставить 0–3 мины (+1 за штаб в зоне 5×5)</div>
-        </div>
+        )}
       </div>
     );
   }
 
   const isFinished = turn.phase === 'finished' || !!gameState.winnerColor;
+  const isSetup = turn.phase === 'setup';
   const winnerColor = gameOver?.winnerColor ?? gameState.winnerColor ?? null;
   const iWon = winnerColor !== null && winnerColor === myColor;
   const reason = gameOver?.reason;
 
+  const me = players.find((p) => p.color === myColor);
+  const opponent = players.find((p) => p.color !== myColor);
+  const iConfirmed = me?.setupConfirmed ?? false;
+  const opponentConfirmed = opponent?.setupConfirmed ?? false;
+  const minesLeft = Math.max(0, config.initialMines - (me?.minesPlaced ?? 0));
+
   return (
     <div className={styles.panel}>
-      {/* Статус хода / Победитель */}
+      {/* Статус хода / Победитель / Подготовка */}
       {isFinished && winnerColor ? (
         <div className={iWon ? styles.winnerBanner : styles.loserBanner}>
           <div className={styles.bannerHead}>
             <span className={styles.turnIcon}>{iWon ? '🏆' : '💀'}</span>
             <span>{iWon ? 'Победа!' : 'Поражение'}</span>
           </div>
+        </div>
+      ) : isSetup ? (
+        <div className={`${styles.turnStatus} ${iConfirmed ? styles.opponentTurn : styles.myTurn}`}>
+          <span className={styles.turnIcon}>{iConfirmed ? '⏳' : '💣'}</span>
+          <span>{iConfirmed ? 'Ожидание противника...' : 'Расставьте мины'}</span>
         </div>
       ) : (
         <div className={`${styles.turnStatus} ${isMyTurn ? styles.myTurn : styles.opponentTurn}`}>
@@ -199,10 +216,42 @@ export function GameInfo({
       </div>
 
       {/* Текущая фаза (только во время игры) */}
-      {!isFinished && (
+      {!isFinished && !isSetup && (
         <div className={styles.phaseBox}>
           <div className={styles.phaseTitle}>{PHASE_LABELS[turn.phase] ?? turn.phase}</div>
           {isMyTurn && <div className={styles.phaseDesc}>{PHASE_DESCRIPTIONS[turn.phase]}</div>}
+        </div>
+      )}
+
+      {/* Подготовка — статус расстановки мин */}
+      {isSetup && (
+        <div className={styles.phaseBox}>
+          <div className={styles.phaseTitle}>Подготовка — расстановка мин</div>
+          <div className={styles.phaseDesc}>
+            {iConfirmed ? (
+              <>
+                Расстановка подтверждена.{' '}
+                {opponentConfirmed
+                  ? 'Оба готовы, начинаем...'
+                  : `Ожидание ${opponent?.name ?? 'противника'}...`}
+              </>
+            ) : (
+              <>
+                Поставьте <strong>{config.initialMines}</strong> мин на доступные клетки своей половины.
+                {' '}🏛️ — штаб (нельзя заминировать).
+              </>
+            )}
+          </div>
+          <div className={styles.phaseDesc} style={{ marginTop: 6 }}>
+            Поставлено: <strong>{me?.minesPlaced ?? 0} / {config.initialMines}</strong>
+            {!iConfirmed && minesLeft > 0 && <> · осталось <strong>{minesLeft}</strong></>}
+          </div>
+          <div className={styles.phaseDesc} style={{ marginTop: 6 }}>
+            Противник:{' '}
+            {opponentConfirmed
+              ? <strong style={{ color: '#2ecc71' }}>✓ готов</strong>
+              : <strong style={{ color: '#f39c12' }}>⏳ расставляет...</strong>}
+          </div>
         </div>
       )}
 

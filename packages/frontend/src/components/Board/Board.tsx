@@ -10,6 +10,7 @@ interface BoardProps {
   onCaptureCell: (row: number, col: number) => void;
   onDefuseCell: (row: number, col: number) => void;
   onPlaceMinePhase3: (row: number, col: number) => void;
+  onPlaceMineSetup?: (row: number, col: number) => void;
   onToggleMark: (row: number, col: number, mark: CellMark) => void;
   onWrapperRef?: (el: HTMLDivElement | null) => void;
 }
@@ -101,15 +102,18 @@ export function Board({
   onCaptureCell,
   onDefuseCell,
   onPlaceMinePhase3,
+  onPlaceMineSetup,
   onToggleMark,
   onWrapperRef,
 }: BoardProps) {
-  const { board, turn, config } = gameState;
+  const { board, turn, config, players } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
 
   const cellSize = useCellSize(config.boardSize);
 
   const isFinished = turn.phase === 'finished';
+  const me = players.find((p) => p.color === myColor);
+  const iConfirmed = me?.setupConfirmed ?? false;
 
   // Центр зон из selectedZone/actionZone (скрываем после окончания игры)
   const displayCenter = !isFinished && turn.selectedZone
@@ -144,39 +148,55 @@ export function Board({
     inZoneWithCenter(r, c, hoverCell.row, hoverCell.col, 2);
 
   const handleClick = (r: number, c: number, e: React.MouseEvent) => {
-    if (!isMyTurn) return;
     if (turn.phase === 'finished') return;
     const cell  = board[r][c];
     const phase = turn.phase;
+
+    if (phase === 'setup') {
+      if (iConfirmed) return;
+      const isOwn = cell.owner === myColor;
+      const reachable = getReachableCells(board, myColor, config.boardSize);
+      if (
+        isOwn &&
+        !isHeadquartersCell(r, c, config.boardSize) &&
+        reachable.has(`${r},${c}`) &&
+        onPlaceMineSetup
+      ) {
+        onPlaceMineSetup(r, c);
+      }
+      return;
+    }
+
+    if (!isMyTurn) return;
 
     if (phase === 'phase1') {
       onSelectZone(r, c);
       return;
     }
     if (phase === 'phase2') {
+      // Клик по своей клетке без флага игнорируем тихо — это просто промах
+      // (например, пользователь сматривается по полю). Любой другой клик
+      // отправляем на сервер, чтобы тот прислал понятное сообщение об ошибке
+      // (вне зоны 5×5 / нельзя разминировать свою / и т. п.).
+      if (cell.owner === myColor) return;
       if (e.ctrlKey || e.metaKey) {
-        if (cell.owner !== myColor && isInActionZone(r, c)) onDefuseCell(r, c);
+        onDefuseCell(r, c);
         return;
       }
-      if (cell.owner !== myColor && isInActionZone(r, c)) onCaptureCell(r, c);
+      onCaptureCell(r, c);
       return;
     }
     if (phase === 'phase3') {
-      const reachableCells = getReachableCells(board, myColor, config.boardSize);
-      if (
-        cell.owner === myColor &&
-        cell.hasMine === false &&
-        !isHeadquartersCell(r, c, config.boardSize) &&
-        reachableCells.has(`${r},${c}`)
-      ) {
-        onPlaceMinePhase3(r, c);
-      }
+      // В фазе 3 шлём любой клик: сервер вернёт причину, если ход неверный
+      // (не своя клетка, HQ, недостижима, уже заминирована и т. п.).
+      onPlaceMinePhase3(r, c);
     }
   };
 
   const handleRightClick = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
     if (turn.phase === 'finished') return;
+    if (turn.phase === 'setup') return;
     const cell = board[r][c];
     const next: Record<CellMark, CellMark> = {
       none: 'flag', flag: 'question', question: 'none',
@@ -243,20 +263,24 @@ export function Board({
       </div>
 
       <div className={styles.bottomBar}>
-        {showLegend && (
-          <div className={styles.zoneLegend}>
-            <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
-            <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
-            <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
-          </div>
-        )}
-        {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
-          <div className={styles.hint}>
-            🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesPerTurn - turn.defusesUsedThisTurn} / {turn.defusesPerTurn}. Захват — только по общей стороне.
-          </div>
-        )}
-        {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
-          <div className={styles.placeholder} />
+        {(
+          <>
+            {showLegend && (
+              <div className={styles.zoneLegend}>
+                <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
+                <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
+                <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
+              </div>
+            )}
+            {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
+              <div className={styles.hint}>
+                🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesPerTurn - turn.defusesUsedThisTurn} / {turn.defusesPerTurn}. Захват — только по общей стороне.
+              </div>
+            )}
+            {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
+              <div className={styles.placeholder} />
+            )}
+          </>
         )}
       </div>
     </div>

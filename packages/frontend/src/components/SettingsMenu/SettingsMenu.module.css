@@ -1,0 +1,169 @@
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  min-width: 260px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  color: #eee;
+}
+
+.title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #9bf;
+  border-bottom: 1px solid #0f3460;
+  padding-bottom: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rowColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+/* Volume */
+.volumeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.volumeValue {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #f39c12;
+  font-weight: 700;
+}
+
+/*
+ * Слайдер с известной шириной «бегунка» — нужно для точного выравнивания
+ * подписей под ним: подписи имеют горизонтальные паддинги, равные половине
+ * ширины бегунка, чтобы крайние значения (0%/200%) стояли строго под центром
+ * бегунка в крайних положениях, а 100% — посередине.
+ *
+ * Ширина бегунка задаётся одинаково для WebKit и Firefox.
+ */
+.slider {
+  width: 100%;
+  accent-color: #e67e22;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  height: 18px;
+}
+.slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Дорожка */
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #2c3e50;
+  border-radius: 2px;
+}
+.slider::-moz-range-track {
+  height: 4px;
+  background: #2c3e50;
+  border-radius: 2px;
+  border: none;
+}
+
+/* Бегунок — ширина и высота фиксированы (16 × 16) */
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e67e22;
+  border: none;
+  margin-top: -6px; /* центрируем относительно дорожки 4px */
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e67e22;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/*
+ * Подписи позиционируются абсолютно, чтобы их *центры* совпадали с центром
+ * бегунка слайдера в положениях min / середина / max. Центр бегунка
+ * перемещается в диапазоне [8px ; width − 8px] (8px = половина ширины
+ * бегунка 16px). Поэтому крайние подписи смещаем на 8px от краёв и
+ * центрируем по своей точке через translateX(-50%).
+ */
+.volumeScale {
+  position: relative;
+  height: 0.95rem;
+  font-size: 0.7rem;
+  color: #88a;
+  font-family: monospace;
+}
+.volumeScale > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.volumeScale > span:nth-child(1) { left: 8px; }
+.volumeScale > span:nth-child(2) { left: 50%; }
+.volumeScale > span:nth-child(3) { left: calc(100% - 8px); }
+
+/* Toggle (mini-switch) */
+.toggle {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+.toggleOn  { background: #27ae60; }
+.toggleOff { background: #555; }
+
+.toggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.toggleOn  .toggleKnob { transform: translateX(20px); }
+.toggleOff .toggleKnob { transform: translateX(0); }
