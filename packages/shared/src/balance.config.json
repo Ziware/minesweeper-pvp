@@ -20,7 +20,7 @@
     "presets": [
       { "label": "1 + 0", "baseMinutes": 1, "incrementSeconds": 0 },
       { "label": "2 + 1", "baseMinutes": 2, "incrementSeconds": 1 },
-      { "label": "3 + 2", "baseMinutes": 5, "incrementSeconds": 7 }
+      { "label": "3 + 2", "baseMinutes": 3, "incrementSeconds": 2 }
     ]
   }
 }
