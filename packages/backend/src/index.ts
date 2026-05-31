@@ -119,6 +119,15 @@ io.on('connection', (socket) => {
     broadcastGameState(room.id);
   });
 
+  socket.on('chord', ({ row, col }) => {
+    const room  = roomManager.getRoom(socket.id);
+    const color = roomManager.getPlayerColor(socket.id);
+    if (!room || !color) return;
+    const r = roomManager.chordCapture(room, color, row, col);
+    if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
+    broadcastGameState(room.id);
+  });
+
   socket.on('endPhase2', () => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);

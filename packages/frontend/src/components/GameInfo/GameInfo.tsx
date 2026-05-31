@@ -16,7 +16,13 @@ export type GameOverInfo = S2C_GameOver;
 interface GameInfoProps {
   gameState: S2C_GameState;
   myColor: PlayerColor;
-  section?: 'controls' | 'stats';
+  section?: 'controls' | 'stats' | 'banner';
+  /**
+   * Для section='banner' — какой именно игрок отображается компактной горизонтальной
+   * полоской (имя + часы + жизни). На десктопе не используется; на мобиле мы рисуем
+   * две таких полоски — над и под доской.
+   */
+  bannerColor?: PlayerColor;
   gameOver?: GameOverInfo | null;
   /** Скрыть подсказки: блок «Управление» (section='stats') и блок текущей фазы (section='controls'). */
   hideControls?: boolean;
@@ -102,6 +108,7 @@ export function GameInfo({
   gameState,
   myColor,
   section = 'controls',
+  bannerColor,
   gameOver,
   hideControls = false,
 }: GameInfoProps) {
@@ -145,6 +152,54 @@ export function GameInfo({
         {i < lives ? '❤️' : '🖤'}
       </span>
     ));
+
+  const isLowTimeMs = (ms: number) => ms < 30_000;
+
+  // ─── Компактный баннер игрока (мобильная раскладка) ───────────────────────
+  // Одна строка: [цвет] [часы] [жизни] [🏆 если победитель].
+  // Содержит ту же визуальную логику подсветки активного игрока, что и
+  // вертикальные карточки, но в горизонтальном виде, чтобы поместиться
+  // над/под доской на узких экранах.
+  if (section === 'banner' && bannerColor) {
+    const player = bannerColor === 'red' ? redPlayer : bluePlayer;
+    const remaining = bannerColor === 'red' ? redRemaining : blueRemaining;
+    const winnerColorB = gameOver?.winnerColor ?? gameState.winnerColor ?? null;
+    const isFinishedB = turn.phase === 'finished' || !!winnerColorB;
+    const isSetupB = turn.phase === 'setup';
+    const isHighlightedB = isSetupB
+      ? bannerColor === myColor
+      : isFinishedB
+        ? bannerColor === winnerColorB
+        : turn.currentPlayer === bannerColor;
+    const isWinnerB = isFinishedB && bannerColor === winnerColorB;
+    const clockActiveB = turn.currentTurnStartedAtMs !== null && !isFinishedB;
+
+    return (
+      <div
+        className={[
+          styles.playerCard,
+          styles.playerCardCompact,
+          bannerColor === 'red' ? styles.red : styles.blue,
+          isHighlightedB ? styles.activePlayer : styles.inactivePlayer,
+        ].join(' ')}
+      >
+        <span className={styles.playerLabel}>
+          {bannerColor === 'red' ? '🔴 Красный' : '🔵 Синий'}
+        </span>
+        <div
+          className={[
+            styles.playerClock,
+            clockActiveB && turn.currentPlayer === bannerColor ? styles.playerClockRunning : '',
+            isLowTimeMs(remaining) ? styles.playerClockLow : '',
+          ].join(' ')}
+        >
+          ⏱ {formatTime(remaining)}
+        </div>
+        <div className={styles.hearts}>{renderHearts(player.lives, config.maxLives)}</div>
+        {isWinnerB && <span className={styles.activeBadge}>🏆</span>}
+      </div>
+    );
+  }
 
   if (section === 'stats') {
     return (
@@ -222,11 +277,17 @@ export function GameInfo({
         {!hideControls && (
           <div className={styles.controlsBlock}>
             <div className={styles.controlsTitle}>🎮 Управление</div>
-            <div className={styles.controlsRow}>🖱️ ЛКМ — действие</div>
-            <div className={styles.controlsRow}>🖱️ ПКМ — флаг / ? / убрать</div>
-            <div className={styles.controlsRow}>⌨️ Ctrl+Click — разминировать</div>
+            {/* Десктоп: мышка + клавиатура. */}
+            <div className={`${styles.controlsRow} ${styles.ctrlDesktopOnly}`}>🖱️ ЛКМ — действие</div>
+            <div className={`${styles.controlsRow} ${styles.ctrlDesktopOnly}`}>🖱️ ПКМ — флаг / ? / убрать</div>
+            <div className={`${styles.controlsRow} ${styles.ctrlDesktopOnly}`}>⌨️ Ctrl+Click — разминировать</div>
+            {/* Мобила: тап + переключатели режима (флаг / разминировать). */}
+            <div className={`${styles.controlsRow} ${styles.ctrlMobileOnly}`}>👆 Тап — действие (захват / выбор зоны / мина)</div>
+            <div className={`${styles.controlsRow} ${styles.ctrlMobileOnly}`}>🚩 Режим «Флаг» — тап ставит флаг / ? / убирает</div>
+            <div className={`${styles.controlsRow} ${styles.ctrlMobileOnly}`}>🛠 Режим «Разминировать» — тап пытается разминировать</div>
+            {/* Универсальные подсказки. */}
             <div className={styles.controlsRow}><Icon name="headquarters" /> Захват штаба — мгновенная победа</div>
-            <div className={styles.controlsRow}>
+            <div className={`${styles.controlsRow} ${styles.ctrlDesktopOnly}`}>
               <span className={styles.hotkeyKey}>Space</span> — кнопка слева от доски
             </div>
             <div className={styles.controlsDivider} />
@@ -254,7 +315,7 @@ export function GameInfo({
   // Часы тикают только когда они "запущены" (currentTurnStartedAtMs !== null)
   // т.е. вне фазы setup и finished.
   const clockActive = turn.currentTurnStartedAtMs !== null && !isFinished;
-  const isLowTime = (ms: number) => ms < 30_000;
+  const isLowTime = isLowTimeMs;
 
   return (
     <div className={styles.panel}>

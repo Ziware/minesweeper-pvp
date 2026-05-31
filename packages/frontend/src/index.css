@@ -2,8 +2,23 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #1a1a2e;
+  /* Учитываем «безопасные зоны» (вырезы iPhone, нав-бары Android). */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* iOS Safari увеличивает страницу при фокусе на input с font-size < 16px.
+   Принудительно ставим 16px на все интерактивные поля, чтобы избежать зума. */
+input,
+textarea,
+select {
+  font-size: 16px;
 }

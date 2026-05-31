@@ -6,6 +6,24 @@
   gap: 0;
 }
 
+/* На мобиле блок доски растягивается в строку (родитель — .gameBody column),
+   но сама доска центрируется внутри неё. */
+@media (max-width: 900px) {
+  .wrapper {
+    width: 100%;
+  }
+  .board {
+    padding: 4px;
+  }
+  .bottomBar {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+  .hint {
+    font-size: 0.76rem;
+  }
+}
+
 .board {
   display: grid;
   gap: 2px;

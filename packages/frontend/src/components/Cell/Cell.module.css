@@ -58,3 +58,74 @@
 
 .cell:hover { filter: brightness(1.18); }
 .ownerNone:hover { filter: none; }
+
+/* ===== Аккорд: подсветка кандидатов на открытие во время удержания ===== */
+/* Подсветка наносится оверлеем поверх фона клетки через ::after, чтобы
+   работать одинаково на нейтральных, союзных и вражеских клетках и не
+   ломать существующие фоны (.ownerRed/.ownerBlue/.mineRed/.mineBlue). */
+.chordPreview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 195, 90, 0.32);
+  pointer-events: none;
+  transition: background 0.08s linear;
+}
+.chordPreview:hover::after {
+  background: rgba(255, 210, 110, 0.45);
+}
+
+/* ===== Эффект взрыва: яркая вспышка, гаснущая за 1 секунду ===== */
+/* Отдельный элемент .explosionFlash поверх содержимого клетки. Цвет —
+   тёплый бело-жёлтый: контрастен и к тёмно-красным (.ownerRed/.mineRed),
+   и к тёмно-синим (.ownerBlue/.mineBlue) фонам. Анимация запускается через
+   уникальный React-ключ, поэтому повторный взрыв на той же клетке
+   корректно перезапустит её. */
+.explosionFlash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background: #fff2a8;
+  box-shadow: 0 0 14px 4px rgba(255, 220, 120, 0.85);
+  animation: explosionFade 1s ease-out forwards;
+}
+
+.exploding {
+  /* Лёгкое «дрожание» границы, чтобы взрыв был заметнее. */
+  animation: explosionShake 0.5s ease-out;
+}
+
+@keyframes explosionFade {
+  0% {
+    background: #ffffff;
+    box-shadow: 0 0 22px 8px rgba(255, 240, 180, 0.95);
+    opacity: 1;
+  }
+  25% {
+    background: #ffd24a;
+    box-shadow: 0 0 18px 6px rgba(255, 200, 80, 0.85);
+    opacity: 0.95;
+  }
+  60% {
+    background: #ff8a3a;
+    box-shadow: 0 0 12px 3px rgba(255, 140, 60, 0.55);
+    opacity: 0.6;
+  }
+  100% {
+    background: rgba(255, 120, 40, 0);
+    box-shadow: 0 0 0 0 rgba(255, 120, 40, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes explosionShake {
+  0%   { transform: translate(0, 0); }
+  20%  { transform: translate(-1px, 1px); }
+  40%  { transform: translate(1px, -1px); }
+  60%  { transform: translate(-1px, -1px); }
+  80%  { transform: translate(1px, 1px); }
+  100% { transform: translate(0, 0); }
+}

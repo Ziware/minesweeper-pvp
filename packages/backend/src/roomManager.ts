@@ -8,6 +8,7 @@ import {
   TimeControl,
   LastAction,
   ALLOWED_TIME_CONTROLS as SHARED_ALLOWED_TIME_CONTROLS,
+  summarizeChord as sharedSummarizeChord,
 } from '@minesweeper-pvp/shared';
 import { createGameLogger, GameLogger } from './gameLogger';
 import {
@@ -29,6 +30,7 @@ import {
   computeBoardStats,
   getHeadquartersOwner,
   isPlayerCellReachable,
+  getReachablePlayerCells,
   INITIAL_DEFUSES_PER_TURN,
   DEFUSE_GRANT_INTERVAL,
   HQ_ACTION_ZONE_BONUS_MINES,
@@ -493,7 +495,7 @@ export class RoomManager {
       // Сначала фиксируем «что произошло» — этим питается клиентский эффект
       // звука взрыва. Если этого не сделать ДО finalizeGameOver, на последнем
       // фатальном клике на мину клиент не получит lastAction и не услышит взрыв.
-      room.turn.lastAction = { type: 'mine_exploded', actorColor: color };
+      room.turn.lastAction = { type: 'mine_exploded', actorColor: color, row, col, id: Date.now() };
       if (player.lives <= 0) {
         const opp = room.players.find((p) => p.color !== color)!;
         this.finalizeGameOver(room, opp.color, 'lives');
@@ -585,7 +587,7 @@ export class RoomManager {
       if (this.checkHeadquartersCapture(room, color, row, col)) {
         return { ok: true, hadMine, gameOver: true };
       }
-      room.turn.lastAction = { type: 'defuse_success', actorColor: color };
+      room.turn.lastAction = { type: 'defuse_success', actorColor: color, row, col, id: Date.now() };
     } else {
       this.clearMarkOnCell(room, row, col);
       cell.owner   = color;
@@ -597,6 +599,164 @@ export class RoomManager {
     }
 
     return { ok: true, hadMine, gameOver: false };
+  }
+
+  /**
+   * Аккорд: клик по своей открытой клетке с цифрой N (N ≥ 0) в фазе 2.
+   *
+   * Условия: фаза 2, мой ход, клетка моя, в зоне 3×3, открыта, имеет цифру.
+   * Среди 8 прямых соседей должно быть ровно N моих флажков.
+   *
+   * Множество кандидатов на открытие строится flood-fill'ом:
+   *   1) база — закрытые непомеченные 8-соседи источника;
+   *   2) повторно добавляем закрытые непомеченные клетки, у которых есть
+   *      8-сосед среди уже добавленных, пока множество растёт.
+   * Это имитирует каскадное «открывание нулей» классического сапёра.
+   *
+   * Кандидаты обходятся в цикле; каждый каскадно проверяется через
+   * canCaptureCell, потому что после захвата соседа цепочка достижимости
+   * растёт, и кандидат, который изначально был недоступен, может стать
+   * захватываемым. Поэтому идём итерационно до фиксации.
+   *
+   * При первой же мине — взрыв (как в captureCell), захваты прерываются,
+   * фаза 3 или конец игры.
+   */
+  chordCapture(room: Room, color: PlayerColor, row: number, col: number):
+    { ok: boolean; hitMine: boolean; gameOver: boolean; error?: string } {
+    if (room.turn.phase !== 'phase2') {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не фаза захвата' };
+    }
+    if (room.turn.currentPlayer !== color) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
+    }
+    const size = room.config.boardSize;
+    if (!isInBounds(row, col, size)) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Клетка вне поля' };
+    }
+    const displayZone = room.turn.selectedZone!;
+    const actionZone  = room.turn.actionZone!;
+    const cell = room.board[row][col];
+    if (cell.owner !== color) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Аккорд работает только по своей клетке' };
+    }
+    // Клетка должна быть в зоне 3×3 и иметь цифру (включая 0).
+    const inDisplay =
+      row >= displayZone.row && row < displayZone.row + 3 &&
+      col >= displayZone.col && col < displayZone.col + 3;
+    if (!inDisplay || !cell.isRevealed || cell.number === null) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Аккорд возможен только на открытой клетке с цифрой в зоне 3×3' };
+    }
+
+    // Используем общую с фронтом функцию суммаризации, чтобы не было
+    // расхождений между превью аккорда и его серверной реализацией.
+    const myMarks = room.marks[color];
+    const reachableOwn = getReachablePlayerCells(room.board, color, room.config);
+    const { flagCount, candidates } = sharedSummarizeChord(row, col, {
+      boardSize: size,
+      isFlag:        (r, c) => myMarks[`${r},${c}`] === 'flag',
+      isOwnedByActor:(r, c) => isInBounds(r, c, size) && room.board[r][c].owner === color,
+      isReachableOwn:(r, c) => reachableOwn.has(`${r},${c}`),
+    });
+
+    if (flagCount > cell.number) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Слишком много флажков для аккорда' };
+    }
+    if (flagCount < cell.number) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Недостаточно флажков для аккорда' };
+    }
+
+    const captured = room.turn.capturedThisTurn as Set<string>;
+    const player = room.players.find((p) => p.color === color)!;
+    room.logger.event('chord_started', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      number: cell.number,
+      flagCount,
+      candidatesCount: candidates.length,
+    });
+
+    // Шаг 1: ищем мину среди кандидатов. Если есть хотя бы одна — взрывается
+    // ПЕРВАЯ по порядку обхода, остальные кандидаты НЕ захватываются.
+    for (const { row: r, col: c } of candidates) {
+      const target = room.board[r][c];
+      if (!target.hasMine) continue;
+      // Проверяем доступность по правилам захвата (зона 5×5 + соседство со
+      // своей территорией) — без неё взрыв тоже невозможен.
+      if (!canCaptureCell(room.board, r, c, color, actionZone.row, actionZone.col, room.config)) {
+        continue;
+      }
+      target.hasMine = false;
+      player.lives--;
+      room.logger.event('mine_exploded', {
+        player: { color, name: player.name, ip: player.ip },
+        row: r,
+        col: c,
+        livesLeft: player.lives,
+        viaChord: true,
+      });
+      refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+      room.turn.lastAction = { type: 'mine_exploded', actorColor: color, row: r, col: c, id: Date.now() };
+      room.logger.event('chord_finished', {
+        player: { color, name: player.name, ip: player.ip },
+        row,
+        col,
+        captureCount: 0,
+        hitMine: true,
+        mineRow: r,
+        mineCol: c,
+      });
+      if (player.lives <= 0) {
+        const opp = room.players.find((p) => p.color !== color)!;
+        this.finalizeGameOver(room, opp.color, 'lives');
+        return { ok: true, hitMine: true, gameOver: true };
+      }
+      this.startPhase3(room);
+      return { ok: true, hitMine: true, gameOver: false };
+    }
+
+    // Шаг 2: мин среди кандидатов нет — захватываем все доступные клетки.
+    let captureCount = 0;
+    for (const { row: r, col: c } of candidates) {
+      const target = room.board[r][c];
+      if (target.owner === color) continue;
+      if (!canCaptureCell(room.board, r, c, color, actionZone.row, actionZone.col, room.config)) continue;
+
+      this.clearMarkOnCell(room, r, c);
+      target.owner = color;
+      captured.add(`${r},${c}`);
+      captureCount++;
+      const targetInDisplay =
+        r >= displayZone.row && r < displayZone.row + 3 &&
+        c >= displayZone.col && c < displayZone.col + 3;
+      if (targetInDisplay) {
+        revealNumberForCell(room.board, r, c, color, room.config);
+      }
+      if (this.checkHeadquartersCapture(room, color, r, c)) {
+        room.logger.event('chord_finished', {
+          player: { color, name: player.name, ip: player.ip },
+          row,
+          col,
+          captureCount,
+          hitMine: false,
+          headquarters: true,
+        });
+        return { ok: true, hitMine: false, gameOver: true };
+      }
+    }
+
+    refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+    if (captureCount > 0) {
+      room.turn.lastAction = null;
+    }
+    room.logger.event('chord_finished', {
+      player: { color, name: player.name, ip: player.ip },
+      row,
+      col,
+      captureCount,
+      hitMine: false,
+    });
+    return { ok: true, hitMine: false, gameOver: false };
   }
 
   private clearMarkOnCell(room: Room, row: number, col: number) {

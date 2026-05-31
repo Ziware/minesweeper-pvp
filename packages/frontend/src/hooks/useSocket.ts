@@ -249,6 +249,14 @@ export function useSocket() {
     socketRef.current?.emit('captureCell',     { row, col });
   const defuseCell      = (row: number, col: number) =>
     socketRef.current?.emit('defuseCell',      { row, col });
+  const chord           = (row: number, col: number) =>
+    socketRef.current?.emit('chord',           { row, col });
+  /** Локальный сетер ошибки — для «инлайн» ошибок UI (например, аккорд
+   *  с лишними флажками отслеживается ещё до отправки на сервер). */
+  const showLocalError  = (message: string) => {
+    setErrorMsg(message);
+    setTimeout(() => setErrorMsg(''), 3000);
+  };
   const endPhase2       = () =>
     socketRef.current?.emit('endPhase2');
   const endPhase3       = () =>
@@ -284,7 +292,8 @@ export function useSocket() {
     serverReachable,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
-    selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    showLocalError,
     returnToMenu,
     leaveRoom,
   };

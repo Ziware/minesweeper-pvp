@@ -8,6 +8,83 @@
   color: #eee;
   width: 260px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  /* Если контент панели выше доступной высоты (длинный «Управление» +
+     статистика на десктопе) — скроллится САМА панель, а её внешняя рамка
+     со скруглениями всегда полностью на экране. Скроллится только
+     внутреннее содержимое. */
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Резервируем место под скроллбар симметрично — иначе при появлении
+     скролла правый внутренний отступ «съедается» полосой, и контент
+     выглядит сдвинутым. both-edges даёт одинаковые отступы слева/справа. */
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: #2a3a5a transparent;
+}
+.panel::-webkit-scrollbar { width: 6px; }
+.panel::-webkit-scrollbar-thumb {
+  background: #2a3a5a;
+  border-radius: 3px;
+}
+.panel::-webkit-scrollbar-track { background: transparent; }
+
+/* На узких экранах панель растягивается на всю ширину родителя
+   (родитель — .sideColumn — уже в мобильной раскладке width:100%). */
+@media (max-width: 900px) {
+  .panel {
+    width: 100%;
+    padding: 14px;
+    /* На мобиле страница скроллится сама — внутренний скролл панели
+       не нужен (и мешал бы: двойной скролл). */
+    max-height: none;
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+  /* В мобильной раскладке вертикальные карточки игроков продублированы
+     компактными баннерами над и под доской — внутри основной панели
+     прячем их, чтобы не было дублирования. */
+  .panel > .playerCard:not(.playerCardCompact) {
+    display: none;
+  }
+}
+
+/* ─── Компактный горизонтальный баннер игрока ────────────────────────────────
+   Используется в section='banner' (мобильная раскладка). Одна строка:
+   [имя] [часы] [жизни]. */
+/* Чейним .playerCard.playerCardCompact, чтобы перебить правила
+   `.playerCard { flex-direction: column }`, объявленные ниже по файлу
+   с такой же специфичностью (одиночный класс). Без чейна column-флекс
+   побеждал по cascade order и баннер выкладывался вертикально. */
+.playerCard.playerCardCompact {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+  padding: 6px 12px;
+  width: 100%;
+  white-space: nowrap;
+}
+.playerCard.playerCardCompact .playerLabel {
+  font-size: 0.9rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.playerCard.playerCardCompact .playerClock {
+  font-size: 0.95rem;
+  padding: 2px 7px;
+  align-self: center;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.playerCard.playerCardCompact .hearts {
+  font-size: 0.9rem;
+  gap: 2px;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Баннер победы / поражения */
@@ -236,6 +313,15 @@
   height: 1px;
   background: #1e3050;
   margin: 3px 0;
+}
+
+/* Утилиты «только десктоп» / «только мобиль» для строк управления.
+   Брейкпоинт 900px — такой же, как в App.module.css. */
+.ctrlDesktopOnly { display: block; }
+.ctrlMobileOnly  { display: none; }
+@media (max-width: 900px) {
+  .ctrlDesktopOnly { display: none; }
+  .ctrlMobileOnly  { display: block; }
 }
 
 .hotkeyKey {

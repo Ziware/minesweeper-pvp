@@ -74,6 +74,14 @@ export interface LastAction {
   type: LastActionType;
   /** Цвет игрока, который выполнил действие. */
   actorColor: PlayerColor;
+  /** Координаты клетки, к которой относится действие (например, клетка, на
+   *  которой взорвалась мина) — используется клиентом для эффекта взрыва. */
+  row?: number;
+  col?: number;
+  /** Уникальный идентификатор события — растёт при каждом новом действии.
+   *  Нужен клиенту, чтобы корректно перезапустить анимацию даже если
+   *  предыдущее действие было такого же типа и на той же клетке. */
+  id?: number;
 }
 
 export interface TurnState {
@@ -124,6 +132,7 @@ export interface C2S_PlaceMine  { row: number; col: number; }
 export interface C2S_SelectZone { row: number; col: number; }
 export interface C2S_CaptureCell     { row: number; col: number; }
 export interface C2S_DefuseCell      { row: number; col: number; }
+export interface C2S_ChordCapture    { row: number; col: number; }
 export interface C2S_PlaceMinePhase3 { row: number; col: number; }
 export interface C2S_ToggleMark { row: number; col: number; mark: CellMark; }
 
@@ -151,6 +160,10 @@ export interface ClientToServerEvents {
   selectZone:      (data: C2S_SelectZone) => void;
   captureCell:     (data: C2S_CaptureCell) => void;
   defuseCell:      (data: C2S_DefuseCell) => void;
+  /** Аккорд: клик по своей открытой клетке с цифрой в фазе 2 пытается
+   *  разом захватить все соседние закрытые клетки, если количество
+   *  установленных рядом флажков равно цифре. */
+  chord:           (data: C2S_ChordCapture) => void;
   placeMinePhase3: (data: C2S_PlaceMinePhase3) => void;
   endPhase2:       () => void;
   endPhase3:       () => void;

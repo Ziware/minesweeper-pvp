@@ -49,7 +49,15 @@
   color: inherit;
   transition: background 0.15s, border-color 0.15s;
 }
-.roomIdCopy:hover,
+/* Hover-эффекты только для устройств с настоящим указателем (мышь/трекпад).
+   На тач-устройствах :hover «залипает» после тапа — нам это не нужно,
+   так как мы и так показываем «Скопировано» через класс .roomIdCopied. */
+@media (hover: hover) {
+  .roomIdCopy:hover {
+    background: rgba(243, 156, 18, 0.08);
+    border-color: rgba(243, 156, 18, 0.45);
+  }
+}
 .roomIdCopy:focus-visible {
   background: rgba(243, 156, 18, 0.08);
   border-color: rgba(243, 156, 18, 0.45);
@@ -73,12 +81,14 @@
   pointer-events: none;
   transition: opacity 0.15s;
 }
-.roomIdCopy:hover .roomIdOverlay,
+@media (hover: hover) {
+  .roomIdCopy:hover .roomIdOverlay { opacity: 1; }
+  .roomIdCopy:hover .roomId { opacity: 0; }
+}
 .roomIdCopy:focus-visible .roomIdOverlay,
 .roomIdCopy.roomIdCopied .roomIdOverlay {
   opacity: 1;
 }
-.roomIdCopy:hover .roomId,
 .roomIdCopy:focus-visible .roomId,
 .roomIdCopy.roomIdCopied .roomId {
   opacity: 0;
@@ -89,6 +99,18 @@
 
 /* Кнопка выхода на экране ожидания. Нейтрально-серая, в отличие от
    акцентных кнопок действий — чтобы не конкурировать визуально. */
+/* Подсказка про копирование — показывается только на тач-устройствах
+   (где нет hover'а с подписью «Скопировать» поверх кода). */
+.copyHintMobile {
+  display: none;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #aab8d0;
+}
+@media (hover: none) {
+  .copyHintMobile { display: block; }
+}
+
 .waitLeaveBtn {
   margin-top: 8px;
   align-self: center;
@@ -125,6 +147,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* dvh учитывает скрывающиеся бары мобильных браузеров — корректнее, чем vh */
+  height: 100dvh;
   overflow: hidden;
   background: #1a1a2e;
   color: #eee;
@@ -183,6 +207,27 @@
   gap: 8px;
 }
 
+/* Группа «кто играет против кого». На десктопе — обычная inline-группа в
+   одной строке с логотипом и кнопками; на мобиле переходит на отдельную
+   вторую строку (см. медиа-запрос ниже). */
+.headerPlayersRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* «Разрыв строки» для flex-шапки. На десктопе скрыт и не влияет на
+   раскладку; на мобиле получает flex-basis: 100%, заставляя всё
+   следующее за ним (никнеймы + кнопки настроек) перенестись на
+   вторую строку. Логотип и Комната остаются на первой. */
+.headerRowBreak { display: none; }
+
+/* Утилиты «только десктоп» / «только мобиль». На десктопе мобильные слоты
+   скрыты — !important, чтобы не проигрывать другим селекторам (например,
+   .sideColumn задаёт display: flex). На мобиле переключаем через медиа-
+   запрос ниже. */
+.mobileOnly { display: none !important; }
+
 .headerBtn {
   padding: 5px 12px;
   border-radius: 8px;
@@ -215,6 +260,17 @@
   min-height: 0;
 }
 
+/* Слот вокруг Board — нужен, чтобы на мобиле явно задавать order
+   и чтобы вставить мобильный баннер красного игрока непосредственно
+   перед доской без перестановок в JSX. На десктопе ведёт себя
+   прозрачно: inline-flex по содержимому. */
+.boardSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .sideColumn {
   display: flex;
   flex-direction: column;
@@ -223,6 +279,7 @@
   flex-shrink: 0;
   align-self: flex-start;
   max-height: 100%;
+  min-height: 0;
   /* overflow visible — иначе у вложенных панелей обрезаются тени */
   overflow: visible;
   /* небольшие отступы, чтобы тени не упирались в края .gameBody */
@@ -351,4 +408,200 @@
 @keyframes slideUpBanner {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   МОБИЛЬНАЯ РАСКЛАДКА
+   ════════════════════════════════════════════════════════════════════════════
+   Десктоп: header + три колонки (controls | board | stats). На узких экранах
+   три колонки не помещаются и пользователь не может проскроллить страницу,
+   потому что вся раскладка завязана на 100dvh + overflow: hidden.
+   Здесь мы переключаем игровой экран в вертикальный «стек»:
+     Header → Board → Action button + GameInfo (controls) → Stats
+   И разрешаем странице скроллиться вертикально (overflow-y: auto на layout).
+   Брейкпоинт ~900px — это (260*2 + ~340 на доску) с запасом. */
+@media (max-width: 900px) {
+  .desktopOnly { display: none !important; }
+  .mobileOnly { display: flex !important; }
+
+  .gameLayout {
+    /* Разрешаем странице скроллиться, чтобы статистика/настройки
+       не оказывались за пределами экрана. */
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Шапка — гибкая, иконки/имена могут перенестись на вторую строку. */
+  .gameHeader {
+    padding: 6px 10px;
+    gap: 6px;
+    row-gap: 6px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  /* Шапка раскладывается в две строки:
+       ряд 1: логотип + «Комната: …»;
+       ряд 2: ники игроков + ⚙ Настройки + ❓ Правила (всё подряд).
+     Перенос делает .headerRowBreak (flex-basis:100%) сразу после roomBadge. */
+  .logo { font-size: 1rem; }
+  .headerRowBreak {
+    display: block;
+    flex-basis: 100%;
+    width: 0;
+    height: 0;
+  }
+  .roomBadge   { font-size: 0.74rem; padding: 3px 8px; letter-spacing: 0.06em; }
+  .playerBadge { font-size: 0.78rem; padding: 3px 9px; }
+  .vs          { font-size: 0.7rem; }
+  .headerActions {
+    /* Чтобы не «прыгало» на новую строку с пустотой слева */
+    margin-left: auto;
+    gap: 6px;
+  }
+  .headerBtn { padding: 4px 8px; font-size: 0.78rem; }
+  /* На мобиле прячем подписи у «Настройки/Правила» — оставляем только
+     иконку, чтобы они уместились в одну строку с никнеймами. */
+  .headerBtnLabel { display: none; }
+
+  /* На второй строке: ники слева, кнопки справа (через margin-left:auto на
+     .headerActions). flex-basis НЕ задаём — это бы выкинуло headerActions
+     на отдельную третью строку. */
+  .headerPlayersRow {
+    justify-content: flex-start;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* Главное переключение: колонки → вертикальный стек. */
+  .gameBody {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  /* Боковые «колонки» теперь полноширинные карточки на всю строку. */
+  .sideColumn {
+    width: 100%;
+    max-height: none;
+    align-self: stretch;
+    padding: 0;
+    margin: 0;
+    gap: 10px;
+    /* На мобиле сама страница скроллится — внутренний скролл колонки
+       не нужен и мешает (двойной скролл). */
+    overflow: visible;
+  }
+  /* Сбрасываем inline-стиль height, который React задаёт для выравнивания
+     с высотой доски (на мобиле это не нужно). */
+  .sideColumnLeft {
+    height: auto !important;
+    justify-content: flex-start;
+  }
+
+  /* Порядок дочерних элементов .gameBody на мобиле:
+       баннер красного   → 1
+       доска             → 2
+       баннер синего     → 3
+       кнопка действия   → 4
+       блок controls     → 5
+       блок stats        → 6
+     Десктопная sideColumnLeft скрыта через .desktopOnly. */
+  .mobileBannerRed   { order: 1; }
+  .boardSlot         { order: 2; width: 100%; }
+  .mobileBannerBlue  { order: 3; }
+  .mobileActionSlot  { order: 4; }
+  .mobileControls    { order: 5; }
+  .gameBody > .sideColumn:not(.mobileControls) { order: 6; }
+
+  /* Мобильная кнопка действия — большая, на всю ширину. Sticky не делаем:
+     по требованию она просто всегда есть на своём месте (под баннером
+     синего); скролл уносит её, как и остальные блоки. */
+  .mobileActionSlot {
+    padding: 0;
+  }
+
+  /* Ряд из двух «залипающих» кнопок-режимов (флаг / разминировать).
+     На десктопе не отображается. */
+  .mobileModeRow {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .mobileModeBtn {
+    flex: 1 1 0;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid #2a3a5a;
+    background: #16213e;
+    color: #aab8d0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s,
+                box-shadow 0.15s, transform 0.05s;
+  }
+  .mobileModeBtn:active { transform: translateY(1px); }
+  .mobileModeBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .mobileModeBtn:disabled:active { transform: none; }
+  .mobileModeBtnActive {
+    background: #0f3460;
+    color: #ffe066;
+    border-color: #f39c12;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4),
+                0 0 12px rgba(243, 156, 18, 0.35);
+  }
+  .primaryActionBtn {
+    padding: 14px 16px;
+    font-size: 1rem;
+    width: 100%;
+  }
+
+  /* Компактные баннеры игроков. Высота минимальная, ширина — на всю строку. */
+  .mobileBanner {
+    width: 100%;
+  }
+
+  /* Окно настроек больше не «выпадает» из правого верхнего угла,
+     а превращается в почти-полноэкранный лист. */
+  .settingsAnchor {
+    position: static;
+  }
+
+  /* Тосты и баннер — учитываем safe-area снизу (iPhone home-bar). */
+  .toastError {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    font-size: 0.85rem;
+    padding: 10px 18px;
+  }
+  .offlineBanner {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    font-size: 0.82rem;
+  }
+
+  /* Экран ожидания / лобби — карточки чуть компактнее. */
+  .waitCard {
+    padding: 28px 22px;
+    max-width: calc(100vw - 24px);
+  }
+  .roomId { font-size: 1.6rem; }
+}
+
+/* Совсем узкие экраны (iPhone SE и подобные) — ещё компактнее. */
+@media (max-width: 480px) {
+  .gameHeader {
+    /* Имена игроков допустимо переносить на отдельную строку. */
+    padding: 6px 8px;
+  }
+  .playerBadge { font-size: 0.74rem; padding: 2px 7px; }
+  .roomBadge   { font-size: 0.7rem; }
+  .gameBody { padding: 8px; gap: 8px; }
 }

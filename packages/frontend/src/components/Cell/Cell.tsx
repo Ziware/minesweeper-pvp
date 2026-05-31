@@ -14,6 +14,15 @@ interface CellProps {
   gamePhase: string;
   isMyTurn: boolean;
   isInActiveZone: boolean;
+  /** Подсветка клетки как кандидата для аккорда (hover-превью): закрытая
+   *  клетка-соседка цифры, которую попытаются открыть аккордом. */
+  chordPreview?: boolean;
+  /** Анимация вспышки взрыва: клетка резко окрашивается и за ~1 сек
+   *  возвращается к обычному фону. */
+  exploding?: boolean;
+  /** Уникальный ключ конкретного взрыва — меняем его, чтобы перезапустить
+   *  CSS-анимацию даже на той же клетке. */
+  explosionKey?: number;
   onClick: (e: React.MouseEvent) => void;
   onRightClick: (e: React.MouseEvent) => void;
 }
@@ -94,6 +103,9 @@ export function Cell({
   gamePhase,
   isMyTurn,
   isInActiveZone,
+  chordPreview,
+  exploding,
+  explosionKey,
   onClick,
   onRightClick,
 }: CellProps) {
@@ -117,6 +129,10 @@ export function Cell({
     cell.isRevealed ? styles.revealed : '',
     // Фаза 3
     gamePhase === 'phase3' && isMyTurn && isOwn && !cell.hasMine && !isHeadquarters ? styles.phase3Target : '',
+    // Аккорд-превью (только подсветка, поверх остальных стилей)
+    chordPreview ? styles.chordPreview : '',
+    // Вспышка взрыва — короткая анимация поверх фона.
+    exploding ? styles.exploding : '',
   ].filter(Boolean).join(' ');
 
   const content = gamePhase === 'finished'
@@ -125,6 +141,13 @@ export function Cell({
 
   return (
     <div className={classNames} onClick={onClick} onContextMenu={onRightClick}>
+      {exploding && (
+        <span
+          key={`boom-${explosionKey ?? 0}`}
+          className={styles.explosionFlash}
+          aria-hidden
+        />
+      )}
       {content}
     </div>
   );

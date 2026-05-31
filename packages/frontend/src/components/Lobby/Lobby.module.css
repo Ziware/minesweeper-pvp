@@ -111,3 +111,30 @@
   border-radius: 8px;
   font-weight: bold;
 }
+
+/* ────────── Мобильная раскладка лобби ──────────
+   На узких экранах две карточки «Создать / Войти» переходят в стек,
+   и обе тянутся на всю ширину экрана с отступами по 12px. */
+@media (max-width: 900px) {
+  .container {
+    padding: 16px 12px;
+    gap: 14px;
+    justify-content: flex-start;
+    /* Чтобы при появлении клавиатуры iOS лобби не «прилипало» по центру */
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  .row {
+    flex-direction: column;
+    width: 100%;
+    gap: 14px;
+  }
+  .card {
+    width: 100%;
+    min-width: 0;
+    padding: 18px 18px;
+  }
+  .card h2 { font-size: 1.05rem; }
+  .tcOptions { flex-wrap: wrap; }
+  .tcOption { flex: 1 1 30%; }
+}

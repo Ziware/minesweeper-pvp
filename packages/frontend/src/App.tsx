@@ -3,7 +3,7 @@ import { useSocket } from './hooks/useSocket';
 import { useSound } from './hooks/useSound';
 import { useSettings } from './hooks/useSettings';
 import { Lobby }     from './components/Lobby/Lobby';
-import { Board }     from './components/Board/Board';
+import { Board, MobileInputMode } from './components/Board/Board';
 import { GameInfo }  from './components/GameInfo/GameInfo';
 import { HelpModal } from './components/HelpModal/HelpModal';
 import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
@@ -15,7 +15,8 @@ export default function App() {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, serverReachable,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
-    selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
+    showLocalError,
     returnToMenu, leaveRoom,
   } = useSocket();
 
@@ -23,6 +24,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [boardHeight, setBoardHeight] = useState<number | null>(null);
   const [roomIdCopied, setRoomIdCopied] = useState(false);
+  // Залипающие кнопки на мобиле: 'flag' (тап = ПКМ-цикл),
+  // 'defuse' (тап = Ctrl+ЛКМ). 'normal' — выключены обе.
+  const [mobileInputMode, setMobileInputMode] = useState<MobileInputMode>('normal');
 
   const {
     settings,
@@ -79,6 +83,21 @@ export default function App() {
   useEffect(() => {
     preload();
   }, [preload]);
+
+  // Если режим (флаг/разминирование) стал недоступен — гасим.
+  // Условия доступности дублируют логику кнопок ниже; держим тут,
+  // чтобы поведение Board (mobileInputMode) тоже сразу обновилось.
+  useEffect(() => {
+    if (mobileInputMode === 'normal') return;
+    if (!gameState) return;
+    const phase = gameState.turn.phase;
+    const finished = phase === 'finished' || !!gameState.winnerColor;
+    const myTurn = gameState.turn.currentPlayer === myColor;
+    const flagOk = !finished && phase === 'phase2';
+    const defuseOk = !finished && phase === 'phase2' && myTurn;
+    if (mobileInputMode === 'flag' && !flagOk) setMobileInputMode('normal');
+    if (mobileInputMode === 'defuse' && !defuseOk) setMobileInputMode('normal');
+  }, [gameState, myColor, mobileInputMode]);
 
   // Звуки победы / поражения — с задержкой 500 мс
   useEffect(() => {
@@ -180,7 +199,7 @@ export default function App() {
             aria-expanded={showSettings}
             aria-haspopup="menu"
           >
-            ⚙️ Настройки
+            ⚙️<span className={styles.headerBtnLabel}> Настройки</span>
           </button>
           {showSettings && (
             <SettingsMenu
@@ -206,7 +225,7 @@ export default function App() {
             setShowHelp(true);
           }}
         >
-          ❓ Правила
+          ❓<span className={styles.headerBtnLabel}> Правила</span>
         </button>
       </div>
     </div>
@@ -253,7 +272,10 @@ export default function App() {
   }
 
   if (screen === 'waiting') {
-    const copyRoomId = async () => {
+    const copyRoomId = async (e?: React.MouseEvent<HTMLButtonElement>) => {
+      // На тач-устройстве снимаем фокус с кнопки, чтобы :focus-visible
+      // не оставлял overlay «Скопировано» включённым после возврата надписи.
+      e?.currentTarget?.blur();
       if (!roomId) return;
       try {
         await navigator.clipboard.writeText(roomId);
@@ -270,7 +292,8 @@ export default function App() {
       }
       playButton();
       setRoomIdCopied(true);
-      window.setTimeout(() => setRoomIdCopied(false), 300);
+      // На мобиле «Скопировано» должно успеть быть прочитанным, потом снова код.
+      window.setTimeout(() => setRoomIdCopied(false), 700);
     };
 
     return renderShell(
@@ -282,17 +305,18 @@ export default function App() {
             <button
               type="button"
               className={`${styles.roomIdCopy} ${roomIdCopied ? styles.roomIdCopied : ''}`}
-              onClick={copyRoomId}
+              onClick={(e) => copyRoomId(e)}
               title={roomIdCopied ? 'Скопировано!' : 'Нажмите, чтобы скопировать'}
               aria-label="Скопировать ID комнаты"
             >
               <span className={styles.roomId}>{roomId}</span>
               <span className={styles.roomIdOverlay} aria-hidden="true">
-                {roomIdCopied ? '✓ Скопировано' : 'Скопировать'}
+                {roomIdCopied ? 'Скопировано!' : 'Скопировать'}
               </span>
             </button>
           </p>
           <p>Поделитесь ID с другом!</p>
+          <p className={styles.copyHintMobile}>👆 Нажмите на код, чтобы скопировать</p>
           <button
             type="button"
             className={styles.waitLeaveBtn}
@@ -326,9 +350,18 @@ export default function App() {
       onClick: () => void;
       variant?: 'menu' | 'endTurn' | 'disabledHint';
       disabled?: boolean;
-    } | null;
+    };
 
-    let primaryAction: PrimaryAction = null;
+    // По умолчанию — неактивная «заглушка»: кнопка остаётся на месте, чтобы
+    // соседние блоки (баннер, статистика) не дрыгались вверх-вниз каждый раз,
+    // когда у игрока появляется / пропадает действие. Конкретные ветки ниже
+    // переопределяют её для случаев, когда действие есть.
+    let primaryAction: PrimaryAction = {
+      label: isMyTurn ? 'Нет действия' : 'Ход противника',
+      onClick: () => {},
+      disabled: true,
+      variant: 'disabledHint',
+    };
     if (isFinished) {
       primaryAction = {
         label: '← Вернуться в меню',
@@ -377,30 +410,56 @@ export default function App() {
       };
     }
 
-    primaryActionRef.current =
-      primaryAction && !primaryAction.disabled ? primaryAction.onClick : null;
+    primaryActionRef.current = primaryAction.disabled ? null : primaryAction.onClick;
+
+    // Кнопка действия. На десктопе живёт в левой колонке, на мобиле — между
+    // баннером синего и блоком фаз/статистики. Чтобы не дублировать разметку,
+    // выносим её в локальный хелпер.
+    const renderPrimaryActionButton = () => (
+      <button
+        className={`${styles.primaryActionBtn} ${
+          primaryAction.variant === 'menu' ? styles.menuVariant : ''
+        } ${
+          primaryAction.variant === 'endTurn' ? styles.endTurnVariant : ''
+        } ${
+          primaryAction.variant === 'disabledHint' ? styles.disabledHintVariant : ''
+        }`}
+        onClick={primaryAction.onClick}
+        disabled={!!primaryAction.disabled}
+      >
+        {primaryAction.label}
+      </button>
+    );
 
     const headerContent = (
       <>
         <span className={styles.roomBadge}>Комната: {roomId}</span>
 
-        {/* Имя текущего игрока */}
-        <span
-          className={styles.playerBadge}
-          style={{ borderColor: myColor === 'red' ? '#e74c3c' : '#3498db' }}
-        >
-          {myColor === 'red' ? '🔴' : '🔵'} {me?.name ?? myName}
-        </span>
+        {/* «Разрыв строки» в flex-шапке: невидимый элемент с flex-basis:100%
+            на мобиле принудительно переносит всё, что после него, на вторую
+            строку. На десктопе display: none и не влияет на раскладку. */}
+        <span className={styles.headerRowBreak} aria-hidden="true" />
 
-        <span className={styles.vs}>vs</span>
+        {/* Имена игроков. На десктопе остаются в той же строке, что и логотип/
+            кнопки. На мобиле уезжают на вторую строку (после разрыва) и
+            делят её с кнопками «Настройки/Правила». */}
+        <div className={styles.headerPlayersRow}>
+          <span
+            className={styles.playerBadge}
+            style={{ borderColor: myColor === 'red' ? '#e74c3c' : '#3498db' }}
+          >
+            {myColor === 'red' ? '🔴' : '🔵'} {me?.name ?? myName}
+          </span>
 
-        {/* Имя противника */}
-        <span
-          className={styles.playerBadge}
-          style={{ borderColor: opponent?.color === 'red' ? '#e74c3c55' : '#3498db55' }}
-        >
-          {opponent?.color === 'red' ? '🔴' : '🔵'} {opponent?.name ?? '...'}
-        </span>
+          <span className={styles.vs}>vs</span>
+
+          <span
+            className={styles.playerBadge}
+            style={{ borderColor: opponent?.color === 'red' ? '#e74c3c55' : '#3498db55' }}
+          >
+            {opponent?.color === 'red' ? '🔴' : '🔵'} {opponent?.name ?? '...'}
+          </span>
+        </div>
       </>
     );
 
@@ -422,8 +481,12 @@ export default function App() {
 
     return renderShell(
       <div className={styles.gameBody}>
+        {/* Десктопная левая колонка (controls + кнопка действия).
+            На мобиле скрывается через CSS (display: none), а её роль
+            выполняют отдельные элементы ниже — баннеры, мобильная кнопка,
+            и mobileControls. */}
         <div
-          className={`${styles.sideColumn} ${styles.sideColumnLeft}`}
+          className={`${styles.sideColumn} ${styles.sideColumnLeft} ${styles.desktopOnly}`}
           style={leftColumnStyle}
         >
           <GameInfo
@@ -434,26 +497,26 @@ export default function App() {
             hideControls={hideControls}
           />
           <div className={styles.actionButtonSlot}>
-            {primaryAction && (
-              <button
-                className={`${styles.primaryActionBtn} ${
-                  primaryAction.variant === 'menu' ? styles.menuVariant : ''
-                } ${
-                  primaryAction.variant === 'endTurn' ? styles.endTurnVariant : ''
-                } ${
-                  primaryAction.variant === 'disabledHint' ? styles.disabledHintVariant : ''
-                }`}
-                onClick={primaryAction.onClick}
-                disabled={!!primaryAction.disabled}
-              >
-                {primaryAction.label}
-              </button>
-            )}
+            {renderPrimaryActionButton()}
           </div>
         </div>
+
+        {/* Мобильный баннер красного игрока — над доской. */}
+        <div className={`${styles.mobileBanner} ${styles.mobileBannerRed} ${styles.mobileOnly}`}>
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            section="banner"
+            bannerColor="red"
+            gameOver={gameOver}
+          />
+        </div>
+
+        <div className={styles.boardSlot}>
         <Board
           gameState={gameState}
           myColor={myColor}
+          mobileInputMode={mobileInputMode}
           onWrapperRef={boardWrapperRefSetter}
           onSelectZone={(row, col) => {
             play('scan');
@@ -483,7 +546,84 @@ export default function App() {
             playButton();
             toggleMark(row, col, mark);
           }}
+          onChord={(row, col) => {
+            // Звук появится из эффекта по обновлению gameState
+            // (locked_cell — захват, explosion — взрыв при ошибке).
+            chord(row, col);
+          }}
+          onLocalError={(message) => {
+            showLocalError(message);
+          }}
         />
+        </div>
+
+        {/* Мобильный баннер синего игрока — под доской. */}
+        <div className={`${styles.mobileBanner} ${styles.mobileBannerBlue} ${styles.mobileOnly}`}>
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            section="banner"
+            bannerColor="blue"
+            gameOver={gameOver}
+          />
+        </div>
+
+        {/* Мобильная кнопка действия + переключатели режима тапа.
+
+           Доступность кнопок:
+             • Флаг       — фаза 2 (свой или чужой ход). В конце игры — нет.
+             • Разминировать — фаза 2 И мой ход (иначе действие невозможно).
+           Если режим становится недоступным — сразу гасим его (см. эффект ниже). */}
+        {(() => {
+          const flagEnabled   = !isFinished && turn.phase === 'phase2';
+          const defuseEnabled = !isFinished && turn.phase === 'phase2' && isMyTurn;
+          return (
+        <div className={`${styles.actionButtonSlot} ${styles.mobileActionSlot} ${styles.mobileOnly}`}>
+          <div className={styles.mobileModeRow}>
+            <button
+              type="button"
+              className={`${styles.mobileModeBtn} ${mobileInputMode === 'flag' ? styles.mobileModeBtnActive : ''}`}
+              onClick={() => {
+                playButton();
+                setMobileInputMode((m) => (m === 'flag' ? 'normal' : 'flag'));
+              }}
+              aria-pressed={mobileInputMode === 'flag'}
+              disabled={!flagEnabled}
+              title="Режим флажков / вопросов (как ПКМ)"
+            >
+              🚩 Флаг
+            </button>
+            <button
+              type="button"
+              className={`${styles.mobileModeBtn} ${mobileInputMode === 'defuse' ? styles.mobileModeBtnActive : ''}`}
+              onClick={() => {
+                playButton();
+                setMobileInputMode((m) => (m === 'defuse' ? 'normal' : 'defuse'));
+              }}
+              aria-pressed={mobileInputMode === 'defuse'}
+              disabled={!defuseEnabled}
+              title="Режим разминирования (как Ctrl+ЛКМ)"
+            >
+              🔧 Разминировать
+            </button>
+          </div>
+          {renderPrimaryActionButton()}
+        </div>
+          );
+        })()}
+
+        {/* Мобильный блок controls (фаза, lastAction). На десктопе он живёт
+            внутри .sideColumnLeft. */}
+        <div className={`${styles.sideColumn} ${styles.mobileControls} ${styles.mobileOnly}`}>
+          <GameInfo
+            gameState={gameState}
+            myColor={myColor}
+            section="controls"
+            gameOver={gameOver}
+            hideControls={hideControls}
+          />
+        </div>
+
         <div className={styles.sideColumn}>
           <GameInfo
             gameState={gameState}
