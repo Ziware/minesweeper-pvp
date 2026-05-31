@@ -269,6 +269,16 @@ export function useSocket() {
     setRestoring(false);
   };
 
+  /**
+   * Добровольный выход из комнаты с уведомлением сервера, чтобы серверу
+   * не приходилось ждать TTL пустой комнаты. Используется, например,
+   * на экране ожидания соперника.
+   */
+  const leaveRoom = () => {
+    socketRef.current?.emit('leaveRoom');
+    returnToMenu();
+  };
+
   return {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
     serverReachable,
@@ -276,5 +286,6 @@ export function useSocket() {
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     returnToMenu,
+    leaveRoom,
   };
 }

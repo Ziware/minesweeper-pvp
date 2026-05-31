@@ -1,5 +1,6 @@
 import React from 'react';
 import { BALANCE, formatTimeControlPresetsList } from '@minesweeper-pvp/shared';
+import { Icon } from '../Icon/Icon';
 import styles from './HelpModal.module.css';
 
 interface HelpModalProps {
@@ -22,7 +23,7 @@ export function HelpModal({ onClose }: HelpModalProps) {
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <button className={styles.closeBtn} onClick={onClose}>✕</button>
-        <h2 className={styles.title}>💣 Правила игры</h2>
+        <h2 className={styles.title}><Icon name="mine" size="1.1em" /> Правила игры</h2>
 
         <div className={styles.content}>
           <section>

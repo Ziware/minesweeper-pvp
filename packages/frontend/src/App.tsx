@@ -7,6 +7,7 @@ import { Board }     from './components/Board/Board';
 import { GameInfo }  from './components/GameInfo/GameInfo';
 import { HelpModal } from './components/HelpModal/HelpModal';
 import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
+import { Icon } from './components/Icon/Icon';
 import styles from './App.module.css';
 
 export default function App() {
@@ -15,12 +16,13 @@ export default function App() {
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, endPhase2, endPhase3, placeMinePhase3, toggleMark,
-    returnToMenu,
+    returnToMenu, leaveRoom,
   } = useSocket();
 
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [boardHeight, setBoardHeight] = useState<number | null>(null);
+  const [roomIdCopied, setRoomIdCopied] = useState(false);
 
   const {
     settings,
@@ -36,7 +38,7 @@ export default function App() {
 
   const previousLivesRef = useRef<Record<string, number> | null>(null);
   const previousCapturedCountRef = useRef<number | null>(null);
-  const previousActionMessageRef = useRef<string | null>(null);
+  const previousActionKeyRef = useRef<string | null>(null);
   const previousTurnKeyRef = useRef<string | null>(null);
   const previousDefusesUsedRef = useRef<number | null>(null);
   const previousMinesPlacedRef = useRef<number | null>(null);
@@ -104,20 +106,24 @@ export default function App() {
     const phase = turn.phase;
     const turnKey = `${turn.currentPlayer}:${turn.turnsPlayed}`;
     const turnChanged = previousTurnKeyRef.current !== turnKey;
-    const message = turn.lastActionMessage;
-    const messageChanged = message !== previousActionMessageRef.current;
+    const lastAction = turn.lastAction;
+    // Ключ действия = тип+автор+ход. Меняется при каждом новом «событии хода».
+    const actionKey = lastAction
+      ? `${turnKey}:${lastAction.type}:${lastAction.actorColor}`
+      : null;
+    const actionChanged = actionKey !== previousActionKeyRef.current;
 
-    // Взрыв: жизни упали + сообщение начинается с 💥
+    // Взрыв: жизни упали + последнее действие — mine_exploded.
     const livesDecreased = previousLives
       ? gameState.players.some(
         (player) => player.lives < (previousLives[player.color] ?? player.lives)
       )
       : false;
-    const isExplosionMessage = !!message && message.startsWith('💥');
+    const isExplosionAction = lastAction?.type === 'mine_exploded';
     const hasExplosion =
       livesDecreased &&
-      isExplosionMessage &&
-      messageChanged &&
+      isExplosionAction &&
+      actionChanged &&
       (phase === 'phase2' || phase === 'phase3' || phase === 'finished');
 
     // Захват клетки без мины
@@ -153,7 +159,7 @@ export default function App() {
 
     previousLivesRef.current = currentLives;
     previousCapturedCountRef.current = capturedCount;
-    previousActionMessageRef.current = message;
+    previousActionKeyRef.current = actionKey;
     previousTurnKeyRef.current = turnKey;
     previousDefusesUsedRef.current = defusesUsed;
     previousMinesPlacedRef.current = minesPlaced;
@@ -161,7 +167,7 @@ export default function App() {
 
   const renderHeader = (content?: React.ReactNode) => (
     <div className={styles.gameHeader}>
-      <h2 className={styles.logo}>💣 Minesweeper PvP</h2>
+      <h2 className={styles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
       {content}
       <div className={styles.headerActions}>
         <div className={styles.settingsAnchor} data-settings-anchor>
@@ -247,12 +253,56 @@ export default function App() {
   }
 
   if (screen === 'waiting') {
+    const copyRoomId = async () => {
+      if (!roomId) return;
+      try {
+        await navigator.clipboard.writeText(roomId);
+      } catch {
+        // Фолбэк для не-HTTPS / старых браузеров — выделяем текст временного <textarea>.
+        const ta = document.createElement('textarea');
+        ta.value = roomId;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch { /* без копии */ }
+        document.body.removeChild(ta);
+      }
+      playButton();
+      setRoomIdCopied(true);
+      window.setTimeout(() => setRoomIdCopied(false), 300);
+    };
+
     return renderShell(
       <div className={styles.centered}>
         <div className={styles.waitCard}>
           <h2>⏳ Ожидание противника...</h2>
-          <p>ID комнаты: <strong className={styles.roomId}>{roomId}</strong></p>
+          <p>
+            ID комнаты:{' '}
+            <button
+              type="button"
+              className={`${styles.roomIdCopy} ${roomIdCopied ? styles.roomIdCopied : ''}`}
+              onClick={copyRoomId}
+              title={roomIdCopied ? 'Скопировано!' : 'Нажмите, чтобы скопировать'}
+              aria-label="Скопировать ID комнаты"
+            >
+              <span className={styles.roomId}>{roomId}</span>
+              <span className={styles.roomIdOverlay} aria-hidden="true">
+                {roomIdCopied ? '✓ Скопировано' : 'Скопировать'}
+              </span>
+            </button>
+          </p>
           <p>Поделитесь ID с другом!</p>
+          <button
+            type="button"
+            className={styles.waitLeaveBtn}
+            onClick={() => {
+              playButton();
+              leaveRoom();
+            }}
+          >
+            ← Выйти в меню
+          </button>
         </div>
       </div>
     );
@@ -274,7 +324,7 @@ export default function App() {
     type PrimaryAction = {
       label: string;
       onClick: () => void;
-      variant?: 'menu';
+      variant?: 'menu' | 'endTurn' | 'disabledHint';
       disabled?: boolean;
     } | null;
 
@@ -297,13 +347,16 @@ export default function App() {
       primaryAction = {
         label: canConfirm
           ? 'Подтвердить ✓'
-          : `Поставьте ещё ${remaining} 💣 `,
+          : `Поставьте ещё ${remaining} мин${remaining === 1 ? 'у' : remaining >= 2 && remaining <= 4 ? 'ы' : ''}`,
         onClick: () => {
           if (!canConfirm) return;
           playButton();
           confirmSetup();
         },
         disabled: !canConfirm,
+        // Пока не расставлены все мины — кнопка должна выглядеть «серой/неактивной»,
+        // а не как зелёная/боевая. Используем отдельный вариант.
+        variant: canConfirm ? undefined : 'disabledHint',
       };
     } else if (isMyTurn && turn.phase === 'phase2') {
       primaryAction = {
@@ -315,11 +368,12 @@ export default function App() {
       };
     } else if (isMyTurn && turn.phase === 'phase3') {
       primaryAction = {
-        label: 'Завершить расстановку →',
+        label: 'Передать ход →',
         onClick: () => {
           playButton();
           endPhase3();
         },
+        variant: 'endTurn',
       };
     }
 
@@ -377,12 +431,17 @@ export default function App() {
             myColor={myColor}
             section="controls"
             gameOver={gameOver}
+            hideControls={hideControls}
           />
           <div className={styles.actionButtonSlot}>
             {primaryAction && (
               <button
                 className={`${styles.primaryActionBtn} ${
                   primaryAction.variant === 'menu' ? styles.menuVariant : ''
+                } ${
+                  primaryAction.variant === 'endTurn' ? styles.endTurnVariant : ''
+                } ${
+                  primaryAction.variant === 'disabledHint' ? styles.disabledHintVariant : ''
                 }`}
                 onClick={primaryAction.onClick}
                 disabled={!!primaryAction.disabled}

@@ -7,6 +7,7 @@ import {
   TurnState,
   BALANCE,
 } from '@minesweeper-pvp/shared';
+import { Icon } from '../Icon/Icon';
 import styles from './GameInfo.module.css';
 
 // Единый тип для информации об окончании игры — определён в shared.
@@ -17,21 +18,46 @@ interface GameInfoProps {
   myColor: PlayerColor;
   section?: 'controls' | 'stats';
   gameOver?: GameOverInfo | null;
-  /** Скрыть блок «Управление» внутри section='stats' */
+  /** Скрыть подсказки: блок «Управление» (section='stats') и блок текущей фазы (section='controls'). */
   hideControls?: boolean;
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  phase1: 'Фаза 1 — выбор зоны 3×3',
-  phase2: 'Фаза 2 — захват клеток',
-  phase3: 'Фаза 3 — расстановка мин',
+  phase1: 'Фаза 1 — Разведка',
+  phase2: 'Фаза 2 — Захват',
+  phase3: 'Фаза 3 — Минирование',
 };
 
 const PHASE_DESCRIPTIONS: Record<string, string> = {
-  phase1: 'Кликните на поле, чтобы выбрать зону 3×3. В зоне должна быть хотя бы одна ваша доступная клетка, соединённая со штабом.',
-  phase2: 'Захватывайте вражеские клетки в зоне 5×5 рядом с доступной клеткой. Ctrl+Click — разминировать.',
-  phase3: 'Поставьте от 0 до лимита мин на свои свободные доступные клетки и завершите ход.',
+  phase1: 'Выберите центр зоны 3×3 — увидите цифры подсказок.',
+  phase2: 'Захватывайте клетки противника в зоне 5×5.',
+  phase3: 'Поставьте мины на свою территорию и завершите ход.',
 };
+
+/**
+ * Сообщение «что только что произошло» для конкретного зрителя.
+ * Берём структурное `lastAction` с бэка и собираем текст от первого лица.
+ */
+function describeLastAction(
+  action: import('@minesweeper-pvp/shared').LastAction,
+  myColor: PlayerColor,
+): { text: string; tone: 'danger' | 'warning' | 'success' } {
+  const mine = action.actorColor === myColor;
+  switch (action.type) {
+    case 'mine_exploded':
+      return mine
+        ? { text: '💥 Вы наступили на мину! Потеряна жизнь.',         tone: 'danger'  }
+        : { text: '💥 Противник наступил на мину и потерял жизнь.',    tone: 'danger'  };
+    case 'defuse_success':
+      return mine
+        ? { text: '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.', tone: 'success' }
+        : { text: '✅ Противник успешно разминировал клетку и захватил её.',         tone: 'success' };
+    case 'defuse_no_mine':
+      return mine
+        ? { text: '⚠️ Мины не оказалось. Клетка захвачена. Ход переходит к фазе 3.', tone: 'warning' }
+        : { text: '⚠️ Противник попытался разминировать пустую клетку и захватил её.', tone: 'warning' };
+  }
+}
 
 const DEFUSE_GRANT_INTERVAL = BALANCE.defuse.grantInterval;
 
@@ -186,7 +212,7 @@ export function GameInfo({
           )}
           {turn.phase === 'phase3' && isMyTurn && minesBonus > 0 && (
             <div className={`${styles.statRow} ${styles.phase3Row}`}>
-              <span>🏛️ Бонус за штаб:</span>
+              <span><Icon name="headquarters" /> Бонус за штаб:</span>
               <strong>+{minesBonus}</strong>
             </div>
           )}
@@ -199,7 +225,7 @@ export function GameInfo({
             <div className={styles.controlsRow}>🖱️ ЛКМ — действие</div>
             <div className={styles.controlsRow}>🖱️ ПКМ — флаг / ? / убрать</div>
             <div className={styles.controlsRow}>⌨️ Ctrl+Click — разминировать</div>
-            <div className={styles.controlsRow}>🏛️ Захват штаба — мгновенная победа</div>
+            <div className={styles.controlsRow}><Icon name="headquarters" /> Захват штаба — мгновенная победа</div>
             <div className={styles.controlsRow}>
               <span className={styles.hotkeyKey}>Space</span> — кнопка слева от доски
             </div>
@@ -224,10 +250,6 @@ export function GameInfo({
   const opponent = players.find((p) => p.color !== myColor);
   const iConfirmed = me?.setupConfirmed ?? false;
   const opponentConfirmed = opponent?.setupConfirmed ?? false;
-  const myInitialMines = me
-    ? (me.color === 'red' ? config.initialMinesRed : config.initialMinesBlue)
-    : 0;
-  const minesLeft = Math.max(0, myInitialMines - (me?.minesPlaced ?? 0));
 
   // Часы тикают только когда они "запущены" (currentTurnStartedAtMs !== null)
   // т.е. вне фазы setup и finished.
@@ -246,7 +268,9 @@ export function GameInfo({
         </div>
       ) : isSetup ? (
         <div className={`${styles.turnStatus} ${iConfirmed ? styles.opponentTurn : styles.myTurn}`}>
-          <span className={styles.turnIcon}>{iConfirmed ? '⏳' : '💣'}</span>
+          <span className={styles.turnIcon}>
+            {iConfirmed ? '⏳' : <Icon name="mine" size="1.1em" />}
+          </span>
           <span>{iConfirmed ? 'Ожидание противника...' : 'Расставьте мины'}</span>
         </div>
       ) : (
@@ -256,81 +280,70 @@ export function GameInfo({
         </div>
       )}
 
-      {/* Карточки игроков */}
-      <div className={styles.playersSection}>
-        <div className={[
-          styles.playerCard, styles.red,
-          turn.currentPlayer === 'red' ? styles.activePlayer : styles.inactivePlayer,
-        ].join(' ')}>
-          <div className={styles.playerHeader}>
-            <span className={styles.playerLabel}>🔴 Красный</span>
-            {turn.currentPlayer === 'red' && <span className={styles.activeBadge}>ходит</span>}
+      {/* Карточки игроков.
+          - В фазе setup активной считается КАРТОЧКА ИГРОКА-ЗРИТЕЛЯ
+            (чтобы каждый видел «свой» цвет подсвеченным).
+          - В finished — карточка победителя; вместо «ходит» — 🏆.
+          - В остальных фазах — карточка чей сейчас ход. */}
+      {(['red', 'blue'] as const).map((color) => {
+        const player = color === 'red' ? redPlayer : bluePlayer;
+        const remaining = color === 'red' ? redRemaining : blueRemaining;
+        const isHighlighted = isSetup
+          ? color === myColor
+          : isFinished
+            ? color === winnerColor
+            : turn.currentPlayer === color;
+        const isWinnerCard = isFinished && color === winnerColor;
+        return (
+          <div
+            key={color}
+            className={[
+              styles.playerCard,
+              color === 'red' ? styles.red : styles.blue,
+              isHighlighted ? styles.activePlayer : styles.inactivePlayer,
+            ].join(' ')}
+          >
+            <div className={styles.playerHeader}>
+              <span className={styles.playerLabel}>
+                {color === 'red' ? '🔴 Красный' : '🔵 Синий'}
+              </span>
+              {isWinnerCard
+                ? <span className={styles.activeBadge}>🏆 победа</span>
+                : (!isFinished && !isSetup && turn.currentPlayer === color)
+                  ? <span className={styles.activeBadge}>ходит</span>
+                  : null}
+            </div>
+            <div className={[
+              styles.playerClock,
+              clockActive && turn.currentPlayer === color ? styles.playerClockRunning : '',
+              isLowTime(remaining) ? styles.playerClockLow : '',
+            ].join(' ')}>
+              ⏱ {formatTime(remaining)}
+            </div>
+            <div className={styles.hearts}>{renderHearts(player.lives, config.maxLives)}</div>
           </div>
-          <div className={[
-            styles.playerClock,
-            clockActive && turn.currentPlayer === 'red' ? styles.playerClockRunning : '',
-            isLowTime(redRemaining) ? styles.playerClockLow : '',
-          ].join(' ')}>
-            ⏱ {formatTime(redRemaining)}
-          </div>
-          <div className={styles.hearts}>{renderHearts(redPlayer.lives, config.maxLives)}</div>
-        </div>
+        );
+      })}
 
-        <div className={[
-          styles.playerCard, styles.blue,
-          turn.currentPlayer === 'blue' ? styles.activePlayer : styles.inactivePlayer,
-        ].join(' ')}>
-          <div className={styles.playerHeader}>
-            <span className={styles.playerLabel}>🔵 Синий</span>
-            {turn.currentPlayer === 'blue' && <span className={styles.activeBadge}>ходит</span>}
-          </div>
-          <div className={[
-            styles.playerClock,
-            clockActive && turn.currentPlayer === 'blue' ? styles.playerClockRunning : '',
-            isLowTime(blueRemaining) ? styles.playerClockLow : '',
-          ].join(' ')}>
-            ⏱ {formatTime(blueRemaining)}
-          </div>
-          <div className={styles.hearts}>{renderHearts(bluePlayer.lives, config.maxLives)}</div>
-        </div>
-      </div>
-
-      {/* Текущая фаза (только во время игры) */}
-      {!isFinished && !isSetup && (
+      {/* Текущая фаза (только во время игры) — краткое название + цель.
+          Скрывается настройкой «Скрыть подсказки». */}
+      {!isFinished && !isSetup && !hideControls && (
         <div className={styles.phaseBox}>
           <div className={styles.phaseTitle}>{PHASE_LABELS[turn.phase] ?? turn.phase}</div>
-          {isMyTurn && <div className={styles.phaseDesc}>{PHASE_DESCRIPTIONS[turn.phase]}</div>}
+          <div className={styles.phaseDesc}>{PHASE_DESCRIPTIONS[turn.phase]}</div>
         </div>
       )}
 
       {/* Подготовка — статус расстановки мин */}
-      {isSetup && (
+      {isSetup && !hideControls && (
         <div className={styles.phaseBox}>
-          <div className={styles.phaseTitle}>Подготовка — расстановка мин</div>
+          <div className={styles.phaseTitle}>Подготовка</div>
           <div className={styles.phaseDesc}>
-            {iConfirmed ? (
-              <>
-                Расстановка подтверждена.{' '}
-                {opponentConfirmed
-                  ? 'Оба готовы, начинаем...'
-                  : `Ожидание ${opponent?.name ?? 'противника'}...`}
-              </>
-            ) : (
-              <>
-                Поставьте <strong>{myInitialMines}</strong> мин на доступные клетки своей половины.
-                {' '}🏛️ — штаб (нельзя заминировать).
-              </>
-            )}
-          </div>
-          <div className={styles.phaseDesc} style={{ marginTop: 6 }}>
-            Поставлено: <strong>{me?.minesPlaced ?? 0} / {myInitialMines}</strong>
-            {!iConfirmed && minesLeft > 0 && <> · осталось <strong>{minesLeft}</strong></>}
-          </div>
-          <div className={styles.phaseDesc} style={{ marginTop: 6 }}>
-            Противник:{' '}
-            {opponentConfirmed
-              ? <strong style={{ color: '#2ecc71' }}>✓ готов</strong>
-              : <strong style={{ color: '#f39c12' }}>⏳ расставляет...</strong>}
+            {iConfirmed
+              ? opponentConfirmed
+                ? 'Оба готовы, начинаем...'
+                : `Ожидание: ${opponent?.name ?? 'противник'} расставляет мины.`
+              : <>Расставьте мины на своей половине. <Icon name="headquarters" /> — штаб (нельзя заминировать).</>}
           </div>
         </div>
       )}
@@ -340,34 +353,23 @@ export function GameInfo({
         <div className={styles.phaseBox}>
           <div className={styles.phaseTitle}>Игра окончена</div>
           <div className={styles.phaseDesc}>
-            {reason === 'lives' && 'Причина: потеряны все жизни'}
-            {reason === 'headquarters' && 'Причина: захвачен штаб'}
-            {reason === 'territory' && 'Причина: больше территории'}
-            {reason === 'time' && 'Причина: истекло время на партию'}
+            {reason === 'lives' && 'Потеряны все жизни'}
+            {reason === 'headquarters' && 'Захвачен штаб'}
+            {reason === 'time' && 'Истекло время на партию'}
           </div>
         </div>
       )}
 
-      {/* Сообщение */}
-      {turn.lastActionMessage && (
-        <div className={[
-          styles.actionMessage,
-          turn.lastActionMessage.startsWith('💥') ? styles.messageDanger  :
-          turn.lastActionMessage.startsWith('⚠️') ? styles.messageWarning :
-          styles.messageSuccess,
-        ].join(' ')}>
-          {turn.lastActionMessage}
-        </div>
-      )}
-
-      {/* Разминирование */}
-      {!isFinished && turn.phase === 'phase2' && (
-        <div className={`${styles.defuseStatus} ${turn.canDefuse ? styles.defuseAvailable : styles.defuseUsed}`}>
-          {turn.canDefuse
-            ? `🔧 Разминирований доступно: ${defusesLeftThisTurn} / ${turn.defusesPerTurn}`
-            : `🔧 Разминирования использованы: ${turn.defusesUsedThisTurn} / ${turn.defusesPerTurn}`}
-        </div>
-      )}
+      {/* Сообщение «что только что произошло» — от первого лица для зрителя. */}
+      {turn.lastAction && (() => {
+        const { text, tone } = describeLastAction(turn.lastAction, myColor);
+        const toneClass = tone === 'danger'  ? styles.messageDanger
+                        : tone === 'warning' ? styles.messageWarning
+                                             : styles.messageSuccess;
+        return (
+          <div className={`${styles.actionMessage} ${toneClass}`}>{text}</div>
+        );
+      })()}
     </div>
   );
 }

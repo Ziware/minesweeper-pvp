@@ -14,7 +14,7 @@ minesweeper-pvp/
     ├── shared/               # общие типы и helpers
     ├── backend/              # Node.js + Socket.IO сервер
     ├── frontend/             # React + Vite клиент
-    └── content/              # статические ассеты (звуки)
+    └── content/              # статические ассеты (звуки, SVG-иконки)
 ```
 
 ---
@@ -79,6 +79,7 @@ React SPA на Vite. Соединяется с бэкендом по WebSocket. 
 | [`src/components/GameInfo/GameInfo.tsx`](packages/frontend/src/components/GameInfo/GameInfo.tsx) | Боковая панель. Через проп `section` рендерится дважды: слева — controls (текущая фаза, primary-кнопка, лимиты разминирования/мин), справа — stats (жизни, ходы, баланс территории, имя соперника). Включает экран финиша с баннером победителя и кнопкой «В меню». |
 | [`src/components/HelpModal/HelpModal.tsx`](packages/frontend/src/components/HelpModal/HelpModal.tsx) | Модальное окно правил игры (это же источник истины для README). |
 | [`src/components/SettingsMenu/SettingsMenu.tsx`](packages/frontend/src/components/SettingsMenu/SettingsMenu.tsx) | Выпадающее меню настроек: mute/unmute, слайдер громкости (кастомный `range` с 16px-thumb), переключатель «скрыть подсказки управления». Закрывается по клику вне (с защитой от race с кнопкой-якорем через атрибут `data-settings-anchor`). |
+| [`src/components/Icon/Icon.tsx`](packages/frontend/src/components/Icon/Icon.tsx) | Универсальная inline-иконка для SVG из `packages/content` (`mine`, `headquarters`). Импортирует SVG через Vite `?url`, рендерит `<img>` с настраиваемым размером, ведёт себя как emoji по вертикальному выравниванию. Используется в `Cell`, `Board`, `GameInfo`, `HelpModal`, шапке `App`. |
 
 ### Конфигурация
 
@@ -92,14 +93,23 @@ React SPA на Vite. Соединяется с бэкендом по WebSocket. 
 
 ## 🎵 `packages/content`
 
-Просто папка со звуковыми ассетами, импортируется фронтендом через статические URL:
+Папка со статическими ассетами, импортируется фронтендом через Vite (`?url`).
+
+Звуки:
 
 ```
 button.wav  defeat.wav  disarm.wav  explosion.wav
 locked_cell.wav  plant_mine.wav  scan.wav  victory.wav
 ```
 
-`useSound` загружает их лениво и воспроизводит по событиям из `App.tsx` (с приоритетной цепочкой — победный/проигрышный звук гасит остальные).
+SVG-иконки:
+
+```
+mine-icon.svg            # символ мины (вместо emoji 💣)
+headquarters-icon.svg    # символ штаба (вместо emoji 🏛️)
+```
+
+`useSound` загружает звуки лениво и воспроизводит по событиям из `App.tsx` (с приоритетной цепочкой — победный/проигрышный звук гасит остальные). SVG-иконки прокидываются через компонент [`Icon`](packages/frontend/src/components/Icon/Icon.tsx) и используются везде, где раньше стояли тематические emoji мины/штаба.
 
 ---
 

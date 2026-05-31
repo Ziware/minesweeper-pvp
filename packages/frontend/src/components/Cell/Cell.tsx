@@ -1,5 +1,6 @@
 import React from 'react';
 import { ClientCellState, PlayerColor } from '@minesweeper-pvp/shared';
+import { Icon } from '../Icon/Icon';
 import styles from './Cell.module.css';
 
 interface CellProps {
@@ -35,7 +36,7 @@ function getCellContent(
   isInActiveZone: boolean,
   isHeadquarters: boolean,
 ): React.ReactNode {
-  if (isHeadquarters) return <span className={styles.icon}>🏛️</span>;
+  if (isHeadquarters) return <Icon name="headquarters" size="80%" />;
 
   if (cell.mark === 'flag')     return <span className={styles.icon}>🚩</span>;
   if (cell.mark === 'question') return <span className={styles.icon}>❓</span>;
@@ -57,16 +58,16 @@ function getCellContent(
   // Своя мина: показываем иконку только если НЕ в активной зоне
   // Цвет фона (mineRed/mineBlue) остаётся всегда через CSS-класс
   if (cell.hasMine === true && cell.owner === myColor && !isInActiveZone) {
-    return <span className={styles.icon}>💣</span>;
+    return <Icon name="mine" size="80%" />;
   }
 
   return null;
 }
 
 function getCellContentForFinished(cell: ClientCellState, isHeadquarters: boolean): React.ReactNode {
-  if (isHeadquarters) return <span className={styles.icon}>🏛️</span>;
+  if (isHeadquarters) return <Icon name="headquarters" size="80%" />;
   if (cell.hasMine === true) {
-    return <span className={styles.icon}>💣</span>;
+    return <Icon name="mine" size="80%" />;
   }
   if (cell.isRevealed && cell.number !== null) {
     return (

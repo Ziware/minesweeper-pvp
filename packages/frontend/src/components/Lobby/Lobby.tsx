@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TimeControl, TIME_CONTROL_PRESETS, BALANCE } from '@minesweeper-pvp/shared';
 import styles from './Lobby.module.css';
 
@@ -10,12 +10,32 @@ interface LobbyProps {
 }
 
 const DEFAULT_PRESET_INDEX = BALANCE.timeControls.defaultPresetIndex;
+const NAME_STORAGE_KEY = 'minesweeper_player_name';
+
+function loadStoredName(): string {
+  try {
+    return localStorage.getItem(NAME_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 export function Lobby({ onCreateRoom, onJoinRoom, onUiClick }: LobbyProps) {
-  const [name,   setName]   = useState('');
+  const [name,   setName]   = useState<string>(() => loadStoredName());
   const [joinId, setJoinId] = useState('');
   const [nameErr, setNameErr] = useState('');
   const [presetIdx, setPresetIdx] = useState(DEFAULT_PRESET_INDEX);
+
+  // Сохраняем введённое имя — чтобы при следующем заходе в лобби
+  // не приходилось вводить его повторно.
+  useEffect(() => {
+    try {
+      const trimmed = name.trim();
+      if (trimmed) localStorage.setItem(NAME_STORAGE_KEY, trimmed);
+    } catch {
+      /* localStorage недоступен — молча игнорируем */
+    }
+  }, [name]);
 
   const handleCreate = () => {
     if (!name.trim()) { setNameErr('Введите имя'); return; }
@@ -78,8 +98,8 @@ export function Lobby({ onCreateRoom, onJoinRoom, onUiClick }: LobbyProps) {
             className={styles.input}
             placeholder="ID комнаты"
             value={joinId}
-            onChange={(e) => setJoinId(e.target.value.toUpperCase())}
-            maxLength={6}
+            onChange={(e) => setJoinId(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())}
+            maxLength={5}
           />
           <p className={styles.hint}>Вы будете играть за 🔵 Синего</p>
           <button

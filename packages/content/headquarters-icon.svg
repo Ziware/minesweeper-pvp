@@ -1,0 +1,58 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Detailed neutral octagonal headquarters icon</title>
+  <desc id="desc">A minimalist detailed flat octagonal headquarters icon in neutral sand, stone, and muted yellow colors suitable for both red and blue sides.</desc>
+
+  <rect width="512" height="512" rx="96" fill="transparent"/>
+
+  <g transform="translate(256 256) scale(1.3)">
+    <path d="M -74 -178 L 74 -178 L 178 -74 L 178 74 L 74 178 L -74 178 L -178 74 L -178 -74 Z" fill="#6D665B"/>
+    <path d="M -68 -158 L 68 -158 L 158 -68 L 158 68 L 68 158 L -68 158 L -158 68 L -158 -68 Z" fill="#D8CFB9"/>
+    <path d="M -58 -132 L 58 -132 L 132 -58 L 132 58 L 58 132 L -58 132 L -132 58 L -132 -58 Z" fill="#AFA795"/>
+    <path d="M -48 -108 L 48 -108 L 108 -48 L 108 48 L 48 108 L -48 108 L -108 48 L -108 -48 Z" fill="#E8DFCA"/>
+
+    <path d="M -68 -158 L 68 -158 L 158 -68 L 158 68 L 68 158 L -68 158 L -158 68 L -158 -68 Z" stroke="#7A7368" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M -58 -132 L 58 -132 L 132 -58 L 132 58 L 58 132 L -58 132 L -132 58 L -132 -58 Z" stroke="#8B8376" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M -48 -108 L 48 -108 L 108 -48 L 108 48 L 48 108 L -48 108 L -108 48 L -108 -48 Z" stroke="#B8B0A0" stroke-width="8" stroke-linejoin="round"/>
+
+    <g fill="#D4A94E" stroke="#6D665B" stroke-width="6" stroke-linejoin="round">
+      <path d="M -24 -154 L 24 -154 L 34 -132 L -34 -132 Z"/>
+      <path d="M -24 154 L 24 154 L 34 132 L -34 132 Z"/>
+      <path d="M 154 -24 L 154 24 L 132 34 L 132 -34 Z"/>
+      <path d="M -154 -24 L -154 24 L -132 34 L -132 -34 Z"/>
+    </g>
+
+    <g fill="#756E63">
+      <circle cx="0" cy="-134" r="10"/>
+      <circle cx="94.75" cy="-94.75" r="10"/>
+      <circle cx="134" cy="0" r="10"/>
+      <circle cx="94.75" cy="94.75" r="10"/>
+      <circle cx="0" cy="134" r="10"/>
+      <circle cx="-94.75" cy="94.75" r="10"/>
+      <circle cx="-134" cy="0" r="10"/>
+      <circle cx="-94.75" cy="-94.75" r="10"/>
+    </g>
+
+    <g stroke="#7D766B" stroke-width="9" stroke-linecap="round">
+      <line x1="0" y1="-102" x2="0" y2="-88"/>
+      <line x1="72.12" y1="-72.12" x2="62.22" y2="-62.22"/>
+      <line x1="102" y1="0" x2="88" y2="0"/>
+      <line x1="72.12" y1="72.12" x2="62.22" y2="62.22"/>
+      <line x1="0" y1="102" x2="0" y2="88"/>
+      <line x1="-72.12" y1="72.12" x2="-62.22" y2="62.22"/>
+      <line x1="-102" y1="0" x2="-88" y2="0"/>
+      <line x1="-72.12" y1="-72.12" x2="-62.22" y2="-62.22"/>
+    </g>
+
+    <path d="M -42 -70 L 42 -70 L 70 -42 L 70 42 L 42 70 L -42 70 L -70 42 L -70 -42 Z" fill="#C8BEAA" stroke="#6D665B" stroke-width="9" stroke-linejoin="round"/>
+    <path d="M -28 -52 L 28 -52 L 46 -34 L 46 34 L 28 52 L -28 52 L -46 34 L -46 -34 Z" fill="#F0E8D5" stroke="#8B8376" stroke-width="7" stroke-linejoin="round"/>
+
+    <g fill="#756E63">
+      <rect x="-30" y="-23" width="14" height="46" rx="5"/>
+      <rect x="-7" y="-23" width="14" height="46" rx="5"/>
+      <rect x="16" y="-23" width="14" height="46" rx="5"/>
+    </g>
+
+    <path d="M -46 -84 L 46 -84" stroke="#D4A94E" stroke-width="8" stroke-linecap="round"/>
+    <path d="M -46 84 L 46 84" stroke="#D4A94E" stroke-width="8" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+.icon {
+  display: inline-block;
+  /* `middle` центрирует иконку по x-height текста и работает при любом размере. */
+  vertical-align: middle;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  flex-shrink: 0;
+}

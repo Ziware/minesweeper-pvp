@@ -7,6 +7,7 @@ import {
   isHeadquartersCell as sharedIsHeadquartersCell,
 } from '@minesweeper-pvp/shared';
 import { Cell } from '../Cell/Cell';
+import { Icon } from '../Icon/Icon';
 import styles from './Board.module.css';
 
 interface BoardProps {
@@ -61,9 +62,17 @@ export function Board({
 
   const cellSize = useCellSize(config.boardSize);
 
-  const isFinished = turn.phase === 'finished';
+  const isFinished = turn.phase === 'finished' || !!gameState.winnerColor;
   const me = players.find((p) => p.color === myColor);
   const iConfirmed = me?.setupConfirmed ?? false;
+
+  const myInitialMines = myColor === 'red'
+    ? config.initialMinesRed
+    : config.initialMinesBlue;
+  const myMinesPlaced = me?.minesPlaced ?? 0;
+  const defusesLeft = Math.max(0, turn.defusesPerTurn - turn.defusesUsedThisTurn);
+  const baseMines = config.minesPerTurn;
+  const minesBonus = Math.max(0, turn.minesAllowedThisTurn - config.minesPerTurn);
 
   // Центр зон из selectedZone/actionZone (скрываем после окончания игры)
   const displayCenter = !isFinished && turn.selectedZone
@@ -209,21 +218,76 @@ export function Board({
       </div>
 
       <div className={styles.bottomBar}>
-        {showLegend && (
-          <div className={styles.zoneLegend}>
-            <span className={styles.legendDisplay}>■ Зона 3×3 — отображение</span>
-            <span className={styles.legendAction}>■ Зона 5×5 — ходы</span>
-            <span className={styles.legendHeadquarters}>🏛️ Штаб</span>
-          </div>
-        )}
-        {isMyTurn && turn.phase === 'phase2' && turn.canDefuse && (
-          <div className={styles.hint}>
-            🔧 <strong>Ctrl+Click</strong> — разминировать. Осталось: {turn.defusesPerTurn - turn.defusesUsedThisTurn} / {turn.defusesPerTurn}. Захват — только по общей стороне.
-          </div>
-        )}
-        {!showLegend && !(isMyTurn && turn.phase === 'phase2' && turn.canDefuse) && (
-          <div className={styles.placeholder} />
-        )}
+        {(() => {
+          // Игра окончена — единственная подсказка.
+          if (isFinished) {
+            return <div className={styles.hint}>Игра окончена</div>;
+          }
+
+          // Фаза расстановки мин на старте.
+          if (turn.phase === 'setup') {
+            if (iConfirmed) {
+              return (
+                <div className={styles.hint}>
+                  Ожидание противника — он расставляет мины…
+                </div>
+              );
+            }
+            return (
+              <div className={styles.hint}>
+                Расставлено мин: <strong>{myMinesPlaced} / {myInitialMines}</strong>
+              </div>
+            );
+          }
+
+          // Не ваш ход в активной фазе.
+          if (!isMyTurn) {
+            return <div className={styles.hint}>Идёт ход противника…</div>;
+          }
+
+          // Фаза 1 — пояснение про зоны.
+          if (turn.phase === 'phase1') {
+            return (
+              <div className={styles.zoneLegend}>
+                <span className={styles.legendDisplay}>■ Зона 3×3 — подсказки</span>
+                <span className={styles.legendAction}>■ Зона 5×5 — действия</span>
+                <span className={styles.legendHeadquarters}>
+                  <Icon name="headquarters" size="1.5em"/> Штаб
+                </span>
+              </div>
+            );
+          }
+
+          // Фаза 2 — зоны + счётчик разминирований.
+          if (turn.phase === 'phase2') {
+            return (
+              <>
+                <div className={styles.zoneLegend}>
+                  <span className={styles.legendDisplay}>■ Зона 3×3 — подсказки</span>
+                  <span className={styles.legendAction}>■ Зона 5×5 — действия</span>
+                </div>
+                <div className={styles.hint}>
+                  🔧 Разминирований осталось: <strong>{defusesLeft} / {turn.defusesPerTurn}</strong>
+                  {' · '}<kbd>Ctrl+Click</kbd> — разминировать
+                </div>
+              </>
+            );
+          }
+
+          // Фаза 3 — мины и бонус за штаб.
+          if (turn.phase === 'phase3') {
+            return (
+              <div className={styles.hint}>
+                Расставлено мин: <strong>{turn.minesPlacedThisTurn} / {turn.minesAllowedThisTurn}</strong>
+                {minesBonus > 0 && (
+                  <> <span style={{ color: '#f0c040' }}>({baseMines} + {minesBonus} за штаб)</span></>
+                )}
+              </div>
+            );
+          }
+
+          return <div className={styles.placeholder} />;
+        })()}
       </div>
     </div>
   );

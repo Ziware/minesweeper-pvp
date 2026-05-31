@@ -61,6 +61,21 @@ export interface BoardStats {
   blueCells: number;
 }
 
+/**
+ * Тип события «последнее действие». Текст для UI собирается на клиенте,
+ * чтобы для каждого игрока было видно от первого лица: «Вы…» / «Противник…».
+ */
+export type LastActionType =
+  | 'mine_exploded'   // взрыв на мине в фазе 2
+  | 'defuse_success'  // успешное разминирование с миной
+  | 'defuse_no_mine'; // разминирование клетки без мины
+
+export interface LastAction {
+  type: LastActionType;
+  /** Цвет игрока, который выполнил действие. */
+  actorColor: PlayerColor;
+}
+
 export interface TurnState {
   phase: GamePhase;
   currentPlayer: PlayerColor;
@@ -71,7 +86,8 @@ export interface TurnState {
   // Лимит мин на 3-ю фазу для текущего игрока (база + бонус за зону над штабом)
   minesAllowedThisTurn: number;
   capturedThisTurn: Set<string> | string[];
-  lastActionMessage: string | null;
+  /** Последнее «громкое» действие хода (взрыв/разминирование). Сообщения собираются на клиенте. */
+  lastAction: LastAction | null;
   // Общий счётчик завершённых ходов обоих игроков (1 ход = одно завершение хода любым игроком)
   turnsPlayed: number;
   // Сколько разминирований доступно текущему игроку в этом ходу
@@ -99,7 +115,7 @@ export interface S2C_GameState {
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor;
-  reason: 'lives' | 'headquarters' | 'territory' | 'time';
+  reason: 'lives' | 'headquarters' | 'time';
 }
 
 export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; }
@@ -127,6 +143,9 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   createRoom:      (data: C2S_CreateRoom) => void;
   joinRoom:        (data: C2S_JoinRoom) => void;
+  /** Добровольный выход из комнаты (например, с экрана ожидания соперника).
+   *  Если игрок уходит ОДИН — комната удаляется немедленно, без TTL. */
+  leaveRoom:       () => void;
   placeMineSetup:  (data: C2S_PlaceMine) => void;
   confirmSetup:    () => void;
   selectZone:      (data: C2S_SelectZone) => void;

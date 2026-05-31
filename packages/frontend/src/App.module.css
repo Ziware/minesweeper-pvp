@@ -30,6 +30,82 @@
   font-size: 2rem;
   letter-spacing: 0.2em;
   color: #f39c12;
+  font-family: monospace;
+}
+
+/* Кнопка-обёртка вокруг ID для «нажми, чтобы скопировать».
+   При наведении сам код прячется, и на его месте появляется
+   надпись «Скопировать» — рамка/размер сохраняются. */
+.roomIdCopy {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  padding: 4px 14px;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.roomIdCopy:hover,
+.roomIdCopy:focus-visible {
+  background: rgba(243, 156, 18, 0.08);
+  border-color: rgba(243, 156, 18, 0.45);
+  outline: none;
+}
+
+/* Overlay-подпись «Скопировать», поверх кода. Изначально невидима;
+   появляется при hover/focus, либо принудительно после клика
+   (через класс .roomIdCopied). */
+.roomIdOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f39c12;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.roomIdCopy:hover .roomIdOverlay,
+.roomIdCopy:focus-visible .roomIdOverlay,
+.roomIdCopy.roomIdCopied .roomIdOverlay {
+  opacity: 1;
+}
+.roomIdCopy:hover .roomId,
+.roomIdCopy:focus-visible .roomId,
+.roomIdCopy.roomIdCopied .roomId {
+  opacity: 0;
+}
+.roomIdCopy .roomId {
+  transition: opacity 0.15s;
+}
+
+/* Кнопка выхода на экране ожидания. Нейтрально-серая, в отличие от
+   акцентных кнопок действий — чтобы не конкурировать визуально. */
+.waitLeaveBtn {
+  margin-top: 8px;
+  align-self: center;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #2a3a5a;
+  background: #16213e;
+  color: #aab8d0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.waitLeaveBtn:hover {
+  background: #1f2f50;
+  color: #cfe;
+  border-color: #3a5a8a;
 }
 
 .replayBtn {
@@ -66,7 +142,14 @@
   flex-wrap: wrap;
 }
 
-.logo { margin: 0; font-size: 1.2rem; }
+.logo {
+  margin: 0;
+  font-size: 1.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  line-height: 1;
+}
 
 .roomBadge {
   background: #0f3460;
@@ -179,6 +262,37 @@
   box-shadow: 0 4px 16px rgba(39, 174, 96, 0.35);
 }
 .primaryActionBtn.menuVariant:hover { background: #2ecc71; }
+
+/* «Подсказка»-кнопка: серая, неактивная, без призыва — пока игрок
+   ещё не выполнил предусловие (например, не расставил все мины). */
+.primaryActionBtn.disabledHintVariant {
+  background: #3a3f55;
+  color: #b8bfd0;
+  box-shadow: none;
+  cursor: not-allowed;
+  border: 1px solid #2a2f45;
+}
+.primaryActionBtn.disabledHintVariant:hover { background: #3a3f55; }
+.primaryActionBtn:disabled {
+  cursor: not-allowed;
+}
+
+/* Завершение хода (фаза 3, «Передать ход»):
+   контрастный «боевой» багрянец — намёк на минирование/опасность,
+   читается отдельно от оранжевой «Завершить захват». */
+.primaryActionBtn.endTurnVariant {
+  background: linear-gradient(180deg, #c0392b 0%, #8b1a1a 100%);
+  color: #fff8e7;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  border: 1px solid #6a0f0f;
+  box-shadow:
+    0 4px 18px rgba(192, 57, 43, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+.primaryActionBtn.endTurnVariant:hover {
+  background: linear-gradient(180deg, #e04a3a 0%, #a02020 100%);
+}
 
 .hotkeyKey {
   display: inline-block;

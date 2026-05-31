@@ -92,7 +92,7 @@ export function SettingsMenu({
       </div>
 
       <div className={styles.row}>
-        <span className={styles.label}>🎮 Скрыть управление</span>
+        <span className={styles.label}>🎮 Скрыть подсказки</span>
         <button
           type="button"
           className={`${styles.toggle} ${hideControls ? styles.toggleOn : styles.toggleOff}`}

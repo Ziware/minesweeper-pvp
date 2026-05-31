@@ -331,7 +331,7 @@ export function createInitialTurnState(
     minesPlacedThisTurn: 0,
     minesAllowedThisTurn,
     capturedThisTurn: new Set<string>(),
-    lastActionMessage: null,
+    lastAction: null,
     turnsPlayed,
     defusesPerTurn,
     defusesUsedThisTurn: 0,

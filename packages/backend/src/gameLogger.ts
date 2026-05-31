@@ -26,6 +26,7 @@ export type GameLogEvent =
   | 'phase3_ended'
   | 'mark_toggled'
   | 'player_disconnected'
+  | 'player_left'
   | 'game_finished'
   | 'room_deleted';
 

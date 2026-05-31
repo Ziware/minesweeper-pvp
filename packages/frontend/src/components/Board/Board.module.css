@@ -47,4 +47,16 @@
 .hint {
   font-size: 0.82rem;
   color: #f39c12;
+  text-align: center;
+}
+
+.hint kbd {
+  display: inline-block;
+  padding: 0 6px;
+  background: #0f3460;
+  border: 1px solid #1e4f80;
+  border-radius: 4px;
+  color: #cde;
+  font-family: monospace;
+  font-size: 0.78rem;
 }

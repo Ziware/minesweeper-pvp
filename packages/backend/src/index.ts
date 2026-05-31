@@ -155,6 +155,15 @@ io.on('connection', (socket) => {
     socket.emit('gameState', state as any);
   });
 
+  socket.on('leaveRoom', () => {
+    const room = roomManager.leaveRoom(socket.id);
+    if (room) {
+      // Если в комнате ещё кто-то остался — обновить ему состояние / уведомить.
+      if (room.players.length > 0) broadcastGameState(room.id);
+      console.log(`[leaveRoom] ${socket.id} left room ${room.id}`);
+    }
+  });
+
   socket.on('disconnect', () => {
     const { room } = roomManager.removePlayer(socket.id);
     if (room) console.log(`[disconnect] left room ${room.id}`);

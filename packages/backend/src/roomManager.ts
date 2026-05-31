@@ -6,6 +6,7 @@ import {
   TurnState,
   CellMark,
   TimeControl,
+  LastAction,
   ALLOWED_TIME_CONTROLS as SHARED_ALLOWED_TIME_CONTROLS,
 } from '@minesweeper-pvp/shared';
 import { createGameLogger, GameLogger } from './gameLogger';
@@ -49,7 +50,7 @@ export interface PlayerState {
   timeMs: number;
 }
 
-export type WinReason = 'lives' | 'headquarters' | 'territory' | 'time';
+export type WinReason = 'lives' | 'headquarters' | 'time';
 
 export interface Room {
   id: string;
@@ -89,7 +90,14 @@ export class RoomManager {
   private emptyRoomCleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   generateRoomId(): string {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    // 5 заглавных латинских букв (без цифр и схожих символов) — короче и
+    // удобнее передавать голосом другу.
+    const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let id = '';
+    for (let i = 0; i < 5; i++) {
+      id += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+    }
+    return id;
   }
 
   createRoom(
@@ -137,7 +145,7 @@ export class RoomManager {
         minesPlacedThisTurn: 0,
         minesAllowedThisTurn: fullConfig.minesPerTurn,
         capturedThisTurn: new Set(),
-        lastActionMessage: null,
+        lastAction: null,
         turnsPlayed: 0,
         defusesPerTurn: INITIAL_DEFUSES_PER_TURN,
         defusesUsedThisTurn: 0,
@@ -243,6 +251,35 @@ export class RoomManager {
 
   getRoomById(roomId: string): Room | null {
     return this.rooms.get(roomId) || null;
+  }
+
+  /**
+   * Добровольный выход игрока из комнаты (например, по кнопке «← В меню»
+   * на экране ожидания). В отличие от `removePlayer`, удаляет игрока
+   * полностью и, если комната становится пустой — сносит её сразу,
+   * не дожидаясь TTL пустой комнаты.
+   */
+  leaveRoom(socketId: string): Room | null {
+    const room = this.getRoom(socketId);
+    if (!room) return null;
+    const idx = room.players.findIndex((p) => p.id === socketId);
+    if (idx >= 0) {
+      const player = room.players[idx];
+      room.logger.event('player_left', {
+        player: { color: player.color, name: player.name, ip: player.ip },
+      });
+      room.players.splice(idx, 1);
+      room.logger.setPlayers(room.players.map((p) => ({
+        id: p.id, color: p.color, name: p.name, ip: p.ip,
+      })));
+    }
+    this.socketToRoom.delete(socketId);
+    this.socketToPlayer.delete(socketId);
+    if (room.players.length === 0) {
+      this.cancelEmptyRoomCleanup(room.id);
+      this.deleteRoom(room.id);
+    }
+    return room;
   }
 
   removePlayer(socketId: string): { room: Room | null; color: PlayerColor | null } {
@@ -427,7 +464,7 @@ export class RoomManager {
     revealNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
-    room.turn.lastActionMessage = null;
+    room.turn.lastAction = null;
     return { ok: true };
   }
 
@@ -453,16 +490,15 @@ export class RoomManager {
         livesLeft: player.lives,
       });
       refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+      // Сначала фиксируем «что произошло» — этим питается клиентский эффект
+      // звука взрыва. Если этого не сделать ДО finalizeGameOver, на последнем
+      // фатальном клике на мину клиент не получит lastAction и не услышит взрыв.
+      room.turn.lastAction = { type: 'mine_exploded', actorColor: color };
       if (player.lives <= 0) {
-        const opp      = room.players.find((p) => p.color !== color)!;
-        room.winner    = opp.color;
-        room.winReason = 'lives';
-        room.phase     = 'finished';
-        room.turn.phase = 'finished';
-        clearRevealedNumbers(room.board);
+        const opp = room.players.find((p) => p.color !== color)!;
+        this.finalizeGameOver(room, opp.color, 'lives');
         return { ok: true, hitMine: true, gameOver: true };
       }
-      room.turn.lastActionMessage = '💥 Вы наступили на мину! Потеряна жизнь.';
       this.startPhase3(room);
     } else {
       this.clearMarkOnCell(room, row, col);
@@ -486,7 +522,7 @@ export class RoomManager {
       if (this.checkHeadquartersCapture(room, color, row, col)) {
         return { ok: true, hitMine, gameOver: true };
       }
-      room.turn.lastActionMessage = null;
+      room.turn.lastAction = null;
     }
     return { ok: true, hitMine, gameOver: false };
   }
@@ -549,7 +585,7 @@ export class RoomManager {
       if (this.checkHeadquartersCapture(room, color, row, col)) {
         return { ok: true, hadMine, gameOver: true };
       }
-      room.turn.lastActionMessage = '✅ Разминирование успешно! Клетка захвачена. Ход продолжается.';
+      room.turn.lastAction = { type: 'defuse_success', actorColor: color };
     } else {
       this.clearMarkOnCell(room, row, col);
       cell.owner   = color;
@@ -557,8 +593,7 @@ export class RoomManager {
       if (this.checkHeadquartersCapture(room, color, row, col)) {
         return { ok: true, hadMine, gameOver: true };
       }
-      room.turn.lastActionMessage = '⚠️ Мины не оказалось. Клетка захвачена. Ход переходит к фазе 3.';
-      this.startPhase3(room, room.turn.lastActionMessage);
+      this.startPhase3(room, { type: 'defuse_no_mine', actorColor: color });
     }
 
     return { ok: true, hadMine, gameOver: false };
@@ -584,14 +619,31 @@ export class RoomManager {
     return { ok: true };
   }
 
-  private startPhase3(room: Room, message?: string) {
+  private startPhase3(room: Room, lastAction?: LastAction) {
     clearRevealedNumbers(room.board);
     room.turn.selectedZone        = null;
     room.turn.actionZone          = null;
     room.turn.phase               = 'phase3';
     room.phase                    = 'phase3';
     room.turn.minesPlacedThisTurn = 0;
-    if (message) room.turn.lastActionMessage = message;
+    if (lastAction) room.turn.lastAction = lastAction;
+  }
+
+  /**
+   * Универсальный финализатор партии. Останавливает часы текущего игрока
+   * (commitTurnTime), переводит фазу в finished и чистит подсвеченные цифры.
+   * Не вызывает logGameFinishedIfNeeded — это делает index.ts при рассылке.
+   */
+  private finalizeGameOver(room: Room, winner: PlayerColor, reason: WinReason) {
+    // Если часы шли (вне setup/finished) — списываем потраченное время.
+    if (room.turn.currentTurnStartedAtMs !== null) {
+      this.commitTurnTime(room);
+    }
+    room.winner    = winner;
+    room.winReason = reason;
+    room.phase     = 'finished';
+    room.turn.phase = 'finished';
+    clearRevealedNumbers(room.board);
   }
 
   placeMinePhase3(room: Room, color: PlayerColor, row: number, col: number) {
@@ -647,22 +699,15 @@ export class RoomManager {
     const headquartersOwner = getHeadquartersOwner(row, col, room.config);
     if (!headquartersOwner || headquartersOwner === color) return false;
 
-    room.winner = color;
-    room.winReason = 'headquarters';
-    room.phase = 'finished';
-    room.turn.phase = 'finished';
-    clearRevealedNumbers(room.board);
+    this.finalizeGameOver(room, color, 'headquarters');
     return true;
   }
 
   private checkAndFinishTurn(room: Room): boolean {
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer)!;
     if (cur.lives <= 0) {
-      const opp      = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
-      room.winner    = opp.color;
-      room.winReason = 'lives';
-      room.phase     = 'finished';
-      room.turn.phase = 'finished';
+      const opp = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
+      this.finalizeGameOver(room, opp.color, 'lives');
       return true;
     }
 
@@ -670,12 +715,8 @@ export class RoomManager {
     this.commitTurnTime(room);
     if (cur.timeMs <= 0) {
       const opp = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
-      room.winner = opp.color;
-      room.winReason = 'time';
-      room.phase = 'finished';
-      room.turn.phase = 'finished';
       cur.timeMs = 0;
-      clearRevealedNumbers(room.board);
+      this.finalizeGameOver(room, opp.color, 'time');
       return true;
     }
     cur.timeMs += room.config.timeControl.incrementMs;
@@ -737,11 +778,8 @@ export class RoomManager {
     cur.timeMs = 0;
     room.turn.currentTurnStartedAtMs = null;
     const opp = room.players.find((p) => p.color !== cur.color)!;
-    room.winner = opp.color;
-    room.winReason = 'time';
-    room.phase = 'finished';
-    room.turn.phase = 'finished';
-    clearRevealedNumbers(room.board);
+    // currentTurnStartedAtMs уже сброшен выше, finalizeGameOver просто меняет статус
+    this.finalizeGameOver(room, opp.color, 'time');
     room.logger.event('time_out', {
       player: { color: cur.color, name: cur.name, ip: cur.ip },
     });
