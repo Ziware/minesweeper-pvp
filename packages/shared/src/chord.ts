@@ -85,7 +85,9 @@ export function summarizeChord(
         continue;
       }
       if (isHeadquartersCell(nr, nc, ctx.boardSize)) continue;
-      unflaggedClosedNeighbors.push({ row: nr, col: nc });
+      if (!ctx.isOwnedByActor(nr, nc)) {
+        unflaggedClosedNeighbors.push({ row: nr, col: nc });
+      }
       if (isOrthogonallyAdjacentToReachable(nr, nc)) {
         reachableKeys.add((cellKey(nr, nc)))
         if (!ctx.isOwnedByActor(nr, nc)) {
