@@ -6,6 +6,13 @@
   min-height: 0;
   background: #1a1a2e;
   color: #eee;
+  /* Safe-area для iOS PWA / iPhone с динамическим островом и скруглениями.
+     env(...) на устройствах без выреза = 0, поэтому ничего не двигаем
+     впустую. */
+  padding-top:    env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:   env(safe-area-inset-left);
+  padding-right:  env(safe-area-inset-right);
 }
 
 .screenBody {
@@ -153,6 +160,18 @@
   background: #1a1a2e;
   color: #eee;
   position: relative;
+  /* Safe-area для iOS PWA (notch / Dynamic Island / нижний home-indicator)
+     и Android-устройств со скруглёнными краями. env(...) на устройствах
+     без вырезов всегда 0 — двигаем шапку и низ только когда это реально
+     нужно. viewport-fit=cover уже задан в <meta viewport>. */
+  padding-top:    env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:   env(safe-area-inset-left);
+  padding-right:  env(safe-area-inset-right);
+  /* Закрашиваем зону safe-area тем же тоном, что и шапка, чтобы переход
+     от «острова» к контенту был визуально цельным. */
+  background-clip: padding-box;
+  box-sizing: border-box;
 }
 
 .gameHeader {
@@ -366,7 +385,9 @@
 
 .toastError {
   position: fixed;
-  bottom: 28px;
+  /* Учитываем safe-area снизу (home-indicator на iOS), чтобы тост не уезжал
+     под индикатор; на устройствах без выреза env() = 0 → отступ как был. */
+  bottom: calc(28px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   background: #2c1515;
@@ -393,7 +414,10 @@
   left: 0;
   right: 0;
   bottom: 0;
+  /* Содержательный отступ + safe-area снизу — баннер не залезает под
+     home-indicator iPhone. */
   padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
   background: #4a2410;
   color: #ffc080;
   text-align: center;
