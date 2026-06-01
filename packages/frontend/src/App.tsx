@@ -4,7 +4,7 @@ import { useSound } from './hooks/useSound';
 import { useSettings } from './hooks/useSettings';
 import { Lobby }     from './components/Lobby/Lobby';
 import { Board, MobileInputMode } from './components/Board/Board';
-import { GameInfo }  from './components/GameInfo/GameInfo';
+import { GameInfo, SideNotice, describeLastAction }  from './components/GameInfo/GameInfo';
 import { HelpModal } from './components/HelpModal/HelpModal';
 import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
 import { Icon } from './components/Icon/Icon';
@@ -47,7 +47,39 @@ export default function App() {
   const previousDefusesUsedRef = useRef<number | null>(null);
   const previousMinesPlacedRef = useRef<number | null>(null);
   const previousWinnerColorRef = useRef<string | null>(null);
+  const previousDefusesPerTurnRef = useRef<number | null>(null);
+  const previousPhaseRef = useRef<string | null>(null);
+  const previousMinesAllowedNoticeRef = useRef<string | null>(null);
   const primaryActionRef = useRef<(() => void) | null>(null);
+
+  // Единая «бегущая» нотификация слева. Любое игровое событие — взрыв,
+  // успешный/пустой дефьюз, выдача +N разминирований обоим, бонус +1 мина
+  // за зону над штабом — кладёт сюда новый объект, перетирая предыдущий.
+  // Параллельно запускается таймер на 5с, по истечении которого слот
+  // обнуляется. Если до таймаута приходит новое уведомление — старый таймер
+  // сбрасывается, и обратный отсчёт начинается заново для нового события.
+  const [sideNotice, setSideNotice] = useState<SideNotice | null>(null);
+  const sideNoticeTimerRef = useRef<number | null>(null);
+  const sideNoticeNonceRef = useRef<number>(0);
+  const pushSideNotice = (text: string, tone: SideNotice['tone']) => {
+    sideNoticeNonceRef.current += 1;
+    setSideNotice({ text, tone, nonce: sideNoticeNonceRef.current });
+    if (sideNoticeTimerRef.current !== null) {
+      window.clearTimeout(sideNoticeTimerRef.current);
+    }
+    sideNoticeTimerRef.current = window.setTimeout(() => {
+      setSideNotice(null);
+      sideNoticeTimerRef.current = null;
+    }, 5000);
+  };
+
+  // Флаги «у кого из игроков таймер уже ушёл в low-time зону». Нужны, чтобы
+  // звук low_timer проигрывался только в момент пересечения порога, а не
+  // повторялся каждый tick. Сбрасываются при смене партии.
+  const lowTimeFiredRef = useRef<Record<'red' | 'blue', boolean>>({
+    red: false,
+    blue: false,
+  });
 
   const playButton = () => play('button');
   const closeHelp = () => {
@@ -176,13 +208,126 @@ export default function App() {
       play('locked_cell');
     }
 
+    // Единая «бегущая» нотификация — слева. Новые события перетирают старые,
+    // плюс таймаут на 5с (см. pushSideNotice). Порядок проверок повторяет
+    // приоритет звуков выше (взрыв > дефьюз > что-либо ещё).
+
+    // 1) Взрыв/успешный/пустой дефьюз — берём готовый текст из describeLastAction.
+    if (actionChanged && lastAction && myColor) {
+      const { text, tone } = describeLastAction(lastAction, myColor);
+      pushSideNotice(text, tone);
+    }
+
+    // 2) Прибавка лимита разминирований обоим игрокам: defusesPerTurn вырос
+    //    относительно предыдущего gameState. Звук — с задержкой 300 мс, чтобы
+    //    не слиться со звуком клика кнопки «Завершить ход». Уведомление —
+    //    зелёное, как успешный дефьюз. Перетирает уведомление из п.1, что
+    //    логично: грант пришёл «поверх» только что отыгранного действия.
+    const prevDefusesPerTurn = previousDefusesPerTurnRef.current;
+    const defusesPerTurn = turn.defusesPerTurn;
+    if (prevDefusesPerTurn !== null && defusesPerTurn > prevDefusesPerTurn) {
+      const delta = defusesPerTurn - prevDefusesPerTurn;
+      playDelayed('add_defuse', 300);
+      pushSideNotice(
+        `🔧 +${delta} к лимиту разминирований на ход для обоих игроков!`,
+        'success',
+      );
+    }
+
+    // 3) Бонус +N мин за зону над штабом (только для текущего игрока, и
+    //    только в фазе 3 у того, чей ход). Триггерим один раз при входе
+    //    в фазу 3 — следим за тем, чтобы не повторять для одного и того же
+    //    хода. Если зона не накрыла штаб — minesAllowedThisTurn совпадает
+    //    с config.minesPerTurn и уведомления нет.
+    const isMyTurn = turn.currentPlayer === myColor;
+    const phase3Bonus = turn.minesAllowedThisTurn - gameState.config.minesPerTurn;
+    const bonusKey = `${turnKey}:phase3-bonus`;
+    if (
+      phase === 'phase3' &&
+      isMyTurn &&
+      phase3Bonus > 0 &&
+      previousMinesAllowedNoticeRef.current !== bonusKey
+    ) {
+      previousMinesAllowedNoticeRef.current = bonusKey;
+      pushSideNotice(
+        `💣 Зона над штабом противника: +${phase3Bonus} к лимиту мин на этот ход!`,
+        'success',
+      );
+    }
+
     previousLivesRef.current = currentLives;
     previousCapturedCountRef.current = capturedCount;
     previousActionKeyRef.current = actionKey;
     previousTurnKeyRef.current = turnKey;
     previousDefusesUsedRef.current = defusesUsed;
     previousMinesPlacedRef.current = minesPlaced;
+    previousDefusesPerTurnRef.current = defusesPerTurn;
+    previousPhaseRef.current = phase;
+  }, [gameState, myColor, play, playDelayed]);
+
+  // Low-time звук: проигрывается ОДИН РАЗ для каждого игрока в тот момент,
+  // когда его оставшееся время впервые опускается ниже 30 секунд. Слышат
+  // оба игрока (звук общий — это сигнал «у кого-то таймер на исходе»).
+  // Таймер обновляется ~раз в 250 мс, чтобы порог не «терялся» между
+  // gameState-апдейтами.
+  useEffect(() => {
+    if (!gameState) return;
+    const turn = gameState.turn;
+    if (turn.phase === 'finished' || gameState.winnerColor) return;
+    if (turn.currentTurnStartedAtMs === null) return; // часы не идут (setup)
+
+    const LOW_TIME_MS = 60_000;
+
+    // Сбрасываем флаги, если игрок «отрос» обратно (например, инкремент
+    // за завершённый ход вернул timeMs выше порога) — чтобы следующее
+    // пересечение порога снова прозвучало.
+    const checkAndFire = () => {
+      const serverNow = Date.now() + (turn.serverNowMs - Date.now()); // = turn.serverNowMs на старте
+      // На самом деле смещение хранится в GameInfo; здесь возьмём проще —
+      // считаем оставшееся время по локальным часам относительно serverNowMs.
+      const offset = turn.serverNowMs - Date.now();
+      const now = Date.now() + offset;
+      for (const player of gameState.players) {
+        const isActive = player.color === turn.currentPlayer;
+        const elapsed = isActive
+          ? Math.max(0, now - (turn.currentTurnStartedAtMs ?? now))
+          : 0;
+        const remaining = Math.max(0, player.timeMs - elapsed);
+        const color = player.color;
+        if (remaining < LOW_TIME_MS) {
+          if (!lowTimeFiredRef.current[color]) {
+            lowTimeFiredRef.current[color] = true;
+            play('low_timer');
+          }
+        } else {
+          // Игрок снова выше порога (инкремент за ход) — разрешаем повторный
+          // алерт при следующем пересечении.
+          lowTimeFiredRef.current[color] = false;
+        }
+      }
+      // serverNow используется неявно через offset — подавим неиспользованную
+      // переменную, чтобы линтер не ругался.
+      void serverNow;
+    };
+
+    checkAndFire();
+    const id = window.setInterval(checkAndFire, 250);
+    return () => window.clearInterval(id);
   }, [gameState, play]);
+
+  // При смене партии (новый roomId / возврат в лобби) сбрасываем флаги
+  // low-time, иначе при новой игре звук может не сработать.
+  useEffect(() => {
+    lowTimeFiredRef.current = { red: false, blue: false };
+    setSideNotice(null);
+    if (sideNoticeTimerRef.current !== null) {
+      window.clearTimeout(sideNoticeTimerRef.current);
+      sideNoticeTimerRef.current = null;
+    }
+    previousDefusesPerTurnRef.current = null;
+    previousMinesAllowedNoticeRef.current = null;
+    previousPhaseRef.current = null;
+  }, [roomId]);
 
   const renderHeader = (content?: React.ReactNode) => (
     <div className={styles.gameHeader}>
@@ -495,6 +640,7 @@ export default function App() {
             section="controls"
             gameOver={gameOver}
             hideControls={hideControls}
+            sideNotice={sideNotice}
           />
           <div className={styles.actionButtonSlot}>
             {renderPrimaryActionButton()}
@@ -621,6 +767,7 @@ export default function App() {
             section="controls"
             gameOver={gameOver}
             hideControls={hideControls}
+            sideNotice={sideNotice}
           />
         </div>
 

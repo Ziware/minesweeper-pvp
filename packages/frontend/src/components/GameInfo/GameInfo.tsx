@@ -13,6 +13,14 @@ import styles from './GameInfo.module.css';
 // Единый тип для информации об окончании игры — определён в shared.
 export type GameOverInfo = S2C_GameOver;
 
+export interface SideNotice {
+  text: string;
+  tone: 'danger' | 'warning' | 'success';
+  /** Монотонный счётчик — нужен для React-key, чтобы анимация перезапускалась
+   *  даже при повторном уведомлении того же типа. */
+  nonce: number;
+}
+
 interface GameInfoProps {
   gameState: S2C_GameState;
   myColor: PlayerColor;
@@ -26,6 +34,11 @@ interface GameInfoProps {
   gameOver?: GameOverInfo | null;
   /** Скрыть подсказки: блок «Управление» (section='stats') и блок текущей фазы (section='controls'). */
   hideControls?: boolean;
+  /**
+   * Единое уведомление в левой колонке (взрыв / разминирование / бонус).
+   * Управляется в App.tsx: новые события перетирают старые, плюс автоматически
+   * скрывается через 5с. `null` — слот пуст. */
+  sideNotice?: SideNotice | null;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -44,7 +57,7 @@ const PHASE_DESCRIPTIONS: Record<string, string> = {
  * Сообщение «что только что произошло» для конкретного зрителя.
  * Берём структурное `lastAction` с бэка и собираем текст от первого лица.
  */
-function describeLastAction(
+export function describeLastAction(
   action: import('@minesweeper-pvp/shared').LastAction,
   myColor: PlayerColor,
 ): { text: string; tone: 'danger' | 'warning' | 'success' } {
@@ -111,6 +124,7 @@ export function GameInfo({
   bannerColor,
   gameOver,
   hideControls = false,
+  sideNotice = null,
 }: GameInfoProps) {
   const { players, turn, config, stats } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
@@ -153,7 +167,7 @@ export function GameInfo({
       </span>
     ));
 
-  const isLowTimeMs = (ms: number) => ms < 30_000;
+  const isLowTimeMs = (ms: number) => ms < 60_000;
 
   // ─── Компактный баннер игрока (мобильная раскладка) ───────────────────────
   // Одна строка: [цвет] [часы] [жизни] [🏆 если победитель].
@@ -225,14 +239,6 @@ export function GameInfo({
             </strong>
           </div>
 
-          <div className={styles.statHeader}>Контроль времени</div>
-          <div className={styles.statRow}>
-            <span>⏱️ База + инкремент:</span>
-            <strong>
-              {Math.round(config.timeControl.baseMs / 60_000)} + {Math.round(config.timeControl.incrementMs / 1000)}
-            </strong>
-          </div>
-
           <div className={styles.statHeader}>Мины на поле</div>
           <div className={styles.statRow}>
             <span className={styles.redLabel}>🔴 Красный:</span>
@@ -258,19 +264,6 @@ export function GameInfo({
             <span>🚩 Флажков:</span>
             <strong>{flagCount}</strong>
           </div>
-
-          {turn.phase === 'phase3' && isMyTurn && (
-            <div className={`${styles.statRow} ${styles.phase3Row}`}>
-              <span>📍 Поставлено мин:</span>
-              <strong>{turn.minesPlacedThisTurn} / {turn.minesAllowedThisTurn}</strong>
-            </div>
-          )}
-          {turn.phase === 'phase3' && isMyTurn && minesBonus > 0 && (
-            <div className={`${styles.statRow} ${styles.phase3Row}`}>
-              <span><Icon name="headquarters" /> Бонус за штаб:</span>
-              <strong>+{minesBonus}</strong>
-            </div>
-          )}
         </div>
 
         {/* Управление (по стилю как statsBlock) — можно скрыть через настройки */}
@@ -421,14 +414,21 @@ export function GameInfo({
         </div>
       )}
 
-      {/* Сообщение «что только что произошло» — от первого лица для зрителя. */}
-      {turn.lastAction && (() => {
-        const { text, tone } = describeLastAction(turn.lastAction, myColor);
-        const toneClass = tone === 'danger'  ? styles.messageDanger
-                        : tone === 'warning' ? styles.messageWarning
-                                             : styles.messageSuccess;
+      {/* Единая «бегущая» нотификация. Новые события перетирают старые, плюс
+          автоматический таймаут на 5с — всё управляется в App.tsx. nonce в
+          key гарантирует, что одинаковые подряд события всё равно перезапускают
+          анимацию появления. */}
+      {sideNotice && (() => {
+        const toneClass = sideNotice.tone === 'danger'  ? styles.messageDanger
+                        : sideNotice.tone === 'warning' ? styles.messageWarning
+                                                       : styles.messageSuccess;
         return (
-          <div className={`${styles.actionMessage} ${toneClass}`}>{text}</div>
+          <div
+            key={`side-notice-${sideNotice.nonce}`}
+            className={`${styles.actionMessage} ${toneClass}`}
+          >
+            {sideNotice.text}
+          </div>
         );
       })()}
     </div>

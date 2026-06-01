@@ -1,31 +1,37 @@
 import { useCallback, useRef } from 'react';
 
+import addDefuseUrl from '../../../content/add_defuse.wav?url';
 import buttonUrl from '../../../content/button.wav?url';
 import defeatUrl from '../../../content/defeat.wav?url';
 import disarmUrl from '../../../content/disarm.wav?url';
 import explosionUrl from '../../../content/explosion.wav?url';
 import lockedCellUrl from '../../../content/locked_cell.wav?url';
+import lowTimerUrl from '../../../content/low_timer.wav?url';
 import plantMineUrl from '../../../content/plant_mine.wav?url';
 import scanUrl from '../../../content/scan.wav?url';
 import victoryUrl from '../../../content/victory.wav?url';
 
 export type SoundName =
+  | 'add_defuse'
   | 'button'
   | 'defeat'
   | 'disarm'
   | 'explosion'
   | 'locked_cell'
+  | 'low_timer'
   | 'plant_mine'
   | 'scan'
   | 'victory';
 
 // Базовая громкость для каждого звука (в дБ). Отрицательные значения = тише.
 const BASE_GAIN_DB: Record<SoundName, number> = {
+  add_defuse: -8,
   button: -9,
   defeat: -10,
   disarm: -9,
   explosion: -7,
   locked_cell: -6,
+  low_timer: -7,
   plant_mine: -9,
   scan: -5,
   victory: -10,
@@ -37,11 +43,13 @@ const GAIN_VARIATION_DB = 1;
 type SoundBuffers = Partial<Record<SoundName, AudioBuffer>>;
 
 const SOUND_URLS: Record<SoundName, string> = {
+  add_defuse: addDefuseUrl,
   button: buttonUrl,
   defeat: defeatUrl,
   disarm: disarmUrl,
   explosion: explosionUrl,
   locked_cell: lockedCellUrl,
+  low_timer: lowTimerUrl,
   plant_mine: plantMineUrl,
   scan: scanUrl,
   victory: victoryUrl,
