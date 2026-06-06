@@ -21,6 +21,7 @@ import { deduce } from '../patterns/deduce';
 import {
   pickForcedPhase2Move,
   pickAggressiveDefuse,
+  pickGambleCapture,
   filterUnsafeCaptures,
   shouldEndPhase3,
   assessHqThreats,
@@ -111,6 +112,23 @@ export function runMcts(obs: BotObservation, config: BotConfig, seed: number): M
   //    - defensive capture/defuse if enemy threatens our HQ.
   const rootMoves = enumerateMoves(rootState, { useChord: config.useChord });
 
+  // ─── Deliberate-mistake helpers ────────────────────────────────────────
+  // `blunder()` rolls against config.blunderRate; when it succeeds the
+  // current forced-move policy slot is SKIPPED, mimicking a human
+  // overlooking the obvious play. WIN-RUSH and defensive HQ moves are NOT
+  // wrapped — losing the game outright on a blunder would be too cruel.
+  const blunderRate = config.blunderRate ?? 0;
+  const earlyEndRate = config.earlyEndPhaseRate ?? 0;
+  const blunder = (): boolean => blunderRate > 0 && rand() < blunderRate;
+  // Early-end fires only when we've already made at least one move this
+  // turn — we don't want the bot to walk into a zone and immediately quit.
+  const earlyEnd = (): boolean => {
+    if (earlyEndRate <= 0) return false;
+    if (rootState.turn.capturedThisTurn.size === 0
+      && rootState.turn.minesPlacedThisTurn === 0) return false;
+    return rand() < earlyEndRate;
+  };
+
   // 6a. WIN-RUSH execution: if there is a viable rush path to enemy HQ that
   //     is short enough to finish this turn, take the next-required action
   //     on it (defuse certain mine on path / capture safe step on path).
@@ -192,16 +210,33 @@ export function runMcts(obs: BotObservation, config: BotConfig, seed: number): M
     }
   }
 
+  // Forced safe/mine slot. Easy/medium may "miss" the obvious play here.
+  // Defensive plays (when threats.distance ≤ 3) are still respected —
+  // we don't want the bot to throw the game by skipping HQ defence.
   const forced = pickForcedPhase2Move(rootState, botColor, ded, rootMoves, threats);
   if (forced.move) {
-    return { bestMove: forced.move, simsRun: 0, rootStats: [{ move: forced.move, visits: 1, meanValue: 0 }] };
+    const isDefensive = forced.reason.startsWith('defensive')
+      || forced.reason.startsWith('WIN');
+    if (isDefensive || !blunder()) {
+      return { bestMove: forced.move, simsRun: 0, rootStats: [{ move: forced.move, visits: 1, meanValue: 0 }] };
+    }
+  }
+  // Pre-MCTS early-end: if a phase already has captures/placements done
+  // this turn, give an easy/medium bot a chance to stop voluntarily.
+  if (earlyEnd()) {
+    if (rootState.turn.phase === 'phase2' && rootMoves.some((m) => m.type === 'end_phase2')) {
+      return { bestMove: { type: 'end_phase2' }, simsRun: 0, rootStats: [{ move: { type: 'end_phase2' }, visits: 1, meanValue: 0 }] };
+    }
+    if (rootState.turn.phase === 'phase3' && rootMoves.some((m) => m.type === 'end_phase3')) {
+      return { bestMove: { type: 'end_phase3' }, simsRun: 0, rootStats: [{ move: { type: 'end_phase3' }, visits: 1, meanValue: 0 }] };
+    }
   }
   // 6b. Trivial chord-like pattern: catch "number fully accounted for by
   //     flagged + certain mines → any remaining unflagged neighbour is safe"
   //     and the symmetric all-mine variant. This handles the case where the
   //     safe cell is in the display zone but only reachable via chord.
   const trivial = pickTrivialChord(rootState, botColor, ded, rootMoves);
-  if (trivial.move) {
+  if (trivial.move && !blunder()) {
     return { bestMove: trivial.move, simsRun: 0, rootStats: [{ move: trivial.move, visits: 1, meanValue: 0 }] };
   }
   if (rootMoves.length === 0) {
@@ -216,8 +251,23 @@ export function runMcts(obs: BotObservation, config: BotConfig, seed: number): M
   //    the action zone. This converts an otherwise-wasted defuse slot
   //    into information gain (and removes a real mine ~30-60% of the time).
   const aggDefuse = pickAggressiveDefuse(rootState, botColor, ded, config, rootMoves);
-  if (aggDefuse.move) {
+  if (aggDefuse.move && !blunder()) {
     return { bestMove: aggDefuse.move, simsRun: 0, rootStats: [{ move: aggDefuse.move, visits: 1, meanValue: 0 }] };
+  }
+
+  // 7b. GAMBLE-CAPTURE — at this point no certain-safe capture, no certain-
+  //     mine defuse, no defensive forced move, and no aggressive defuse
+  //     was worth doing. The gamble policy only spends a life on cells
+  //     with genuine positional payoff (enemy HQ / on a rush path to it /
+  //     adjacent to enemy HQ) AND requires lives ≥ 2. Otherwise it
+  //     returns null and we fall through to `end_phase2`.
+  if (rootState.turn.phase === 'phase2') {
+    const enemy: PlayerColor = botColor === 'red' ? 'blue' : 'red';
+    const rushForGamble = assessRushModel(rootState, botColor, enemy, mineProb);
+    const gamble = pickGambleCapture(rootState, botColor, ded, rootMoves, rushForGamble.pathCells);
+    if (gamble.move) {
+      return { bestMove: gamble.move, simsRun: 0, rootStats: [{ move: gamble.move, visits: 1, meanValue: 0 }] };
+    }
   }
 
   // 8. Defensive phase-3 mine placement — if enemy threatens our HQ and
@@ -337,9 +387,18 @@ export function runMcts(obs: BotObservation, config: BotConfig, seed: number): M
 
   // Fast path: easy difficulty / `greedyOnly` skips MCTS entirely. The greedy
   // prior already plays a reasonable game and answers in <60 ms.
+  // With non-zero `rootActionTemperature` we sample among the top candidates
+  // instead of strictly taking sortedRoot[0] — that's what makes the easy
+  // bot pick the 2nd/3rd-best move sometimes (the "honest mistakes" easy
+  // is supposed to make).
   if (config.greedyOnly || config.simulationBudget <= 0 || config.maxThinkMs <= 0) {
+    const picked = pickWithTemperature(
+      sortedRoot.map((m, i) => ({ move: m, score: sortedRoot.length - i })),
+      config.rootActionTemperature,
+      rand,
+    );
     return {
-      bestMove: sortedRoot[0],
+      bestMove: picked,
       simsRun: 0,
       rootStats: sortedRoot.map((m, i) => ({ move: m, visits: sortedRoot.length - i, meanValue: 0 })),
     };
@@ -440,9 +499,56 @@ export function runMcts(obs: BotObservation, config: BotConfig, seed: number): M
     return { bestMove: sortedRoot[0], simsRun, rootStats: [] };
   }
 
-  // Root-action temperature: optionally sample instead of argmax. For solo
-  // MVP we always pick the robust child for predictability.
+  // Root-action temperature: when > 0 we softmax-sample the root child by
+  // visit count instead of argmax. Used to inject controlled imperfection
+  // into easier difficulty tiers ("honest mistakes" — bot still chooses a
+  // sensible move, just not always THE optimal one).
+  if (config.rootActionTemperature > 0 && stats.length > 1) {
+    const sampled = pickWithTemperature(
+      stats.map((s) => ({ move: s.move, score: s.visits })),
+      config.rootActionTemperature,
+      rand,
+    );
+    return { bestMove: sampled, simsRun, rootStats: stats };
+  }
   return { bestMove: best.move, simsRun, rootStats: stats };
+}
+
+/**
+ * Softmax-sample a move from candidates by score.
+ *   - temperature ≤ 0 → strict argmax (highest score wins).
+ *   - temperature > 0 → probabilities ∝ exp(score / (max * temperature)).
+ *     Higher temperature flattens the distribution and lets the bot pick
+ *     non-optimal moves more often (controlled error rate). At temp=1 the
+ *     top move stays clearly preferred but the runner-up has a real chance.
+ */
+function pickWithTemperature(
+  candidates: Array<{ move: EngineMove; score: number }>,
+  temperature: number,
+  rand: () => number,
+): EngineMove {
+  if (candidates.length === 0) throw new Error('pickWithTemperature: no candidates');
+  if (candidates.length === 1 || temperature <= 0) {
+    let best = candidates[0];
+    for (const c of candidates) if (c.score > best.score) best = c;
+    return best.move;
+  }
+  let maxScore = -Infinity;
+  for (const c of candidates) if (c.score > maxScore) maxScore = c.score;
+  const denom = Math.max(1e-6, Math.abs(maxScore) * temperature);
+  let total = 0;
+  const weights: number[] = [];
+  for (const c of candidates) {
+    const w = Math.exp((c.score - maxScore) / denom);
+    weights.push(w);
+    total += w;
+  }
+  let r = rand() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return candidates[i].move;
+  }
+  return candidates[candidates.length - 1].move;
 }
 
 function uctSelect(node: Node, c: number, botColor: PlayerColor): Node | null {

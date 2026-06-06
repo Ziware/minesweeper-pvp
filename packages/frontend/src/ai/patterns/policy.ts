@@ -254,6 +254,96 @@ export function pickAggressiveDefuse(
   };
 }
 
+/**
+ * Pick a "gamble" capture — but ONLY when the cell promises significant
+ * positional payoff. We never burn a life "just to keep moving".
+ *
+ * Conditions ALL of:
+ *   • lives ≥ 2 — one life left ⇒ refuse any gamble (a single hit = loss).
+ *   • pMine ≤ a tight life-dependent cap (≤0.25 with 2 lives, ≤0.40 with 3+).
+ *   • The cell is "valuable" in at least ONE of these senses:
+ *       (a) it is an enemy HQ cell — capturing wins the game outright;
+ *       (b) it lies on our shortest rush path to enemy HQ (rushPath set);
+ *       (c) it is orthogonally adjacent to an enemy HQ cell — capturing it
+ *           puts US one step from winning next turn.
+ *
+ * When no candidate satisfies all three conditions we return `null` and
+ * the dispatcher falls through to `end_phase2`. This is the user-requested
+ * "don't burn lives on meaningless gambles" rule.
+ */
+export function pickGambleCapture(
+  state: EngineState,
+  color: PlayerColor,
+  ded: DeductionInfo,
+  legalMoves: EngineMove[],
+  rushPath?: Set<string>,
+): MoveDecision {
+  if (state.turn.phase !== 'phase2') return { move: null, reason: 'not phase2' };
+  const me = state.players.find((p) => p.color === color);
+  const lives = me?.lives ?? 3;
+  if (lives <= 1) {
+    return { move: null, reason: `only ${lives} life — refusing to gamble` };
+  }
+
+  // TIGHT cap: with 2 lives a coin flip is unacceptable (≤25% only).
+  // With 3+ lives we'll commit to a 40% mine chance — but only on a
+  // genuinely high-value cell, see "valuable" check below.
+  const gambleCap = lives >= 3 ? 0.40 : 0.25;
+
+  const size = state.config.boardSize;
+  const enemy: PlayerColor = color === 'red' ? 'blue' : 'red';
+  const enemyHqs = getHeadquartersCells(enemy, size);
+  const enemyHqKeys = new Set(enemyHqs.map((h) => cellKey(h.row, h.col)));
+  // Cells one orthogonal step from an enemy HQ — capturing them sets up a
+  // 1-step rush to the win on our next turn.
+  const enemyHqAdjKeys = new Set<string>();
+  for (const h of enemyHqs) {
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+      const nr = h.row + dr;
+      const nc = h.col + dc;
+      if (!isInBounds(nr, nc, size)) continue;
+      enemyHqAdjKeys.add(cellKey(nr, nc));
+    }
+  }
+
+  let bestMove: EngineMove | null = null;
+  let bestP = Infinity;
+  let bestReason = '';
+  for (const m of legalMoves) {
+    if (m.type !== 'capture') continue;
+    const k = cellKey(m.row, m.col);
+    if (ded.certainMine.has(k)) continue;          // guaranteed hit, skip
+    const p = ded.pMine.get(k) ?? 0.5;
+    if (p > gambleCap) continue;                   // too risky for our lives
+
+    // Value check — at least one of the three "worth dying for" criteria.
+    const isEnemyHq = enemyHqKeys.has(k);
+    const isOnRush = rushPath?.has(k) ?? false;
+    const isAdjEnemyHq = enemyHqAdjKeys.has(k);
+    if (!isEnemyHq && !isOnRush && !isAdjEnemyHq) continue;
+
+    // Prefer the SAFEST cell among the valuable candidates.
+    if (p < bestP) {
+      bestP = p;
+      bestMove = m;
+      bestReason = isEnemyHq ? 'enemy HQ'
+        : isOnRush ? 'on rush path'
+        : 'adj. to enemy HQ';
+    }
+  }
+
+  if (bestMove) {
+    return {
+      move: bestMove,
+      reason: `gamble capture (${bestReason}) p≈${bestP.toFixed(2)} (lives=${lives}, cap=${gambleCap.toFixed(2)})`,
+    };
+  }
+  return {
+    move: null,
+    reason: `no high-value gamble below ${gambleCap.toFixed(2)} (lives=${lives})`,
+  };
+}
+
 /** Maximum acceptable `pMine` for a capture given current lives. */
 export function capThresholdForLives(lives: number, base: number): number {
   if (lives <= 1) return 0.05;     // 1 life: refuse any uncertain capture

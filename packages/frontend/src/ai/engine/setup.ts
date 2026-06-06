@@ -150,19 +150,17 @@ function scoreCandidate(
   else if (edgeDist === 0) edgePenalty = 0.35;
   else if (edgeDist === 1) edgePenalty = 0.10;
 
-  // ─── 3b. HARD corner-triangle penalty.
-  //   Per user spec, a "corner" is every cell on or below the anti-diagonal
-  //   of the 3×3 block touching one of the four board corners — i.e. cells
-  //   whose Manhattan distance to the nearest board corner is ≤ 2. Mines
-  //   placed there sit dead all game because the enemy's capture frontier
-  //   essentially never reaches that triangle. We add a giant penalty
-  //   (orders of magnitude larger than any positive term) so the placer
-  //   only falls back into the triangle when literally nothing else is
-  //   available.
+  // ─── 3b. Dynamic corner penalty.
+  //   Closer to any board corner → bigger penalty, linearly. Maximum at
+  //   the corner cell itself (Manhattan dist 0), fully gone at dist ≥ 3.
+  //   Cells near a corner are nearly useless for mines — the enemy capture
+  //   frontier almost never reaches them — so we apply a gradient that
+  //   makes the very corners essentially unpickable but still allows
+  //   border-zone cells just outside the 3×3 corner block.
   const cornerR = Math.min(cand.row, size - 1 - cand.row);
   const cornerC = Math.min(cand.col, size - 1 - cand.col);
-  const inCornerTriangle = cornerR + cornerC <= 2;
-  const cornerTrianglePenalty = inCornerTriangle ? 10 : 0;
+  const cornerDist = cornerR + cornerC;
+  const cornerTrianglePenalty = Math.max(0, (3 - cornerDist) / 3) * 10;
 
   // ─── 4. Anti-clustering — keep the wall spread out across the border.
   let cluster = 0;

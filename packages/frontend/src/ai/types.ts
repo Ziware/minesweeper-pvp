@@ -169,6 +169,22 @@ export interface BotConfig {
   useChord: boolean;
   assumeOpponentMaxesMines: boolean;
   setupHeuristicNoise: number;
+  /**
+   * Probability ∈ [0, 1] that the bot WILL SKIP each "forced move" policy
+   * slot (forced safe capture / forced mine defuse / trivial-chord pattern
+   * / aggressive defuse / gamble). Used to inject deliberate human-like
+   * mistakes into easier difficulties: a roll succeeds → policy slot is
+   * NOT consulted on this step → fall-through to weaker MCTS / prior.
+   * Hard sets this to 0 (never blunders). Default 0 when omitted.
+   */
+  blunderRate?: number;
+  /**
+   * Probability ∈ [0, 1] of voluntarily ending phase 2 / phase 3 BEFORE
+   * the bot has exhausted its safe / useful moves. Simulates "human
+   * decided not to push further this turn". Hard sets this to 0
+   * (never gives up early). Default 0 when omitted.
+   */
+  earlyEndPhaseRate?: number;
 }
 
 /** Observation = what the bot legitimately knows. The driver builds this by
