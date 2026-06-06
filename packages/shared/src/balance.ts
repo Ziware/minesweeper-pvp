@@ -75,6 +75,16 @@ export const TIME_CONTROL_PRESETS: Array<{ label: string; timeControl: TimeContr
     },
   }));
 
+/**
+ * Sentinel-проверка «без таймера». Передавать `Infinity` по сокету нельзя
+ * (JSON превратит в `null`), поэтому шахматные часы с `baseMs === 0`
+ * трактуются как «бесконечные»: UI рисует ∞, сервер не тратит время и
+ * не проверяет timeout.
+ */
+export function isUntimedControl(tc: TimeControl): boolean {
+  return tc.baseMs === 0;
+}
+
 /** Контроль времени по умолчанию (выбран `defaultPresetIndex`). */
 export const DEFAULT_TIME_CONTROL: TimeControl =
   TIME_CONTROL_PRESETS[BALANCE.timeControls.defaultPresetIndex].timeControl;

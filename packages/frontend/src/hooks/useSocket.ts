@@ -266,6 +266,19 @@ export function useSocket() {
   const toggleMark      = (row: number, col: number, mark: CellMark) =>
     socketRef.current?.emit('toggleMark',      { row, col, mark });
 
+  /** Технический канал: лог одиночной игры против бота. Не меняет состояние,
+   *  никак не отображается в UI — нужен только для серверного логирования. */
+  const logSoloEvent = (data: {
+    sessionId: string;
+    playerName: string;
+    humanColor: PlayerColor;
+    difficulty: string;
+    event: string;
+    details?: Record<string, unknown>;
+  }) => {
+    socketRef.current?.emit('soloLog', data);
+  };
+
   const returnToMenu = () => {
     clearSession();
     setScreen('lobby');
@@ -296,5 +309,6 @@ export function useSocket() {
     showLocalError,
     returnToMenu,
     leaveRoom,
+    logSoloEvent,
   };
 }

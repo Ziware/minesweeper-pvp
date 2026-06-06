@@ -1,10 +1,41 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { ServerToClientEvents, ClientToServerEvents } from '@minesweeper-pvp/shared';
 import { RoomManager } from './roomManager';
 import { getClientIp } from './gameLogger';
+
+const SOLO_LOG_ROOT = process.env.GAME_LOG_DIR
+  ? path.join(process.env.GAME_LOG_DIR, 'solo')
+  : path.resolve(process.cwd(), 'logs', 'solo');
+
+function safeSegmentSolo(value: string): string {
+  return value
+    .trim()
+    .replace(/[^\p{L}\p{N}._-]+/gu, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64) || 'unknown';
+}
+
+function appendSoloLog(
+  sessionId: string,
+  playerName: string,
+  payload: Record<string, unknown>,
+) {
+  try {
+    fs.mkdirSync(SOLO_LOG_ROOT, { recursive: true });
+    const file = path.join(
+      SOLO_LOG_ROOT,
+      `${safeSegmentSolo(playerName)}-${safeSegmentSolo(sessionId)}.log.jsonl`,
+    );
+    fs.appendFileSync(file, `${JSON.stringify(payload)}\n`, 'utf8');
+  } catch (err) {
+    console.warn('[soloLog] failed to write', err);
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -171,6 +202,21 @@ io.on('connection', (socket) => {
       if (room.players.length > 0) broadcastGameState(room.id);
       console.log(`[leaveRoom] ${socket.id} left room ${room.id}`);
     }
+  });
+
+  socket.on('soloLog', ({ sessionId, playerName, humanColor, difficulty, event, details }) => {
+    const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+    appendSoloLog(sessionId, playerName, {
+      ts: new Date().toISOString(),
+      sessionId,
+      socketId: socket.id,
+      ip,
+      playerName,
+      humanColor,
+      difficulty,
+      event,
+      ...(details ?? {}),
+    });
   });
 
   socket.on('disconnect', () => {

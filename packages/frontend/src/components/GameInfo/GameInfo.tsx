@@ -89,6 +89,7 @@ function pluralize(n: number, forms: [string, string, string]): string {
 }
 
 function formatTime(ms: number): string {
+  if (!Number.isFinite(ms)) return '∞';
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
@@ -157,8 +158,15 @@ export function GameInfo({
     return () => clearInterval(id);
   }, [turn.currentTurnStartedAtMs]);
 
-  const redRemaining  = computeRemainingMs(redPlayer,  turn, serverClientOffsetRef.current);
-  const blueRemaining = computeRemainingMs(bluePlayer, turn, serverClientOffsetRef.current);
+  // В режиме «без таймера» (baseMs === 0) сервер хранит timeMs = 0 у обоих —
+  // нам не нужно его декрементить, и в UI должна гореть ∞.
+  const untimedControl = config.timeControl.baseMs === 0;
+  const redRemaining  = untimedControl
+    ? Number.POSITIVE_INFINITY
+    : computeRemainingMs(redPlayer,  turn, serverClientOffsetRef.current);
+  const blueRemaining = untimedControl
+    ? Number.POSITIVE_INFINITY
+    : computeRemainingMs(bluePlayer, turn, serverClientOffsetRef.current);
 
   const renderHearts = (lives: number, max: number) =>
     Array.from({ length: max }, (_, i) => (
@@ -167,7 +175,7 @@ export function GameInfo({
       </span>
     ));
 
-  const isLowTimeMs = (ms: number) => ms < 60_000;
+  const isLowTimeMs = (ms: number) => Number.isFinite(ms) && ms < 60_000;
 
   // ─── Компактный баннер игрока (мобильная раскладка) ───────────────────────
   // Одна строка: [цвет] [часы] [жизни] [🏆 если победитель].

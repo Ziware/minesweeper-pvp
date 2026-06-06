@@ -6,7 +6,8 @@
     "dev": "vite",
     "prebuild": "node ../shared/scripts/gen-balance.js",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "precalc:patterns": "node scripts/gen-patterns.js"
   },
   "dependencies": {
     "@minesweeper-pvp/shared": "*",

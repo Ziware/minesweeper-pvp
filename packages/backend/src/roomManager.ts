@@ -871,15 +871,16 @@ export class RoomManager {
       return true;
     }
 
+    const untimed = room.config.timeControl.baseMs === 0;
     // Списываем потраченное на ход время и начисляем инкремент
     this.commitTurnTime(room);
-    if (cur.timeMs <= 0) {
+    if (!untimed && cur.timeMs <= 0) {
       const opp = room.players.find((p) => p.color !== room.turn.currentPlayer)!;
       cur.timeMs = 0;
       this.finalizeGameOver(room, opp.color, 'time');
       return true;
     }
-    cur.timeMs += room.config.timeControl.incrementMs;
+    if (!untimed) cur.timeMs += room.config.timeControl.incrementMs;
 
     const turnsPlayed = room.turn.turnsPlayed + 1;
     const prevDefusesPerTurn = room.turn.defusesPerTurn;
@@ -910,6 +911,11 @@ export class RoomManager {
   private commitTurnTime(room: Room): void {
     const startedAt = room.turn.currentTurnStartedAtMs;
     if (startedAt === null) return;
+    // Режим «без таймера»: часы не идут, время не списываем.
+    if (room.config.timeControl.baseMs === 0) {
+      room.turn.currentTurnStartedAtMs = null;
+      return;
+    }
     const elapsed = Math.max(0, Date.now() - startedAt);
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer);
     if (cur) {
@@ -927,6 +933,8 @@ export class RoomManager {
     if (room.phase === 'waiting' || room.phase === 'setup' || room.phase === 'finished') {
       return false;
     }
+    // Режим «без таймера»: timeout невозможен.
+    if (room.config.timeControl.baseMs === 0) return false;
     const startedAt = room.turn.currentTurnStartedAtMs;
     if (startedAt === null) return false;
     const cur = room.players.find((p) => p.color === room.turn.currentPlayer);
@@ -972,7 +980,8 @@ export class RoomManager {
   getBoardForPlayer(room: Room, color: PlayerColor) {
     // По окончании партии открываем расположение всех мин обоим игрокам и
     // убираем флажки/вопросы — это превращает финальное поле в «итоговую карту».
-    if (room.phase === 'finished') {
+    // Режим отладки (env DEBUG_REVEAL_BOARD=1) — отдаём полное поле всегда.
+    if (room.phase === 'finished' || process.env.DEBUG_REVEAL_BOARD === '1') {
       return room.board.map((row) =>
         row.map((cell) => ({
           owner: cell.owner,

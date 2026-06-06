@@ -170,4 +170,14 @@ export interface ClientToServerEvents {
   toggleMark:      (data: C2S_ToggleMark) => void;
   // tabId позволяет серверу различать вкладки одного устройства
   restoreSession:  (data: { roomId: string; playerColor: PlayerColor; tabId: string }) => void;
+  /** Технический канал для одиночной игры — события идут без изменения
+   *  состояния, только для логирования факта партии vs. компьютер. */
+  soloLog:         (data: {
+    sessionId: string;
+    playerName: string;
+    humanColor: PlayerColor;
+    difficulty: string;
+    event: string;
+    details?: Record<string, unknown>;
+  }) => void;
 }

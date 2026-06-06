@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { PlayerColor } from '@minesweeper-pvp/shared';
 import { useSocket } from './hooks/useSocket';
 import { useSound } from './hooks/useSound';
 import { useSettings } from './hooks/useSettings';
+import { useLocalGame } from './ai/driver/useLocalGame';
+import type { Difficulty } from './ai/types';
 import { Lobby }     from './components/Lobby/Lobby';
 import { Board, MobileInputMode } from './components/Board/Board';
 import { GameInfo, SideNotice, describeLastAction }  from './components/GameInfo/GameInfo';
@@ -10,15 +13,62 @@ import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
 import { Icon } from './components/Icon/Icon';
 import styles from './App.module.css';
 
+type GameMode = 'pvp' | 'solo';
+
 export default function App() {
+  // Solo-mode parameters set from the Lobby. `soloEnabled` flips on when the
+  // user clicks "Start" on the vs-Computer card; it's cleared on returnToMenu.
+  const [gameMode, setGameMode] = useState<GameMode>('pvp');
+  const [soloEnabled, setSoloEnabled] = useState(false);
+  const [soloHumanColor, setSoloHumanColor] = useState<PlayerColor>('red');
+  const [soloDifficulty, setSoloDifficulty] = useState<Difficulty>('normal');
+  const [soloHumanName, setSoloHumanName] = useState('');
+  const [soloNonce, setSoloNonce] = useState(0);
+  // sessionId стабилен на одну партию vs. бот — бэкенд использует его, чтобы
+  // склеивать события одного матча в один JSONL-файл.
+  const soloSessionIdRef = useRef<string>('');
+
+  const pvpSession = useSocket();
+  const logSoloEvent = pvpSession.logSoloEvent;
+  const soloSession = useLocalGame({
+    enabled: soloEnabled,
+    humanColor: soloHumanColor,
+    humanName: soloHumanName || 'Игрок',
+    difficulty: soloDifficulty,
+    gameNonce: soloNonce,
+    onLogEvent: (event, details) => {
+      if (!soloSessionIdRef.current) return;
+      logSoloEvent({
+        sessionId:  soloSessionIdRef.current,
+        playerName: soloHumanName || 'Игрок',
+        humanColor: soloHumanColor,
+        difficulty: soloDifficulty,
+        event,
+        details,
+      });
+    },
+  });
+
+  const session = gameMode === 'solo' ? soloSession : pvpSession;
   const {
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, serverReachable,
     createRoom, joinRoom,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     showLocalError,
-    returnToMenu, leaveRoom,
-  } = useSocket();
+    returnToMenu: sessionReturnToMenu, leaveRoom: sessionLeaveRoom,
+  } = session;
+
+  const returnToMenu = () => {
+    sessionReturnToMenu();
+    setSoloEnabled(false);
+    setGameMode('pvp');
+  };
+  const leaveRoom = () => {
+    sessionLeaveRoom();
+    setSoloEnabled(false);
+    setGameMode('pvp');
+  };
 
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -294,6 +344,11 @@ export default function App() {
           : 0;
         const remaining = Math.max(0, player.timeMs - elapsed);
         const color = player.color;
+        if (!Number.isFinite(player.timeMs)) {
+          // No-timer mode (solo vs bot): never fire low-time alerts.
+          lowTimeFiredRef.current[color] = false;
+          continue;
+        }
         if (remaining < LOW_TIME_MS) {
           if (!lowTimeFiredRef.current[color]) {
             lowTimeFiredRef.current[color] = true;
@@ -403,12 +458,24 @@ export default function App() {
       <div className={styles.screenBody}>
         <Lobby
           onCreateRoom={(name, timeControl) => {
+            setGameMode('pvp');
             playButton();
             createRoom(name, timeControl);
           }}
           onJoinRoom={(id, name) => {
+            setGameMode('pvp');
             playButton();
             joinRoom(id, name);
+          }}
+          onStartSolo={(name, difficulty, humanColor) => {
+            playButton();
+            setSoloHumanName(name);
+            setSoloDifficulty(difficulty);
+            setSoloHumanColor(humanColor);
+            soloSessionIdRef.current = `solo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            setGameMode('solo');
+            setSoloEnabled(true);
+            setSoloNonce((n) => n + 1);
           }}
           onUiClick={playButton}
         />

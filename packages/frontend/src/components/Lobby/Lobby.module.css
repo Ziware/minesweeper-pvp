@@ -2,106 +2,170 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 0;
+  justify-content: flex-start;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: #1a1a2e;
   color: #eee;
-  gap: 20px;
-  padding: 24px;
+  gap: 12px;
+  /* Верхний паддинг рассчитан так, чтобы PvP-вариант оказался примерно
+     в центре экрана; при переключении в solo нижняя часть просто
+     становится короче, а верхние блоки (бренд, имя, переключатель)
+     остаются на месте — UI не «прыгает». */
+  padding: 12vh 20px 20px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.row {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.card {
-  background: #16213e;
-  border-radius: 12px;
-  padding: 22px 26px;
+/* ───── Минималистичная шапка ───── */
+.brandHeader {
+  text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: 280px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.brandTitle {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #eef;
+  letter-spacing: 0.3px;
+}
+.brandSubtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #889;
 }
 
-.card h2 { margin: 0; font-size: 1.1rem; }
+/* ───── Сетка с двумя соседними карточками (Создать/Войти) ───── */
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  max-width: 720px;
+}
 
-.hint { margin: 0; font-size: 0.85rem; color: #778; }
+/* ───── Универсальная карточка ───── */
+.card {
+  background: #16213e;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  flex: 0 0 auto;
+}
+
+/* Внутри .row карточки делят пространство поровну и тянутся на одну высоту */
+.row .card {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+/* Кнопка/последний элемент карточки прижимается к низу, чтобы выровнять
+   высоты карточек «Создать» и «Войти» (у второй есть дополнительный input). */
+.row .card > .btnRed,
+.row .card > .btnBlue {
+  margin-top: auto;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #eef;
+  text-align: center;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #889;
+  text-align: center;
+}
 
 .input {
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-radius: 8px;
-  border: 1px solid #333;
-  background: #0f3460;
+  border: 1px solid #2a2f55;
+  background: #0e1535;
   color: #eee;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.15s;
 }
+.input:focus { border-color: #3498db; }
 
 .inputError { border-color: #e74c3c; }
-.fieldError { color: #e74c3c; font-size: 0.82rem; margin-top: -6px; }
+.fieldError { color: #e74c3c; font-size: 0.8rem; margin-top: -4px; text-align: center; }
 
-.btnRed {
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  background: #c0392b;
-  color: white;
-  font-size: 1rem;
-  cursor: pointer;
-  font-weight: bold;
-  transition: background 0.2s;
-}
-.btnRed:hover { background: #e74c3c; }
-
+.btnRed,
 .btnBlue {
-  padding: 12px;
+  padding: 10px;
   border-radius: 8px;
   border: none;
-  background: #2980b9;
   color: white;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
-  font-weight: bold;
-  transition: background 0.2s;
+  font-weight: 600;
+  text-align: center;
+  transition: filter 0.15s, transform 0.05s;
 }
-.btnBlue:hover  { background: #3498db; }
-.btnBlue:disabled { background: #444; cursor: not-allowed; }
+.btnRed  { background: #c0392b; }
+.btnBlue { background: #1f6fb2; }
+.btnRed:hover,
+.btnBlue:hover { filter: brightness(1.1); }
+.btnRed:active,
+.btnBlue:active { transform: translateY(1px); }
+.btnBlue:disabled { background: #2c2f4a; color: #777; cursor: not-allowed; }
 
+/* ───── Метки и пресеты ───── */
 .tcLabel {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: #aab;
-  margin-top: 4px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .tcOptions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* 2×2 для четырёх пресетов времени */
+.tcOptionsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
 .tcOption {
   flex: 1;
-  padding: 9px 6px;
+  padding: 8px 8px;
   border-radius: 8px;
-  border: 1px solid #333;
+  border: 1px solid #2a2f55;
   background: #0f3460;
   color: #cfd0d6;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
   font-weight: 600;
+  text-align: center;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.tcOption:hover { background: #154480; }
+.tcOption:hover { background: #142060; }
 
 .tcOptionActive {
   background: #1f6fb2;
   color: #fff;
   border-color: #3498db;
-  box-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+  box-shadow: 0 0 6px rgba(52, 152, 219, 0.45);
 }
 
 .error {
@@ -112,29 +176,27 @@
   font-weight: bold;
 }
 
-/* ────────── Мобильная раскладка лобби ──────────
-   На узких экранах две карточки «Создать / Войти» переходят в стек,
-   и обе тянутся на всю ширину экрана с отступами по 12px. */
+/* ────────── Мобильная раскладка ────────── */
 @media (max-width: 900px) {
   .container {
-    padding: 16px 12px;
-    gap: 14px;
-    justify-content: flex-start;
-    /* Чтобы при появлении клавиатуры iOS лобби не «прилипало» по центру */
-    padding-top: max(16px, env(safe-area-inset-top));
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    gap: 10px;
+    padding: 6vh 12px 14px;
+    padding-top: max(6vh, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
   }
+  .brandTitle { font-size: 1.2rem; }
+  .brandSubtitle { font-size: 0.8rem; }
   .row {
     flex-direction: column;
     width: 100%;
-    gap: 14px;
+    gap: 10px;
   }
   .card {
     width: 100%;
     min-width: 0;
-    padding: 18px 18px;
+    max-width: none;
+    padding: 12px 14px;
   }
-  .card h2 { font-size: 1.05rem; }
   .tcOptions { flex-wrap: wrap; }
   .tcOption { flex: 1 1 30%; }
 }
