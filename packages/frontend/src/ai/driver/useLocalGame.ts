@@ -94,6 +94,12 @@ export function useLocalGame(opts: UseLocalGameOpts): UseLocalGameApi {
       humanColor: opts.humanColor,
       humanName: opts.humanName,
       difficulty: opts.difficulty,
+      // Бот-метаданные (план расстановки, MCTS-статистика выбранного хода,
+      // топ-альтернативы, ошибки fallback'ов) идут отдельной струёй в
+      // тот же логгер, что и обычные события движка.
+      onBotMeta: (kind, details) => {
+        opts.onLogEvent?.(kind, details);
+      },
     });
     driverRef.current = driver;
 

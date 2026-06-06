@@ -43,6 +43,13 @@ export interface DriverOpts {
   humanName: string;
   botName?: string;
   difficulty: Difficulty;
+  /**
+   * Optional callback: получает «технические» события от бота, которые не
+   * являются ApplyEvent (например, сводка MCTS-поиска, диагностика
+   * fallback'ов). Сейчас используется только в [`useLocalGame`](packages/frontend/src/ai/driver/useLocalGame.ts:121)
+   * для записи в solo-лог.
+   */
+  onBotMeta?: (kind: string, details: Record<string, unknown>) => void;
 }
 
 export type DriverListener = (state: EngineState, event?: ApplyEvent) => void;
@@ -61,12 +68,14 @@ export class LocalGameDriver {
    *  used by determinizer for the OPPONENT side. For solo, the opponent IS
    *  the bot; the human's view doesn't run determinizer. Reset every game. */
   private oppMinesRemovedByBot = 0;
+  private onBotMeta: DriverOpts['onBotMeta'];
 
   constructor(opts: DriverOpts) {
     this.humanColor = opts.humanColor;
     this.botColor = oppositeColor(opts.humanColor);
     this.difficulty = opts.difficulty;
     this.botConfig = DIFFICULTY_PRESETS[opts.difficulty];
+    this.onBotMeta = opts.onBotMeta;
     const cfg = makeConfig(opts.config);
     this.state = createInitialState({
       config: cfg,
@@ -167,16 +176,31 @@ export class LocalGameDriver {
       seed: this.seed,
       noise: this.botConfig.setupHeuristicNoise,
     });
+    // Лог метаданных: какой план расстановки выбрал бот. Полезно для разбора
+    // («бот всегда ставит мины слишком близко к HQ» / «никогда не закрывает
+    // правый фланг»).
+    this.onBotMeta?.('bot_setup_planned', {
+      botColor: this.botColor,
+      required,
+      placedCount: Math.min(required, plan.length),
+      plan,
+      setupHeuristicNoise: this.botConfig.setupHeuristicNoise,
+    });
     // Apply the plan instantly (no pacing for setup — both players' setups
     // are independent; we don't want the bot to slow down the human).
+    //
+    // CRITICAL: каждое размещение должно вызвать emit(), чтобы лог-канал
+    // (onLogEvent в useLocalGame) получил setup_mine_toggled для каждой
+    // мины бота. Раньше события молча терялись, и в JSONL был виден только
+    // финальный setup_confirmed — стартовая расстановка бота отсутствовала.
     for (let i = 0; i < required && i < plan.length; i++) {
       const { row, col } = plan[i];
-      const ev = applyPlaceMineSetupAs(this.state, this.botColor, row, col);
-      // ignore errors silently (best-effort)
-      if ((ev as any).kind === 'ERROR') break;
+      const placeEv = applyPlaceMineSetupAs(this.state, this.botColor, row, col);
+      if ((placeEv as any).kind === 'ERROR') break;
+      this.emit(placeEv);
     }
-    const ev = applyConfirmSetupAs(this.state, this.botColor);
-    this.emit((ev as any).kind === 'ERROR' ? undefined : ev);
+    const confirmEv = applyConfirmSetupAs(this.state, this.botColor);
+    this.emit((confirmEv as any).kind === 'ERROR' ? undefined : confirmEv);
     if (this.state.turn.currentPlayer === this.botColor && this.state.phase !== 'setup') {
       this.maybeScheduleBotTurn();
     }
@@ -202,23 +226,60 @@ export class LocalGameDriver {
     const obs = buildBotObservation(this.state, this.botColor, this.oppMinesRemovedByBot);
     const seed = (this.seed = ((this.seed * 1103515245) + 12345) | 0);
     let move: EngineMove;
+    let mctsMeta: { simsRun: number; topMoves: Array<{ move: EngineMove; visits: number; meanValue: number }> } | null = null;
+    const decisionStartMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     try {
       const res = runMcts(obs, this.botConfig, seed);
       move = res.bestMove;
+      // Сохраняем top-3 альтернатив по числу визитов и средней оценке —
+      // показывает, что MCTS реально рассматривал и насколько уверенно был
+      // выбран финальный ход.
+      const sortedStats = res.rootStats
+        .slice()
+        .sort((a, b) => b.visits - a.visits)
+        .slice(0, 3);
+      mctsMeta = { simsRun: res.simsRun, topMoves: sortedStats };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[LocalGameDriver] bot search failed', err);
+      this.onBotMeta?.('bot_search_failed', {
+        phase: this.state.turn.phase,
+        error: String((err as any)?.message ?? err),
+      });
       // Emergency fallback: end the turn so the game can progress.
       move = this.state.turn.phase === 'phase3' ? { type: 'end_phase3' } :
              this.state.turn.phase === 'phase2' ? { type: 'end_phase2' } :
              // Setup or phase1 with no fallback — log and bail.
              { type: 'end_phase2' };
     }
+    const decisionMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - decisionStartMs);
+    // Лог метаданных решения бота: чем он думал, сколько симуляций успел
+    // развернуть, какие альтернативы рассматривал, сколько ms ушло. Это
+    // идёт ПЕРЕД самим эмитом move-события, чтобы в логе сразу было
+    // понятно «как принято» и потом «что сделано».
+    const me = this.state.players.find((p) => p.color === this.botColor);
+    this.onBotMeta?.('bot_decision', {
+      phase: this.state.turn.phase,
+      difficulty: this.difficulty,
+      pickedMove: move,
+      simsRun: mctsMeta?.simsRun ?? 0,
+      decisionMs,
+      topMoves: mctsMeta?.topMoves ?? [],
+      lives: me?.lives,
+      capturedThisTurn: this.state.turn.capturedThisTurn.size,
+      defusesLeft: this.state.turn.defusesPerTurn - this.state.turn.defusesUsedThisTurn,
+      minesPlacedThisTurn: this.state.turn.minesPlacedThisTurn,
+    });
     const res = applyMove(this.state, move);
     if (!res.ok) {
       // Shouldn't happen — but if it does, force an end-phase to avoid stall.
       // eslint-disable-next-line no-console
       console.warn('[LocalGameDriver] bot picked illegal move, forcing end-phase', move, res.error);
+      this.onBotMeta?.('bot_illegal_move', {
+        attemptedMove: move,
+        error: res.error,
+        phase: this.state.turn.phase,
+      });
       const fallback: EngineMove =
         this.state.turn.phase === 'phase3' ? { type: 'end_phase3' } : { type: 'end_phase2' };
       const r2 = applyMove(this.state, fallback);

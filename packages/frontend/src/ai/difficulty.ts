@@ -37,75 +37,79 @@ export const DIFFICULTY_PRESETS: Record<Difficulty, BotConfig> = {
   // │ исключительно в качестве MCTS-поиска и количестве «шума».          │
   // └──────────────────────────────────────────────────────────────────────┘
   easy: {
-    // Думает максимум 200 мс и ходит почти по чистому prior'у.
-    // НО: greedyOnly: true — MCTS вообще не запускается, бот идёт на
-    // первый кандидат отсортированного по приору списка.
-    // С большим rootActionTemperature (0.45) и rolloutTemperature (0.55)
-    // даже отбор кандидатов сильно зашумлён — бот часто выбирает
-    // 2-й/3-й лучший вариант. dangerThresholdCapture поднят до 0.40 —
-    // бот регулярно лезет в спорные клетки и теряет жизни, делая партии
-    // короткими и проходимыми.
-    simulationBudget: 200,
-    maxThinkMs: 150,
+    // Максимально ослабленный «новичок»: бот делает «безопасные» ходы
+    // ровно настолько, чтобы не сливаться сразу на certain-mine, но почти
+    // всё остальное игнорирует.
+    //
+    // Параметры подобраны так, чтобы бот:
+    //   • не запускал MCTS (greedyOnly), не имел сложной дедукции
+    //     (trivial → видит только N=0 / N=all-mines, без 1-2-1 и subset);
+    //   • в 70 % случаев пропускал ЛЮБОЙ forced-слой политики
+    //     (forced-safe-capture, forced-mine-defuse, trivial-chord,
+    //     aggressive defuse). То есть видит очевидный безопасный ход —
+    //     и НЕ делает его в 70 % случаев. Это уровень «играю первый раз».
+    //   • в 35 % случаев досрочно завершает фазу, не доходя до конца хода.
+    //   • НЕ использует chord (useChord:false) — chord даёт сразу несколько
+    //     безопасных капчур, а новичок про эту механику не знает.
+    //   • Берёт капчуры с pMine до 0.50 (50 % шанс мины) — регулярно
+    //     теряет жизни. Defuse порог 0.65 — почти никогда не разминирует
+    //     уверенно.
+    //   • rootActionTemperature 0.7 + rolloutTemperature 0.7 → даже среди
+    //     ходов одного слоя выбор сильно случайный.
+    //   • setupHeuristicNoise 0.7 → расстановка стартовых мин почти
+    //     случайная.
+    simulationBudget: 150,
+    maxThinkMs: 100,
     greedyOnly: true,
     deductionLevel: 'trivial',
-    layoutSamples: 3,
-    rolloutDepth: 2,
-    uctC: 1.4,
-    phase1TopK: 4,
-    phase3TopK: 4,
+    layoutSamples: 2,
+    rolloutDepth: 1,
+    uctC: 1.6,
+    phase1TopK: 3,
+    phase3TopK: 3,
     rolloutPolicy: 'weightedRandom',
-    rolloutTemperature: 0.55,
+    rolloutTemperature: 0.70,
     opponentModel: 'weak',
-    rootActionTemperature: 0.45,
-    dangerThresholdCapture: 0.40,
-    dangerThresholdDefuse: 0.55,
-    useChord: true,
+    rootActionTemperature: 0.70,
+    dangerThresholdCapture: 0.50,
+    dangerThresholdDefuse: 0.65,
+    useChord: false,
     assumeOpponentMaxesMines: false,
-    setupHeuristicNoise: 0.45,
-    // Намеренные ошибки easy-бота:
-    //   • 40 % шанс пропустить каждый «forced» слой политики — то есть
-    //     не сделать форсированный безопасный захват / forced-defuse /
-    //     trivial-chord; бот «не заметит» очевидную выгоду.
-    //   • 20 % шанс досрочно закончить фазу даже если есть осмысленные
-    //     ходы — «человек решил, что хватит на сегодня».
-    blunderRate: 0.40,
-    earlyEndPhaseRate: 0.2,
+    setupHeuristicNoise: 0.70,
+    blunderRate: 0.70,
+    earlyEndPhaseRate: 0.35,
   },
   normal: {
-    // Бот того же стиля что hard (full-дедукция, greedyWithJitter,
-    // strong opponentModel), но с тремя ключевыми ослаблениями:
-    //   • simulationBudget / maxThinkMs / layoutSamples / rolloutDepth /
-    //     topK заметно урезаны — MCTS-дерево мельче, оценка позиций
-    //     более шумная.
-    //   • rootActionTemperature: 0.18 — бот иногда выбирает не самый
-    //     посещаемый, а слегка менее посещаемый узел. Это вносит
-    //     «ошибки на ровном месте» без слива на certain-mine.
-    //   • setupHeuristicNoise: 0.25 — начальная расстановка мин менее
-    //     отточенная.
-    //   • dangerThresholdCapture: 0.28 — чуть охотнее лезет в риск.
-    simulationBudget: 600,
-    maxThinkMs: 400,
-    deductionLevel: 'full',
-    layoutSamples: 5,
+    // Уровень «крепкий любитель»: уже видит явные паттерны и думает MCTS,
+    // но регулярно ошибается:
+    //   • subset-дедукция вместо full — ловит 1-2-1, но НЕ решает
+    //     полную CSP-цепочку. Сложные позиции пропускает.
+    //   • opponentModel: 'mirror' — соперник в симуляциях такой же как мы,
+    //     не идеальный.
+    //   • 30 % шанс пропустить forced слой; 18 % шанс досрочного
+    //     завершения фазы — заметно чаще, чем было раньше (было 15/10).
+    //   • dangerThresholdCapture: 0.35 — спокойно лезет в риск.
+    //   • rootActionTemperature: 0.35 — частые «ошибки на ровном месте».
+    //   • setupHeuristicNoise: 0.4 — стартовая расстановка с шумом.
+    simulationBudget: 500,
+    maxThinkMs: 350,
+    deductionLevel: 'subset',
+    layoutSamples: 4,
     rolloutDepth: 3,
-    uctC: 1.0,
-    phase1TopK: 6,
+    uctC: 1.1,
+    phase1TopK: 5,
     phase3TopK: 5,
     rolloutPolicy: 'greedyWithJitter',
-    rolloutTemperature: 0.25,
+    rolloutTemperature: 0.30,
     opponentModel: 'mirror',
-    rootActionTemperature: 0.18,
-    dangerThresholdCapture: 0.28,
-    dangerThresholdDefuse: 0.45,
+    rootActionTemperature: 0.35,
+    dangerThresholdCapture: 0.35,
+    dangerThresholdDefuse: 0.50,
     useChord: true,
-    assumeOpponentMaxesMines: true,
-    setupHeuristicNoise: 0.25,
-    // Намеренные ошибки medium-бота — заметно реже чем у easy:
-    //   • 15 % шанс пропустить forced слой;
-    //   • 10 % шанс досрочно закончить фазу.
-    blunderRate: 0.15,
-    earlyEndPhaseRate: 0.10,
+    assumeOpponentMaxesMines: false,
+    setupHeuristicNoise: 0.40,
+    blunderRate: 0.30,
+    earlyEndPhaseRate: 0.18,
   },
   hard: {
     // Максимальная сила: длинные роллауты, много определёнок,

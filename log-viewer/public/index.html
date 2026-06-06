@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minesweeper PvP — просмотрщик логов</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">🪖 Просмотрщик логов</div>
+    <div class="topbar-actions">
+      <button id="btnBack" class="btn btn-secondary" hidden>← Назад к списку</button>
+      <button id="btnRefresh" class="btn btn-secondary">Обновить список</button>
+    </div>
+  </header>
+
+  <main id="screen-list" class="screen">
+    <h2>Доступные партии</h2>
+    <p class="hint">
+      Положи лог-файл <code>*.jsonl</code> (или директорию с
+      <code>game.log.jsonl</code> внутри) в каталог
+      <code>log-viewer/logs/</code> и нажми «Обновить список».
+    </p>
+    <div id="logList" class="log-list">Загрузка…</div>
+  </main>
+
+  <main id="screen-viewer" class="screen" hidden>
+    <div class="viewer-header">
+      <div class="viewer-info">
+        <div id="viewerTitle" class="viewer-title">—</div>
+        <div id="viewerSubtitle" class="viewer-subtitle">—</div>
+      </div>
+      <div class="viewer-controls">
+        <label class="toolbar-toggle" title="Пропускать не игровые события (без изменения поля)">
+          <input type="checkbox" id="chkSkipNonGame" checked />
+          Только игровые ходы
+        </label>
+        <button id="btnFirst" class="btn">⏮ В начало</button>
+        <button id="btnPrev"  class="btn">← Назад</button>
+        <span id="stepLabel" class="step-label">0 / 0</span>
+        <button id="btnNext"  class="btn">Вперёд →</button>
+        <button id="btnLast"  class="btn">В конец ⏭</button>
+      </div>
+    </div>
+
+    <div class="viewer-grid">
+      <section class="board-wrap">
+        <div id="boardLegend" class="board-legend"></div>
+        <div id="board" class="board"></div>
+      </section>
+
+      <aside class="side-panel">
+        <h3>Состояние</h3>
+        <div id="statePanel" class="state-panel"></div>
+
+        <h3>Событие</h3>
+        <div id="eventPanel" class="event-panel"></div>
+
+        <h3>История</h3>
+        <div id="eventList" class="event-list"></div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
