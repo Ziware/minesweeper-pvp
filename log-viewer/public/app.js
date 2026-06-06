@@ -1,23 +1,24 @@
 /**
- * Vanilla-JS local log viewer.
+ * Vanilla-JS local log viewer (unified schema).
  *
- * Architecture:
- *   - On load: fetches /api/logs and renders the list screen.
- *   - Opening a log: fetches its content, parses jsonl line-by-line,
- *     NORMALIZES events into a flat shape (so PvP server logs and
- *     local solo logs go through the same replay engine), and builds
- *     a per-event snapshot list.
- *   - Step controls (← / →, Home / End) move a cursor over the snapshots
- *     — navigation is O(1).
- *   - The board is rendered FULLY OPEN: mines of both colours and cell
- *     ownership are always shown. Numbers are shown ONLY inside the
- *     currently-active display zone (3×3) — matching the in-game UX.
- *   - A "Только игровые ходы" toggle filters out events that don't
- *     change the visible board (connect/disconnect, room_created,
- *     session_restored, defuses_granted, etc.).
+ * Каждая партия теперь — это директория logs/<mode>/<sess>/ с двумя файлами:
+ *   • meta.json       — описание партии (mode, players, IP, config, итог);
+ *   • game.log.jsonl  — упрощённый «игровой» лог.
+ *
+ * Словарь игровых событий ОДИН для PvP и solo:
+ *   setup_mine, setup_confirmed, game_started, zone_select,
+ *   cell_open, mine_hit, mine_defused, phase3_mine, turn_end, game_finished.
+ *
+ * Просмотрщик:
+ *   • Список сессий (/api/sessions) — фильтрует PvP/solo, группирует по дням.
+ *   • Открытие сессии (/api/session/<id>) — строит линейку snapshot'ов и
+ *     даёт пошаговое перемещение клавишами/кнопками.
+ *   • Поле всегда нарисовано «по-видимому»: владельцы клеток, мины обоих
+ *     игроков, цифры — только внутри текущей display 3×3.
+ *   • Тоггл «Только игровые ходы» здесь почти не нужен (других событий
+ *     просмотрщику не присылают), но оставлен на будущее.
  */
 
-// ─── Defaults (mirrored from packages/shared/src/balance.config.json) ──────
 const DEFAULT_CONFIG = {
   boardSize: 10,
   initialMinesRed: 7,
@@ -25,35 +26,17 @@ const DEFAULT_CONFIG = {
   maxLives: 3,
 };
 
-// Event kinds we consider "game-changing" for the skip-non-game filter.
-// Everything else (room_created, player_joined, session_restored, …) is
-// hidden when the toggle is on.
 const GAME_EVENT_KINDS = new Set([
-  'setup_mine_toggled',
+  'setup_mine',
   'setup_confirmed',
   'game_started',
-  'solo_started',
-  'zone_selected',
-  'capture',
-  'cell_captured',
-  'mine_exploded',
-  'defuse',
-  'cell_defused',
-  'defuse_success',
-  'defuse_no_mine',
-  'chord_started',
-  'chord_finished',
-  'mark_toggled',
-  'end_phase2',
-  'phase2_ended',
-  'place_mine_phase3',
-  'mine_placed_phase3',
-  'phase3_mine_placed',
-  'end_phase3',
-  'phase3_ended',
+  'zone_select',
+  'cell_open',
+  'mine_hit',
+  'mine_defused',
+  'phase3_mine',
+  'turn_end',
   'game_finished',
-  'solo_finished',
-  'time_out',
 ]);
 
 // ─── DOM helpers ───────────────────────────────────────────────────────────
@@ -78,10 +61,12 @@ const btnLast      = $('#btnLast');
 const chkSkipNonGame = $('#chkSkipNonGame');
 
 // ─── Top-level state ───────────────────────────────────────────────────────
-let allSnapshots = [];   // every snapshot (incl. non-game ones)
-let visibleSteps = [];   // indices into allSnapshots that are currently shown
-let cursor       = 0;    // index into visibleSteps
-let currentLog   = null;
+let allSnapshots = [];
+let visibleSteps = [];
+let cursor       = 0;
+let currentSession = null;          // {id, meta, events}
+let allSessions  = [];              // list from /api/sessions
+let listFilter   = 'all';
 
 // ─── Bootstrap ─────────────────────────────────────────────────────────────
 btnRefresh.addEventListener('click', loadList);
@@ -91,10 +76,9 @@ btnPrev.addEventListener('click',  () => moveCursor(cursor - 1));
 btnNext.addEventListener('click',  () => moveCursor(cursor + 1));
 btnLast.addEventListener('click',  () => moveCursor(visibleSteps.length - 1));
 chkSkipNonGame.addEventListener('change', () => {
-  // Preserve the current snapshot when toggling.
   const currentAll = visibleSteps[cursor] ?? 0;
   rebuildVisible();
-  // Find the closest visible step ≤ currentAll, else first.
+  renderEventList();
   let next = 0;
   for (let i = visibleSteps.length - 1; i >= 0; i--) {
     if (visibleSteps[i] <= currentAll) { next = i; break; }
@@ -112,52 +96,171 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') { showList(); e.preventDefault(); }
 });
 
+document.querySelectorAll('#logFilters .log-filter-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    listFilter = btn.dataset.mode;
+    for (const b of document.querySelectorAll('#logFilters .log-filter-btn')) {
+      b.classList.toggle('active', b.dataset.mode === listFilter);
+    }
+    renderList();
+  });
+});
+
 loadList();
 
 // ─── List screen ───────────────────────────────────────────────────────────
 async function loadList() {
   logListEl.textContent = 'Загрузка…';
-  let logs = [];
   try {
-    const r = await fetch('/api/logs');
+    const r = await fetch('/api/sessions');
     const j = await r.json();
-    logs = j.logs || [];
+    allSessions = j.sessions || [];
   } catch (err) {
     logListEl.innerHTML = `<div class="log-list-empty">Не удалось получить список: ${escapeHtml(String(err))}</div>`;
     return;
   }
-  if (logs.length === 0) {
-    logListEl.innerHTML = `<div class="log-list-empty">Логов пока нет. Положи <code>*.jsonl</code> файлы в <code>log-viewer/logs/</code>.</div>`;
+  const counts = { all: allSessions.length, pvp: 0, solo: 0 };
+  for (const s of allSessions) {
+    if (s.mode === 'pvp')  counts.pvp++;
+    else if (s.mode === 'solo') counts.solo++;
+  }
+  document.querySelectorAll('#logFilters .log-filter-count').forEach((el) => {
+    el.textContent = ` (${counts[el.dataset.count] ?? 0})`;
+  });
+  renderList();
+}
+
+function renderList() {
+  if (allSessions.length === 0) {
+    logListEl.innerHTML = `<div class="log-list-empty">Партий пока нет. Backend пишет в <code>logs/&lt;mode&gt;/&lt;session&gt;/</code> — положи такую директорию в <code>log-viewer/logs/</code>.</div>`;
     return;
   }
-  logListEl.innerHTML = '';
-  for (const log of logs) {
-    const el = document.createElement('div');
-    el.className = 'log-item';
-    el.innerHTML = `
-      <div class="log-item-label">${escapeHtml(log.label)}</div>
-      <div class="log-item-meta">
-        ${formatBytes(log.size)} · ${formatDate(log.mtime)}
-      </div>
-    `;
-    el.addEventListener('click', () => openLog(log));
-    logListEl.appendChild(el);
+  const filtered = allSessions.filter((s) => listFilter === 'all' || s.mode === listFilter);
+  if (filtered.length === 0) {
+    logListEl.innerHTML = `<div class="log-list-empty">Нет партий с фильтром <b>${escapeHtml(listFilter)}</b>.</div>`;
+    return;
   }
+
+  // Group: month → day → [sessions].
+  const monthMap = new Map();
+  for (const s of filtered) {
+    const ts = s.startedAt ? Date.parse(s.startedAt) : 0;
+    const d = new Date(ts || Date.now());
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const dayKey   = `${monthKey}-${String(d.getDate()).padStart(2, '0')}`;
+    let dayMap = monthMap.get(monthKey);
+    if (!dayMap) { dayMap = new Map(); monthMap.set(monthKey, dayMap); }
+    let arr = dayMap.get(dayKey);
+    if (!arr) { arr = []; dayMap.set(dayKey, arr); }
+    arr.push(s);
+  }
+
+  logListEl.innerHTML = '';
+  for (const [monthKey, dayMap] of monthMap) {
+    const monthEl = document.createElement('div');
+    monthEl.className = 'log-month';
+    const monthDate = new Date(`${monthKey}-01T00:00:00`);
+    const monthTitle = document.createElement('div');
+    monthTitle.className = 'log-month-title';
+    monthTitle.textContent = monthDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+    monthEl.appendChild(monthTitle);
+
+    for (const [dayKey, sessions] of dayMap) {
+      const dayEl = document.createElement('div');
+      dayEl.className = 'log-day';
+      const dayDate = new Date(`${dayKey}T00:00:00`);
+      const dayTitle = document.createElement('div');
+      dayTitle.className = 'log-day-title';
+      dayTitle.innerHTML = `
+        <span>${escapeHtml(dayDate.toLocaleDateString(undefined, { day: 'numeric', month: 'long' }))}</span>
+        <span class="log-day-weekday">${escapeHtml(dayDate.toLocaleDateString(undefined, { weekday: 'long' }))}</span>
+        <span class="log-day-weekday">· ${sessions.length} ${plural(sessions.length, 'партия', 'партии', 'партий')}</span>
+      `;
+      dayEl.appendChild(dayTitle);
+      for (const s of sessions) dayEl.appendChild(renderSessionRow(s));
+      monthEl.appendChild(dayEl);
+    }
+    logListEl.appendChild(monthEl);
+  }
+}
+
+function renderSessionRow(session) {
+  const el = document.createElement('div');
+  el.className = `log-row ${escapeHtml(session.mode || 'unknown')}`;
+  const ts = session.startedAt ? new Date(session.startedAt) : null;
+  const time = ts
+    ? `${String(ts.getHours()).padStart(2, '0')}:${String(ts.getMinutes()).padStart(2, '0')}`
+    : '—';
+  const modeLabel = session.mode === 'solo' ? 'Соло'
+                  : session.mode === 'pvp'  ? 'PvP'
+                  : '—';
+
+  const playersEl = document.createElement('div');
+  playersEl.className = 'log-row-players';
+  const red  = session.players?.red?.name  || null;
+  const blue = session.players?.blue?.name || null;
+  const winColor = session.result?.winner || null;
+  const playerSpan = (name, color) => {
+    const sp = document.createElement('span');
+    sp.className = `log-row-player ${color}` + (winColor === color ? ' winner' : '');
+    sp.textContent = name || (color === 'red' ? '?' : '?');
+    return sp;
+  };
+  playersEl.appendChild(playerSpan(red, 'red'));
+  const vs = document.createElement('span');
+  vs.className = 'log-row-vs';
+  vs.textContent = session.mode === 'solo' ? 'vs' : '×';
+  playersEl.appendChild(vs);
+  playersEl.appendChild(playerSpan(blue, 'blue'));
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'log-row-meta';
+  const winText = session.result
+    ? (session.result.winner
+        ? `🏁 ${escapeHtml(session.result.winner)}${session.result.reason ? ` (${escapeHtml(session.result.reason)})` : ''}`
+        : `🏳 ничья${session.result.reason ? ` (${escapeHtml(session.result.reason)})` : ''}`)
+    : 'не закончена';
+  const dur = session.durationMs ? `<span class="pill">${formatDuration(session.durationMs)}</span>` : '';
+  const turns = session.totals?.turnsPlayed ? `<span class="pill">${session.totals.turnsPlayed} ходов</span>` : '';
+  metaEl.innerHTML = `${winText}${dur}${turns}`;
+
+  const timeEl = document.createElement('div');
+  timeEl.className = 'log-row-time';
+  timeEl.textContent = time;
+
+  const modeEl = document.createElement('div');
+  modeEl.className = 'log-row-mode';
+  modeEl.textContent = modeLabel;
+
+  el.appendChild(timeEl);
+  el.appendChild(modeEl);
+  el.appendChild(playersEl);
+  el.appendChild(metaEl);
+  el.addEventListener('click', () => openSession(session));
+  return el;
+}
+
+function plural(n, one, few, many) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
 }
 
 function showList() {
   screenList.hidden = false;
   screenViewer.hidden = true;
   btnBack.hidden = true;
-  currentLog = null;
+  currentSession = null;
   allSnapshots = [];
   visibleSteps = [];
 }
 
 // ─── Viewer ────────────────────────────────────────────────────────────────
-async function openLog(log) {
-  currentLog = log;
-  viewerTitle.textContent = log.label;
+async function openSession(session) {
+  currentSession = session;
+  viewerTitle.textContent = sessionTitle(session);
   viewerSubtitle.textContent = 'Загрузка…';
   screenList.hidden = true;
   screenViewer.hidden = false;
@@ -168,114 +271,48 @@ async function openLog(log) {
   eventList.innerHTML = '';
   stepLabel.textContent = '0 / 0';
 
-  let text;
+  let payload;
   try {
-    const r = await fetch(`/api/log/${encodeURIComponent(log.id)}`);
-    text = await r.text();
+    const r = await fetch(`/api/session/${encodeURIComponent(session.id)}`);
+    payload = await r.json();
   } catch (err) {
     viewerSubtitle.textContent = 'Ошибка загрузки: ' + err;
     return;
   }
-  const events = parseLog(text);
-  allSnapshots = buildSnapshots(events);
-  viewerSubtitle.textContent = `${events.length} событий · ${allSnapshots.length - 1} ходов`;
+  if (payload.error) {
+    viewerSubtitle.textContent = 'Ошибка: ' + payload.error;
+    return;
+  }
+  const meta = payload.meta || {};
+  const events = payload.events || [];
+  allSnapshots = buildSnapshots(meta, events);
+  viewerSubtitle.textContent = sessionSubtitle(meta, events.length, allSnapshots.length - 1);
   rebuildVisible();
   renderEventList();
   moveCursor(0);
 }
 
-// ─── Parse jsonl ─ normalization ───────────────────────────────────────────
-//
-// Two log shapes exist:
-//
-// 1) PvP server log: flat fields
-//      { event: "cell_captured", player: { color, name, ip }, row, col, ... }
-//
-// 2) Solo / local log: nested
-//      { event: { kind: "capture", row, col, actor }, playerName, humanColor,
-//        difficulty, currentPlayer, phase, ... }
-//
-// We normalize both into:
-//      { kind, row?, col?, actor?, ts, raw, ...extra }
-// where `actor` is the color whose move it is and `raw` keeps the original
-// envelope for the side panel.
-function parseLog(text) {
-  const out = [];
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let parsed;
-    try { parsed = JSON.parse(trimmed); }
-    catch (_) { continue; }
-    if (!parsed || typeof parsed !== 'object') continue;
-    out.push(normalize(parsed));
-  }
-  return out;
+function sessionTitle(s) {
+  const red  = s.players?.red?.name  || '?';
+  const blue = s.players?.blue?.name || '?';
+  const mode = s.mode === 'solo' ? '🤖' : '🪖';
+  return `${mode} ${red} vs ${blue}`;
 }
 
-function normalize(raw) {
-  const ts = raw.ts || raw.timestamp || null;
-  // Case 1: nested event object (solo).
-  if (raw.event && typeof raw.event === 'object') {
-    const e = raw.event;
-    return {
-      kind: e.kind || 'unknown',
-      ts,
-      row: e.row,
-      col: e.col,
-      actor: e.actor || raw.currentPlayer || null,
-      mark: e.mark,
-      // Pull useful side-info from the envelope.
-      currentPlayer: raw.currentPlayer || null,
-      phase: raw.phase || null,
-      turnsPlayed: raw.turnsPlayed,
-      humanColor: raw.humanColor,
-      botColor: raw.botColor,
-      playerName: raw.playerName,
-      difficulty: raw.difficulty,
-      raw,
-    };
-  }
-  // Case 2: flat event string (PvP server).
-  if (typeof raw.event === 'string') {
-    return {
-      kind: raw.event,
-      ts,
-      row: raw.row,
-      col: raw.col,
-      actor: raw.player?.color || raw.creator?.color || null,
-      mark: raw.mark,
-      player: raw.player,
-      creator: raw.creator,
-      players: raw.players,
-      displayZone: raw.displayZone,
-      actionZone:  raw.actionZone,
-      clicked: raw.clicked,
-      winner: raw.winner,
-      reason: raw.reason || raw.winReason,
-      hasMine: raw.hasMine,
-      hadMine: raw.hadMine,
-      livesLeft: raw.livesLeft,
-      minesPlaced: raw.minesPlaced,
-      defusesUsedThisTurn: raw.defusesUsedThisTurn,
-      defusesPerTurn: raw.defusesPerTurn,
-      viaChord: raw.viaChord,
-      number: raw.number,
-      flagCount: raw.flagCount,
-      candidatesCount: raw.candidatesCount,
-      captureCount: raw.captureCount,
-      hitMine: raw.hitMine,
-      raw,
-    };
-  }
-  return { kind: 'unknown', ts, raw };
+function sessionSubtitle(meta, evCount, stepCount) {
+  const ts = meta.startedAtLocal || meta.startedAt || '—';
+  const result = meta.result
+    ? (meta.result.winner
+        ? `победитель ${meta.result.winner} (${meta.result.reason})`
+        : `ничья (${meta.result.reason})`)
+    : 'не завершена';
+  const dur = meta.durationMs ? `, длилась ${formatDuration(meta.durationMs)}` : '';
+  return `${ts} · ${result}${dur} · ${evCount} событий · ${stepCount} ходов`;
 }
 
 // ─── Replay engine ─────────────────────────────────────────────────────────
-function buildSnapshots(events) {
-  const config = extractConfig(events);
-  const initial = createInitialState(config, events);
+function buildSnapshots(meta, events) {
+  const initial = createInitialState(meta);
   const snaps = [{ state: cloneState(initial), event: null, index: -1 }];
   let cur = cloneState(initial);
   events.forEach((ev, i) => {
@@ -285,21 +322,9 @@ function buildSnapshots(events) {
   return snaps;
 }
 
-function extractConfig(events) {
-  const cfg = { ...DEFAULT_CONFIG };
-  for (const ev of events) {
-    const r = ev.raw || {};
-    const c = r.config || r.gameConfig;
-    if (c && typeof c === 'object') Object.assign(cfg, c);
-    if (r.boardSize)  cfg.boardSize = r.boardSize;
-    if (r.maxLives)   cfg.maxLives  = r.maxLives;
-  }
-  return cfg;
-}
-
-function createInitialState(config, events) {
+function createInitialState(meta) {
+  const config = { ...DEFAULT_CONFIG, ...(meta.config || {}) };
   const size = config.boardSize;
-  // Owner: top half = red, bottom half = blue.
   const board = [];
   for (let r = 0; r < size; r++) {
     const row = [];
@@ -307,52 +332,19 @@ function createInitialState(config, events) {
       row.push({
         owner: r < size / 2 ? 'red' : 'blue',
         hasMine: false,
-        mark: { red: 'none', blue: 'none' },
       });
     }
     board.push(row);
   }
-
-  // Collect player names. For PvP logs the `players` field lists both; for
-  // solo logs we have `playerName` + `humanColor` for the human and the bot
-  // color is the opposite.
-  const players = {};
-  for (const ev of events) {
-    const r = ev.raw || {};
-    if (Array.isArray(r.players)) {
-      for (const p of r.players) {
-        if (p?.color && !players[p.color]) players[p.color] = { name: p.name || p.color, color: p.color };
-      }
-    }
-    if (r.player?.color && !players[r.player.color]) {
-      players[r.player.color] = { name: r.player.name || r.player.color, color: r.player.color };
-    }
-    if (r.creator?.color && !players[r.creator.color]) {
-      players[r.creator.color] = { name: r.creator.name || r.creator.color, color: r.creator.color };
-    }
-    if (r.playerName && r.humanColor && !players[r.humanColor]) {
-      players[r.humanColor] = { name: r.playerName, color: r.humanColor };
-    }
-    if (r.humanColor) {
-      const bot = r.humanColor === 'red' ? 'blue' : 'red';
-      if (!players[bot]) {
-        const botName = r.difficulty ? `Бот (${r.difficulty})` : 'Бот';
-        players[bot] = { name: botName, color: bot };
-      }
-    }
-    if (players.red && players.blue) break;
-  }
-  if (!players.red)  players.red  = { name: 'red',  color: 'red' };
-  if (!players.blue) players.blue = { name: 'blue', color: 'blue' };
-
+  const players = {
+    red:  { name: meta.players?.red?.name  || 'red',  color: 'red',  lives: config.maxLives, minesPlaced: 0 },
+    blue: { name: meta.players?.blue?.name || 'blue', color: 'blue', lives: config.maxLives, minesPlaced: 0 },
+  };
   return {
     config,
     board,
-    players: {
-      red:  { ...players.red,  lives: config.maxLives, minesPlaced: 0 },
-      blue: { ...players.blue, lives: config.maxLives, minesPlaced: 0 },
-    },
-    phase: 'waiting',
+    players,
+    phase: 'setup',
     currentPlayer: 'red',
     displayZone: null,
     actionZone:  null,
@@ -362,22 +354,16 @@ function createInitialState(config, events) {
     winner: null,
     winReason: null,
     turnsPlayed: 0,
-    defusesPerTurn: 1,
     defusesUsedThisTurn: 0,
+    timeLeftMs: { red: null, blue: null },
   };
 }
 
 function cloneState(s) {
   return {
     config: s.config,
-    board: s.board.map((row) => row.map((cell) => ({
-      ...cell,
-      mark: { ...cell.mark },
-    }))),
-    players: {
-      red:  { ...s.players.red },
-      blue: { ...s.players.blue },
-    },
+    board: s.board.map((row) => row.map((cell) => ({ ...cell }))),
+    players: { red: { ...s.players.red }, blue: { ...s.players.blue } },
     phase: s.phase,
     currentPlayer: s.currentPlayer,
     displayZone: s.displayZone ? { ...s.displayZone } : null,
@@ -388,51 +374,25 @@ function cloneState(s) {
     winner: s.winner,
     winReason: s.winReason,
     turnsPlayed: s.turnsPlayed,
-    defusesPerTurn: s.defusesPerTurn,
     defusesUsedThisTurn: s.defusesUsedThisTurn,
+    timeLeftMs: { ...s.timeLeftMs },
   };
 }
 
-// Apply one normalized event to mutable state.
 function applyEvent(s, ev) {
   s.lastEventCells = [];
-  const size = s.config.boardSize;
-  // Pre-compute display/action zones derived from a click in solo logs.
-  // Solo's zone_selected carries `row,col` (the click), not the top-left.
-  const derivedDisplayFromClick = (row, col) => ({ row: row - 1, col: col - 1 });
-  const derivedActionFromClick  = (row, col) => ({ row: row - 2, col: col - 2 });
-  // Propagate phase/currentPlayer/turnsPlayed when the log envelope provides
-  // them — this is the cheapest way to keep solo logs in sync.
-  if (ev.raw) {
-    if (ev.raw.phase) s.phase = ev.raw.phase;
-    if (ev.raw.currentPlayer) s.currentPlayer = ev.raw.currentPlayer;
-    if (typeof ev.raw.turnsPlayed === 'number') s.turnsPlayed = ev.raw.turnsPlayed;
+  const actor = ev.actor;
+  if (typeof ev.timeLeftMs === 'number' && actor) {
+    s.timeLeftMs[actor] = ev.timeLeftMs;
   }
 
   switch (ev.kind) {
-    case 'room_created':
-    case 'player_joined':
-    case 'session_restored':
-    case 'player_left':
-    case 'player_disconnected':
-    case 'room_deleted':
-    case 'solo_started':
-      break;
-
-    case 'setup_mine_toggled': {
+    case 'setup_mine': {
       const c = s.board[ev.row]?.[ev.col];
       if (!c) break;
-      // PvP log carries explicit `hasMine`; solo log just toggles.
-      if (typeof ev.hasMine === 'boolean') {
-        c.hasMine = ev.hasMine;
-      } else {
-        c.hasMine = !c.hasMine;
-      }
-      if (ev.actor) {
-        s.players[ev.actor].minesPlaced += c.hasMine ? 1 : -1;
-        if (typeof ev.minesPlaced === 'number') {
-          s.players[ev.actor].minesPlaced = ev.minesPlaced;
-        }
+      c.hasMine = !!ev.hasMine;
+      if (actor && typeof ev.minesPlaced === 'number') {
+        s.players[actor].minesPlaced = ev.minesPlaced;
       }
       s.phase = 'setup';
       s.lastEventCells.push({ row: ev.row, col: ev.col });
@@ -445,22 +405,16 @@ function applyEvent(s, ev) {
 
     case 'game_started':
       s.phase = 'phase1';
-      s.currentPlayer = ev.actor || ev.raw?.firstPlayer || 'red';
-      // Clear any setup-phase mark visualization.
+      s.currentPlayer = actor || 'red';
       break;
 
-    case 'zone_selected': {
-      const click = (ev.row !== undefined && ev.col !== undefined)
-        ? { row: ev.row, col: ev.col } : null;
-      if (ev.displayZone)  s.displayZone = { row: ev.displayZone.row, col: ev.displayZone.col };
-      else if (click)      s.displayZone = derivedDisplayFromClick(click.row, click.col);
-      if (ev.actionZone)   s.actionZone  = { row: ev.actionZone.row,  col: ev.actionZone.col  };
-      else if (click)      s.actionZone  = derivedActionFromClick(click.row, click.col);
+    case 'zone_select': {
+      if (ev.displayZone) s.displayZone = { ...ev.displayZone };
+      if (ev.actionZone)  s.actionZone  = { ...ev.actionZone };
       s.phase = 'phase2';
-      if (ev.actor) s.currentPlayer = ev.actor;
+      if (actor) s.currentPlayer = actor;
       s.capturedThisTurn = [];
       s.defusesUsedThisTurn = 0;
-      // Highlight the display 3×3 cells.
       const dz = s.displayZone;
       if (dz) {
         for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 3; dc++) {
@@ -470,151 +424,75 @@ function applyEvent(s, ev) {
       break;
     }
 
-    case 'capture':
-    case 'cell_captured': {
-      const color = ev.actor;
+    case 'cell_open': {
       const c = s.board[ev.row]?.[ev.col];
-      if (c && color) {
-        c.owner = color;
-        c.mark.red = 'none';
-        c.mark.blue = 'none';
-      }
-      if (color) s.currentPlayer = color;
+      if (c && actor) c.owner = actor;
+      if (actor) s.currentPlayer = actor;
       s.capturedThisTurn.push({ row: ev.row, col: ev.col });
       s.lastEventCells.push({ row: ev.row, col: ev.col });
       break;
     }
 
-    case 'mine_exploded': {
-      const color = ev.actor;
+    case 'mine_hit': {
       const c = s.board[ev.row]?.[ev.col];
       if (c) c.hasMine = false;
-      if (color && typeof ev.livesLeft === 'number') {
-        s.players[color].lives = ev.livesLeft;
-      } else if (color) {
-        s.players[color].lives = Math.max(0, s.players[color].lives - 1);
+      if (actor) {
+        if (typeof ev.livesLeft === 'number') s.players[actor].lives = ev.livesLeft;
+        else s.players[actor].lives = Math.max(0, s.players[actor].lives - 1);
+        s.currentPlayer = actor;
       }
-      if (color) s.currentPlayer = color;
       s.lastEventCells.push({ row: ev.row, col: ev.col });
       break;
     }
 
-    case 'defuse':
-    case 'cell_defused':
-    case 'defuse_success':
-    case 'defuse_no_mine': {
-      const color = ev.actor;
+    case 'mine_defused': {
       const c = s.board[ev.row]?.[ev.col];
-      if (c && color) {
-        // Per applyDefuse: cell becomes ours, mine (if any) removed.
-        if (ev.hadMine || ev.kind === 'defuse_success' || (ev.kind === 'defuse' && c.hasMine)) {
-          c.hasMine = false;
-        }
-        // For some solo logs `defuse` doesn't carry hadMine — be tolerant.
-        if (ev.kind === 'defuse_no_mine') c.hasMine = false;
-        c.owner = color;
-        c.mark.red = 'none';
-        c.mark.blue = 'none';
+      if (c) {
+        if (ev.hadMine) c.hasMine = false;
+        if (actor) c.owner = actor;
       }
-      if (color) s.currentPlayer = color;
-      if (typeof ev.defusesUsedThisTurn === 'number') s.defusesUsedThisTurn = ev.defusesUsedThisTurn;
-      if (typeof ev.defusesPerTurn === 'number') s.defusesPerTurn = ev.defusesPerTurn;
+      if (actor) s.currentPlayer = actor;
+      s.defusesUsedThisTurn++;
       s.capturedThisTurn.push({ row: ev.row, col: ev.col });
       s.lastEventCells.push({ row: ev.row, col: ev.col });
       break;
     }
 
-    case 'chord_started':
-      if (ev.actor) s.currentPlayer = ev.actor;
-      s.lastEventCells.push({ row: ev.row, col: ev.col });
-      break;
-    case 'chord_finished':
-      if (ev.actor) s.currentPlayer = ev.actor;
-      s.lastEventCells.push({ row: ev.row, col: ev.col });
-      break;
-
-    case 'defuses_granted':
-      if (typeof ev.raw?.defusesPerTurn === 'number') s.defusesPerTurn = ev.raw.defusesPerTurn;
-      break;
-
-    case 'mark_toggled': {
-      const color = ev.actor;
-      const mark = ev.mark || 'flag';
-      const c = s.board[ev.row]?.[ev.col];
-      if (c && color) {
-        // Solo logs typically don't include `mark`; assume toggle flag↔none.
-        if (!ev.mark) {
-          c.mark[color] = c.mark[color] === 'flag' ? 'none' : 'flag';
-        } else {
-          c.mark[color] = mark;
-        }
-      }
-      s.lastEventCells.push({ row: ev.row, col: ev.col });
-      break;
-    }
-
-    case 'end_phase2':
-    case 'phase2_ended':
-      s.phase = 'phase3';
-      // Keep displayZone / actionZone visible — they're informational.
-      s.capturedThisTurn = [];
-      s.defusesUsedThisTurn = 0;
-      break;
-
-    case 'place_mine_phase3':
-    case 'mine_placed_phase3':
-    case 'phase3_mine_placed': {
+    case 'phase3_mine': {
       const c = s.board[ev.row]?.[ev.col];
       if (c) c.hasMine = true;
-      const color = ev.actor;
-      if (color && typeof ev.minesPlaced === 'number') {
-        s.players[color].minesPlaced = ev.minesPlaced;
-      } else if (color) {
-        s.players[color].minesPlaced++;
-      }
+      if (actor) s.players[actor].minesPlaced++;
       s.phase = 'phase3';
       s.lastEventCells.push({ row: ev.row, col: ev.col });
       break;
     }
 
-    case 'end_phase3':
-    case 'phase3_ended':
+    case 'turn_end':
+      // Завершение хода: переход к сопернику, очистка визуальных зон.
       s.phase = 'phase1';
-      s.currentPlayer = s.currentPlayer === 'red' ? 'blue' : 'red';
-      s.turnsPlayed = (s.turnsPlayed ?? 0) + 1;
+      s.currentPlayer = (actor || s.currentPlayer) === 'red' ? 'blue' : 'red';
       s.displayZone = null;
       s.actionZone = null;
       s.capturedThisTurn = [];
       s.defusesUsedThisTurn = 0;
+      if (typeof ev.turnsPlayed === 'number') s.turnsPlayed = ev.turnsPlayed;
+      else s.turnsPlayed++;
       break;
 
     case 'game_finished':
-    case 'solo_finished':
       s.finished = true;
-      s.winner = ev.winner?.color || ev.raw?.winner?.color || ev.raw?.winner || ev.winner || null;
-      if (typeof s.winner === 'object') s.winner = s.winner.color;
-      s.winReason = ev.reason || ev.raw?.reason || null;
-      break;
-
-    case 'time_out':
-      s.finished = true;
-      if (ev.actor) {
-        s.winner = ev.actor === 'red' ? 'blue' : 'red';
-        s.winReason = 'time';
-      }
+      s.winner = ev.winner || null;
+      s.winReason = ev.reason || null;
       break;
 
     default:
-      // Unknown event: ignored.
+      // Неизвестное событие — игнор.
       break;
   }
 }
 
 // ─── Numbers: ONLY inside currently-active display zone ────────────────────
 function computeNumbersInDisplayZone(s) {
-  // Returns a Map "r,c" → { value, owner } for cells whose owner had their
-  // number revealed by sitting in the current display zone, mirroring the
-  // backend's revealNumberForCell logic.
   const numbers = new Map();
   const dz = s.displayZone;
   if (!dz) return numbers;
@@ -638,11 +516,10 @@ function computeNumbersInDisplayZone(s) {
   return numbers;
 }
 
-// ─── Visible-steps filter (skip-non-game toggle) ───────────────────────────
+// ─── Visible-steps filter ──────────────────────────────────────────────────
 function rebuildVisible() {
   const skipNonGame = chkSkipNonGame.checked;
   visibleSteps = [];
-  // Step 0 (initial state) is always shown.
   visibleSteps.push(0);
   for (let i = 1; i < allSnapshots.length; i++) {
     const ev = allSnapshots[i].event;
@@ -667,7 +544,6 @@ function renderCurrent() {
   const size = s.config.boardSize;
   const numbers = computeNumbersInDisplayZone(s);
 
-  // Board ────────────────────────────────────────
   boardEl.style.gridTemplateColumns = `repeat(${size}, auto)`;
   boardEl.innerHTML = '';
   const dz = s.displayZone;
@@ -690,15 +566,13 @@ function renderCurrent() {
       if (inAction)  div.classList.add('in-action');
       if (recentSet.has(`${r},${c}`)) div.classList.add('recent');
 
-      // Mine wins over number; numbers are only shown for cells in display zone.
       if (cell.hasMine) {
         const m = document.createElement('span');
         m.className = 'mine ' + (cell.owner || '');
         m.textContent = '💣';
         div.appendChild(m);
       } else if (inDisplay) {
-        const k = `${r},${c}`;
-        const n = numbers.get(k);
+        const n = numbers.get(`${r},${c}`);
         if (n !== undefined && n > 0) {
           const ns = document.createElement('span');
           ns.className = 'number';
@@ -707,21 +581,10 @@ function renderCurrent() {
           div.appendChild(ns);
         }
       }
-
-      const redMark  = cell.mark.red;
-      const blueMark = cell.mark.blue;
-      const markChar = pickMarkChar(redMark, blueMark);
-      if (markChar) {
-        const mk = document.createElement('span');
-        mk.className = 'mark';
-        mk.textContent = markChar;
-        div.appendChild(mk);
-      }
       boardEl.appendChild(div);
     }
   }
 
-  // Legend ────────────────────────────────────────
   boardLegend.innerHTML = `
     <span><span class="legend-swatch" style="background:var(--red-soft)"></span>red</span>
     <span><span class="legend-swatch" style="background:var(--blue-soft)"></span>blue</span>
@@ -731,35 +594,33 @@ function renderCurrent() {
     <span>Цифры — только внутри display 3×3</span>
   `;
 
-  // State panel ─────────────────────────────────
   const pRed = s.players.red, pBlue = s.players.blue;
+  const tRed  = s.timeLeftMs.red  != null ? formatDuration(s.timeLeftMs.red)  : '—';
+  const tBlue = s.timeLeftMs.blue != null ? formatDuration(s.timeLeftMs.blue) : '—';
   statePanel.innerHTML = `
     <div class="player-bar red ${s.currentPlayer === 'red' ? 'active' : ''}">
       <div class="player-bar-name">🔴 ${escapeHtml(pRed.name)}</div>
-      <div class="player-bar-stats">♥ ${pRed.lives} · 💣 ${pRed.minesPlaced}</div>
+      <div class="player-bar-stats">♥ ${pRed.lives} · 💣 ${pRed.minesPlaced} · ⏱ ${tRed}</div>
     </div>
     <div class="player-bar blue ${s.currentPlayer === 'blue' ? 'active' : ''}">
       <div class="player-bar-name">🔵 ${escapeHtml(pBlue.name)}</div>
-      <div class="player-bar-stats">♥ ${pBlue.lives} · 💣 ${pBlue.minesPlaced}</div>
+      <div class="player-bar-stats">♥ ${pBlue.lives} · 💣 ${pBlue.minesPlaced} · ⏱ ${tBlue}</div>
     </div>
     <div class="lbl">Фаза</div><div class="val">${escapeHtml(s.phase)}</div>
     <div class="lbl">Ход</div><div class="val">${escapeHtml(s.currentPlayer)}</div>
     <div class="lbl">Ходов сыграно</div><div class="val">${s.turnsPlayed}</div>
-    <div class="lbl">Defuses (исп./всего)</div><div class="val">${s.defusesUsedThisTurn} / ${s.defusesPerTurn}</div>
     ${s.finished ? `
       <div class="lbl">Финиш</div>
-      <div class="val">${escapeHtml(s.winner || '—')} (${escapeHtml(s.winReason || '—')})</div>
+      <div class="val">${escapeHtml(s.winner || 'ничья')} (${escapeHtml(s.winReason || '—')})</div>
     ` : ''}
   `;
 
-  // Event panel ──────────────────────────────────
   if (snap.event) {
     eventPanel.innerHTML = renderEventDetail(snap.event);
   } else {
     eventPanel.textContent = 'Начальное состояние';
   }
 
-  // Step label ──────────────────────────────────
   stepLabel.textContent = `${cursor} / ${visibleSteps.length - 1}`;
   btnPrev.disabled  = cursor === 0;
   btnFirst.disabled = cursor === 0;
@@ -769,7 +630,6 @@ function renderCurrent() {
 
 function renderEventList() {
   eventList.innerHTML = '';
-  // Show only the events that match the current "visible" filter.
   for (let v = 0; v < visibleSteps.length; v++) {
     const allIdx = visibleSteps[v];
     const snap = allSnapshots[allIdx];
@@ -799,13 +659,13 @@ function renderEventDetail(ev) {
   const parts = [];
   parts.push(`<span class="event-kind">${escapeHtml(ev.kind)}</span>${actor ? ' · ' + actorHtml : ''}`);
   const fields = {
-    row: ev.row, col: ev.col, mark: ev.mark,
+    row: ev.row, col: ev.col,
     hasMine: ev.hasMine, hadMine: ev.hadMine,
     livesLeft: ev.livesLeft, minesPlaced: ev.minesPlaced,
-    defusesUsed: ev.defusesUsedThisTurn, defusesPer: ev.defusesPerTurn,
-    number: ev.number, flagCount: ev.flagCount,
-    captureCount: ev.captureCount, hitMine: ev.hitMine,
-    viaChord: ev.viaChord, reason: ev.reason, winner: ev.winner,
+    viaChord: ev.viaChord, viaDefuse: ev.viaDefuse,
+    timeLeftMs: typeof ev.timeLeftMs === 'number' ? formatDuration(ev.timeLeftMs) : undefined,
+    turnsPlayed: ev.turnsPlayed,
+    reason: ev.reason, winner: ev.winner,
   };
   const kv = [];
   for (const [k, v] of Object.entries(fields)) {
@@ -816,7 +676,7 @@ function renderEventDetail(ev) {
   if (ev.actionZone)  kv.push(`actionZone: (${ev.actionZone.row}, ${ev.actionZone.col})`);
   if (ev.clicked)     kv.push(`clicked: (${ev.clicked.row}, ${ev.clicked.col})`);
   if (kv.length) parts.push('<br>' + kv.join(' · '));
-  if (ev.ts) parts.push(`<br><span style="opacity:.6">ts: ${escapeHtml(ev.ts)}</span>`);
+  if (ev.tsLocal || ev.ts) parts.push(`<br><span style="opacity:.6">ts: ${escapeHtml(ev.tsLocal || ev.ts)}${typeof ev.t === 'number' ? ` (+${formatDuration(ev.t)})` : ''}</span>`);
   return parts.join('');
 }
 
@@ -834,24 +694,17 @@ function numberColor(n) {
   }
 }
 
-function pickMarkChar(redMark, blueMark) {
-  if (redMark === 'flag' || blueMark === 'flag') return '🚩';
-  if (redMark === 'question' || blueMark === 'question') return '?';
-  return null;
-}
-
 // ─── Utilities ─────────────────────────────────────────────────────────────
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (s) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[s]));
 }
-function formatBytes(n) {
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1024 / 1024).toFixed(2) + ' MB';
-}
-function formatDate(ms) {
-  const d = new Date(ms);
-  return d.toLocaleString();
+function formatDuration(ms) {
+  if (ms == null) return '—';
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m > 0) return `${m}:${String(s).padStart(2, '0')}`;
+  return `${s}s`;
 }

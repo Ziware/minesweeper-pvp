@@ -16,12 +16,17 @@
   </header>
 
   <main id="screen-list" class="screen">
-    <h2>Доступные партии</h2>
+    <h2>Партии</h2>
     <p class="hint">
       Положи лог-файл <code>*.jsonl</code> (или директорию с
       <code>game.log.jsonl</code> внутри) в каталог
       <code>log-viewer/logs/</code> и нажми «Обновить список».
     </p>
+    <div class="log-filters" id="logFilters">
+      <button class="log-filter-btn active" data-mode="all">Все<span class="log-filter-count" data-count="all">0</span></button>
+      <button class="log-filter-btn" data-mode="pvp">PvP<span class="log-filter-count" data-count="pvp">0</span></button>
+      <button class="log-filter-btn" data-mode="solo">Соло<span class="log-filter-count" data-count="solo">0</span></button>
+    </div>
     <div id="logList" class="log-list">Загрузка…</div>
   </main>
 

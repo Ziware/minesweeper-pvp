@@ -36,16 +36,31 @@ export default function App() {
     humanName: soloHumanName || 'Игрок',
     difficulty: soloDifficulty,
     gameNonce: soloNonce,
-    onLogEvent: (event, details) => {
-      if (!soloSessionIdRef.current) return;
-      logSoloEvent({
-        sessionId:  soloSessionIdRef.current,
-        playerName: soloHumanName || 'Игрок',
-        humanColor: soloHumanColor,
-        difficulty: soloDifficulty,
-        event,
-        details,
-      });
+    onSession: (kind, meta) => {
+      const sid = soloSessionIdRef.current;
+      if (!sid) return;
+      if (kind === 'session_start') {
+        logSoloEvent({
+          kind: 'session_start',
+          sessionId: sid,
+          playerName: meta.humanName,
+          humanColor: meta.humanColor,
+          difficulty: meta.difficulty,
+          config: meta.config,
+        });
+      }
+      // 'session_finished' специально не отправляем — recorder закроется по
+      // приходу game_finished (это уже сделано в onSoloEvent).
+    },
+    onSoloEvent: (event) => {
+      const sid = soloSessionIdRef.current;
+      if (!sid) return;
+      logSoloEvent({ ...event, sessionId: sid } as any);
+    },
+    onLogAux: (auxKind, details) => {
+      const sid = soloSessionIdRef.current;
+      if (!sid) return;
+      logSoloEvent({ kind: 'session_aux', sessionId: sid, auxKind, details });
     },
   });
 

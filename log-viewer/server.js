@@ -2,10 +2,17 @@
 /**
  * Tiny zero-dependency static server for the local log viewer.
  *
- *   GET /                  → public/index.html
- *   GET /<static-file>     → public/<static-file>
- *   GET /api/logs          → JSON list of available log files in ./logs
- *   GET /api/log/<name>    → raw text of the log file (jsonl)
+ * Каждая партия теперь хранится отдельной директорией с двумя файлами:
+ *   <session-dir>/meta.json        — полная метаинформация о партии,
+ *   <session-dir>/game.log.jsonl   — упрощённые игровые события,
+ *   <session-dir>/aux.log.jsonl    — необязательный «вспомогательный» лог
+ *                                    (телеметрия бота и т.п., не нужен
+ *                                    просмотрщику).
+ *
+ *   GET /                      → public/index.html
+ *   GET /<static-file>         → public/<static-file>
+ *   GET /api/sessions          → JSON список сессий (читает meta.json'ы)
+ *   GET /api/session/<id>      → { meta, events } для одной сессии
  *
  * Run with:
  *   node server.js              (port 5174 by default)
@@ -41,46 +48,95 @@ function ensureLogsDir() {
 }
 
 /**
- * Recursively walk LOGS_DIR and collect any *.jsonl files.
- * Returns array of objects:
- *   { id, label, relPath, size, mtime }
- *
- * `id` is a URL-safe identifier (base64 of relative path) used in the
- * /api/log/<id> endpoint. `label` is a human-friendly name (folder/file).
+ * Найти все session-директории внутри LOGS_DIR. Сессия = любая папка
+ * (на любой глубине), где есть meta.json. Рекурсивно — но без захода
+ * внутрь самой session-папки.
  */
-function listLogs() {
+function findSessionDirs() {
   ensureLogsDir();
-  const results = [];
-
+  const out = [];
   function visit(dir) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
     catch (_) { return; }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        visit(full);
-      } else if (entry.isFile() && /\.jsonl$/i.test(entry.name)) {
-        const rel = path.relative(LOGS_DIR, full);
-        const stat = fs.statSync(full);
-        // Label = parent folder name + file name (skip if both equal "logs").
-        const parent = path.basename(path.dirname(full));
-        const baseLabel = parent === path.basename(LOGS_DIR)
-          ? entry.name
-          : `${parent}/${entry.name}`;
-        results.push({
-          id: Buffer.from(rel).toString('base64url'),
-          label: baseLabel,
-          relPath: rel,
-          size: stat.size,
-          mtime: stat.mtimeMs,
-        });
-      }
+    // Если в текущей папке лежит meta.json — считаем её session-папкой
+    // и не идём глубже.
+    if (entries.some((e) => e.isFile() && e.name === 'meta.json')) {
+      out.push(dir);
+      return;
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) visit(path.join(dir, e.name));
     }
   }
   visit(LOGS_DIR);
-  results.sort((a, b) => b.mtime - a.mtime);
-  return results;
+  return out;
+}
+
+function readJsonSafe(p) {
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
+  catch (_) { return null; }
+}
+
+function summarizeSession(dir) {
+  const meta = readJsonSafe(path.join(dir, 'meta.json')) || {};
+  const rel  = path.relative(LOGS_DIR, dir);
+  const id   = Buffer.from(rel).toString('base64url');
+  return {
+    id,
+    relPath: rel,
+    label: rel,
+    mode: meta.mode || 'unknown',
+    sessionId: meta.sessionId || null,
+    startedAt: meta.startedAt || null,
+    startedAtLocal: meta.startedAtLocal || null,
+    endedAt: meta.endedAt || null,
+    endedAtLocal: meta.endedAtLocal || null,
+    durationMs: meta.durationMs ?? null,
+    players: meta.players || {},
+    result: meta.result || null,
+    totals: meta.totals || null,
+    config: meta.config || null,
+  };
+}
+
+function listSessions() {
+  const dirs = findSessionDirs();
+  const sessions = dirs.map(summarizeSession);
+  sessions.sort((a, b) => {
+    const ta = a.startedAt ? Date.parse(a.startedAt) : 0;
+    const tb = b.startedAt ? Date.parse(b.startedAt) : 0;
+    return tb - ta;
+  });
+  return sessions;
+}
+
+function readSession(id) {
+  let rel;
+  try { rel = Buffer.from(id, 'base64url').toString('utf8'); }
+  catch (_) { return { error: 'bad id' }; }
+  const target = path.resolve(LOGS_DIR, rel);
+  if (!target.startsWith(LOGS_DIR + path.sep) && target !== LOGS_DIR) {
+    return { error: 'bad path' };
+  }
+  if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+    return { error: 'session not found' };
+  }
+  const meta = readJsonSafe(path.join(target, 'meta.json'));
+  if (!meta) return { error: 'meta.json missing' };
+
+  const events = [];
+  const logFile = path.join(target, 'game.log.jsonl');
+  if (fs.existsSync(logFile)) {
+    const raw = fs.readFileSync(logFile, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t) continue;
+      try { events.push(JSON.parse(t)); }
+      catch (_) { /* skip malformed lines silently */ }
+    }
+  }
+  return { meta, events };
 }
 
 function sendJson(res, status, payload) {
@@ -127,34 +183,16 @@ const server = http.createServer((req, res) => {
     return sendText(res, 405, 'Method not allowed');
   }
 
-  // API: list logs.
-  if (pathname === '/api/logs') {
-    try {
-      return sendJson(res, 200, { logs: listLogs() });
-    } catch (e) {
-      return sendJson(res, 500, { error: String(e && e.message || e) });
-    }
+  if (pathname === '/api/sessions') {
+    try { return sendJson(res, 200, { sessions: listSessions() }); }
+    catch (e) { return sendJson(res, 500, { error: String(e && e.message || e) }); }
   }
 
-  // API: fetch single log content by id.
-  const logMatch = pathname.match(/^\/api\/log\/([A-Za-z0-9_\-]+)$/);
-  if (logMatch) {
-    let rel;
-    try { rel = Buffer.from(logMatch[1], 'base64url').toString('utf8'); }
-    catch (_) { return sendText(res, 400, 'Bad id'); }
-    // Prevent path traversal.
-    const target = path.resolve(LOGS_DIR, rel);
-    if (!target.startsWith(LOGS_DIR + path.sep) && target !== LOGS_DIR) {
-      return sendText(res, 400, 'Bad path');
-    }
-    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
-      return sendText(res, 404, 'Log not found');
-    }
-    fs.readFile(target, 'utf8', (err, data) => {
-      if (err) return sendText(res, 500, String(err));
-      return sendText(res, 200, data, 'text/plain; charset=utf-8');
-    });
-    return;
+  const sessionMatch = pathname.match(/^\/api\/session\/([A-Za-z0-9_\-]+)$/);
+  if (sessionMatch) {
+    const result = readSession(sessionMatch[1]);
+    if (result.error) return sendJson(res, 404, { error: result.error });
+    return sendJson(res, 200, result);
   }
 
   // Static assets from public/.
@@ -162,7 +200,6 @@ const server = http.createServer((req, res) => {
   if (pathname === '/' || pathname === '') {
     staticPath = path.join(PUBLIC_DIR, 'index.html');
   } else {
-    // Strip leading "/" and disallow ".."
     const safe = pathname.replace(/^\/+/, '');
     if (safe.includes('..')) return sendText(res, 400, 'Bad path');
     staticPath = path.join(PUBLIC_DIR, safe);
@@ -175,5 +212,5 @@ server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`[log-viewer] running at http://localhost:${PORT}`);
   // eslint-disable-next-line no-console
-  console.log(`[log-viewer] drop *.jsonl logs into ${LOGS_DIR}/`);
+  console.log(`[log-viewer] drop session directories into ${LOGS_DIR}/`);
 });

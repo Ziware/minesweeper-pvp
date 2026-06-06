@@ -267,15 +267,9 @@ export function useSocket() {
     socketRef.current?.emit('toggleMark',      { row, col, mark });
 
   /** Технический канал: лог одиночной игры против бота. Не меняет состояние,
-   *  никак не отображается в UI — нужен только для серверного логирования. */
-  const logSoloEvent = (data: {
-    sessionId: string;
-    playerName: string;
-    humanColor: PlayerColor;
-    difficulty: string;
-    event: string;
-    details?: Record<string, unknown>;
-  }) => {
+   *  никак не отображается в UI — нужен только для серверного логирования.
+   *  Принимает уже типизированный SoloLogPayload (sessionId внутри). */
+  const logSoloEvent = (data: import('@minesweeper-pvp/shared').SoloLogPayload) => {
     socketRef.current?.emit('soloLog', data);
   };
 

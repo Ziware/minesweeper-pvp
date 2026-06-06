@@ -10,7 +10,7 @@ import {
   ALLOWED_TIME_CONTROLS as SHARED_ALLOWED_TIME_CONTROLS,
   summarizeChord as sharedSummarizeChord,
 } from '@minesweeper-pvp/shared';
-import { createGameLogger, GameLogger } from './gameLogger';
+import { createGameRecorder, type GameRecorder } from './gameRecorder';
 import {
   DEFAULT_CONFIG,
   DEFAULT_TIME_CONTROL,
@@ -65,7 +65,7 @@ export interface Room {
   winner?: PlayerColor;
   winReason?: WinReason;
   marks: Record<PlayerColor, Record<string, CellMark>>;
-  logger: GameLogger;
+  recorder: GameRecorder;
   gameOverLogged: boolean;
 }
 
@@ -115,11 +115,12 @@ export class RoomManager {
     const board      = createBoard(fullConfig.boardSize);
     initBoard(board, fullConfig);
 
-    const logger = createGameLogger(roomId, {
-      color: 'red',
-      name: playerName,
-      ip,
+    const recorder = createGameRecorder({
+      sessionId: roomId,
+      mode: 'pvp',
+      initialPlayer: { color: 'red', name: playerName, ip },
     });
+    recorder.setConfig(fullConfig);
 
     const room: Room = {
       id: roomId,
@@ -156,7 +157,7 @@ export class RoomManager {
       },
       setupConfirmed: new Set(),
       marks: { red: {}, blue: {} },
-      logger,
+      recorder,
       gameOverLogged: false,
     };
 
@@ -184,14 +185,7 @@ export class RoomManager {
     });
     room.phase      = 'setup';
     room.turn.phase = 'setup';
-    room.logger.setPlayers(room.players.map((player) => ({
-      color: player.color,
-      name: player.name,
-      ip: player.ip,
-    })));
-    room.logger.event('player_joined', {
-      player: { color: 'blue', name: playerName, ip },
-    });
+    room.recorder.setPlayer({ color: 'blue', name: playerName, ip });
 
     this.socketToRoom.set(socketId, roomId);
     this.socketToPlayer.set(socketId, 'blue');
@@ -233,10 +227,6 @@ export class RoomManager {
     this.socketToRoom.set(newSocketId, roomId);
     this.socketToPlayer.set(newSocketId, playerColor);
 
-    room.logger.event('session_restored', {
-      player: { color: playerColor, name: player.name, ip: player.ip },
-      tabId,
-    });
 
     return { room };
   }
@@ -267,13 +257,7 @@ export class RoomManager {
     const idx = room.players.findIndex((p) => p.id === socketId);
     if (idx >= 0) {
       const player = room.players[idx];
-      room.logger.event('player_left', {
-        player: { color: player.color, name: player.name, ip: player.ip },
-      });
       room.players.splice(idx, 1);
-      room.logger.setPlayers(room.players.map((p) => ({
-        id: p.id, color: p.color, name: p.name, ip: p.ip,
-      })));
     }
     this.socketToRoom.delete(socketId);
     this.socketToPlayer.delete(socketId);
@@ -291,9 +275,6 @@ export class RoomManager {
       const player = room.players.find((p) => p.id === socketId);
       if (player) {
         player.connected = false;
-        room.logger.event('player_disconnected', {
-          player: { color: player.color, name: player.name, ip: player.ip },
-        });
       }
     }
     this.socketToRoom.delete(socketId);
@@ -341,7 +322,6 @@ export class RoomManager {
         this.socketToPlayer.delete(player.id);
       }
     }
-    room.logger.event('room_deleted', { reason: 'empty_room_cleanup' });
     return this.rooms.delete(roomId);
   }
 
@@ -356,13 +336,7 @@ export class RoomManager {
     const loser = room.players.find((p) => p.color !== room.winner);
     const stats = computeBoardStats(room.board);
 
-    room.logger.event('game_finished', {
-      winner: winner ? { color: winner.color, name: winner.name, ip: winner.ip } : { color: room.winner },
-      loser: loser ? { color: loser.color, name: loser.name, ip: loser.ip } : null,
-      reason: room.winReason || 'lives',
-      stats,
-      turnsPlayed: room.turn.turnsPlayed,
-    });
+    room.recorder.gameFinished(room.winner ?? null, room.winReason || 'lives');
     room.gameOverLogged = true;
   }
 
@@ -379,13 +353,7 @@ export class RoomManager {
     if (cell.hasMine) {
       cell.hasMine = false;
       player.minesPlaced--;
-      room.logger.event('setup_mine_toggled', {
-        player: { color, name: player.name, ip: player.ip },
-        row,
-        col,
-        hasMine: false,
-        minesPlaced: player.minesPlaced,
-      });
+      room.recorder.setupMine(color, row, col, false, player.minesPlaced);
       return { ok: true };
     }
     const setupLimit = color === 'red' ? room.config.initialMinesRed : room.config.initialMinesBlue;
@@ -394,13 +362,7 @@ export class RoomManager {
     }
     cell.hasMine = true;
     player.minesPlaced++;
-    room.logger.event('setup_mine_toggled', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      hasMine: true,
-      minesPlaced: player.minesPlaced,
-    });
+    room.recorder.setupMine(color, row, col, true, player.minesPlaced);
     return { ok: true };
   }
 
@@ -413,21 +375,14 @@ export class RoomManager {
     }
     player.setupConfirmed = true;
     room.setupConfirmed.add(color);
-    room.logger.event('setup_confirmed', {
-      player: { color, name: player.name, ip: player.ip },
-      minesPlaced: player.minesPlaced,
-    });
+    room.recorder.setupConfirmed(color, player.minesPlaced);
     const bothConfirmed = room.setupConfirmed.size === 2;
     if (bothConfirmed) {
       room.phase = 'phase1';
       room.turn  = createInitialTurnState('red');
       // Старт часов первого игрока
       room.turn.currentTurnStartedAtMs = Date.now();
-      room.logger.event('game_started', {
-        firstPlayer: 'red',
-        players: room.players.map((p) => ({ color: p.color, name: p.name, ip: p.ip })),
-        timeControl: room.config.timeControl,
-      });
+      room.recorder.gameStarted('red');
     }
     return { ok: true, bothConfirmed };
   }
@@ -449,15 +404,7 @@ export class RoomManager {
       room.config.minesPerTurn + (defensiveZone ? HQ_ACTION_ZONE_BONUS_MINES : 0);
 
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('zone_selected', {
-      player: { color, name: player.name, ip: player.ip },
-      clicked: { row: clickedRow, col: clickedCol },
-      displayZone,
-      actionZone,
-      defusesPerTurn: room.turn.defusesPerTurn,
-      defensiveZone,
-      minesAllowedThisTurn,
-    });
+    room.recorder.zoneSelect(color, { row: clickedRow, col: clickedCol }, displayZone, actionZone, this.getTimeLeftMs(room, color));
 
     room.turn.selectedZone = displayZone;
     room.turn.actionZone   = actionZone;
@@ -485,12 +432,7 @@ export class RoomManager {
       cell.hasMine = false;
       const player = room.players.find((p) => p.color === color)!;
       player.lives--;
-      room.logger.event('mine_exploded', {
-        player: { color, name: player.name, ip: player.ip },
-        row,
-        col,
-        livesLeft: player.lives,
-      });
+      room.recorder.mineHit(color, row, col, player.lives, { timeLeftMs: this.getTimeLeftMs(room, color) });
       refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
       // Сначала фиксируем «что произошло» — этим питается клиентский эффект
       // звука взрыва. Если этого не сделать ДО finalizeGameOver, на последнем
@@ -507,12 +449,7 @@ export class RoomManager {
       cell.owner = color;
       captured.add(`${row},${col}`);
       const player = room.players.find((p) => p.color === color)!;
-      room.logger.event('cell_captured', {
-        player: { color, name: player.name, ip: player.ip },
-        row,
-        col,
-        capturedThisTurn: captured.size,
-      });
+      room.recorder.cellOpen(color, row, col, { timeLeftMs: this.getTimeLeftMs(room, color) });
       const inDisplayZone =
         row >= displayZone.row && row < displayZone.row + 3 &&
         col >= displayZone.col && col < displayZone.col + 3 &&
@@ -559,14 +496,7 @@ export class RoomManager {
     room.turn.canDefuse = room.turn.defusesUsedThisTurn < room.turn.defusesPerTurn;
     const hadMine = cell.hasMine;
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('cell_defused', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      hadMine,
-      defusesUsedThisTurn: room.turn.defusesUsedThisTurn,
-      defusesPerTurn: room.turn.defusesPerTurn,
-    });
+    room.recorder.mineDefused(color, row, col, hadMine, { timeLeftMs: this.getTimeLeftMs(room, color) });
 
     if (hadMine) {
       this.clearMarkOnCell(room, row, col);
@@ -667,14 +597,6 @@ export class RoomManager {
 
     const captured = room.turn.capturedThisTurn as Set<string>;
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('chord_started', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      number: cell.number,
-      flagCount,
-      candidatesCount: candidates.length,
-    });
 
     // Шаг 1: ищем мину среди кандидатов. Если есть хотя бы одна — взрывается
     // ПЕРВАЯ по порядку обхода, остальные кандидаты НЕ захватываются.
@@ -688,24 +610,9 @@ export class RoomManager {
       }
       target.hasMine = false;
       player.lives--;
-      room.logger.event('mine_exploded', {
-        player: { color, name: player.name, ip: player.ip },
-        row: r,
-        col: c,
-        livesLeft: player.lives,
-        viaChord: true,
-      });
+      room.recorder.mineHit(color, r, c, player.lives, { viaChord: true, timeLeftMs: this.getTimeLeftMs(room, color) });
       refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
       room.turn.lastAction = { type: 'mine_exploded', actorColor: color, row: r, col: c, id: Date.now() };
-      room.logger.event('chord_finished', {
-        player: { color, name: player.name, ip: player.ip },
-        row,
-        col,
-        captureCount: 0,
-        hitMine: true,
-        mineRow: r,
-        mineCol: c,
-      });
       if (player.lives <= 0) {
         const opp = room.players.find((p) => p.color !== color)!;
         this.finalizeGameOver(room, opp.color, 'lives');
@@ -726,6 +633,7 @@ export class RoomManager {
       target.owner = color;
       captured.add(`${r},${c}`);
       captureCount++;
+      room.recorder.cellOpen(color, r, c, { viaChord: true, timeLeftMs: this.getTimeLeftMs(room, color) });
       const targetInDisplay =
         r >= displayZone.row && r < displayZone.row + 3 &&
         c >= displayZone.col && c < displayZone.col + 3;
@@ -733,14 +641,6 @@ export class RoomManager {
         revealNumberForCell(room.board, r, c, color, room.config);
       }
       if (this.checkHeadquartersCapture(room, color, r, c)) {
-        room.logger.event('chord_finished', {
-          player: { color, name: player.name, ip: player.ip },
-          row,
-          col,
-          captureCount,
-          hitMine: false,
-          headquarters: true,
-        });
         return { ok: true, hitMine: false, gameOver: true };
       }
     }
@@ -749,13 +649,6 @@ export class RoomManager {
     if (captureCount > 0) {
       room.turn.lastAction = null;
     }
-    room.logger.event('chord_finished', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      captureCount,
-      hitMine: false,
-    });
     return { ok: true, hitMine: false, gameOver: false };
   }
 
@@ -769,12 +662,6 @@ export class RoomManager {
     if (room.turn.phase !== 'phase2') return { ok: false, error: 'Сейчас не фаза захвата' };
     if (room.turn.currentPlayer !== color) return { ok: false, error: 'Сейчас не ваш ход' };
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('phase2_ended', {
-      player: { color, name: player.name, ip: player.ip },
-      capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
-      defusesUsedThisTurn: room.turn.defusesUsedThisTurn,
-      defusesPerTurn: room.turn.defusesPerTurn,
-    });
     this.startPhase3(room);
     return { ok: true };
   }
@@ -824,19 +711,10 @@ export class RoomManager {
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('phase3_mine_placed', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
-    });
+    room.recorder.phase3Mine(color, row, col, { timeLeftMs: this.getTimeLeftMs(room, color) });
     const done = room.turn.minesPlacedThisTurn >= room.turn.minesAllowedThisTurn;
     if (done) {
-      room.logger.event('phase3_ended', {
-        player: { color, name: player.name, ip: player.ip },
-        minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
-        reason: 'mine_limit_reached',
-      });
+      room.recorder.turnEnd(color, { timeLeftMs: this.getTimeLeftMs(room, color), turnsPlayed: room.turn.turnsPlayed });
       const gameOver = this.checkAndFinishTurn(room);
       return { ok: true, done: true, gameOver };
     }
@@ -847,10 +725,7 @@ export class RoomManager {
     if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Сейчас не фаза минирования' };
     if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Сейчас не ваш ход' };
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('phase3_ended', {
-      player: { color, name: player.name, ip: player.ip },
-      minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
-    });
+    room.recorder.turnEnd(color, { timeLeftMs: this.getTimeLeftMs(room, color), turnsPlayed: room.turn.turnsPlayed });
     const gameOver = this.checkAndFinishTurn(room);
     return { ok: true, gameOver };
   }
@@ -889,11 +764,6 @@ export class RoomManager {
     // Каждые DEFUSE_GRANT_INTERVAL завершённых совместных ходов оба игрока
     // получают +1 к лимиту разминирований на ход.
     if (nextDefusesPerTurn > prevDefusesPerTurn) {
-      room.logger.event('defuses_granted', {
-        turnsPlayed,
-        defusesPerTurn: nextDefusesPerTurn,
-        delta: nextDefusesPerTurn - prevDefusesPerTurn,
-      });
     }
 
     const nextColor: PlayerColor = room.turn.currentPlayer === 'red' ? 'blue' : 'red';
@@ -908,6 +778,18 @@ export class RoomManager {
    * Списать с текущего игрока время, прошедшее с начала его хода.
    * Сбрасывает currentTurnStartedAtMs — после вызова часы не идут.
    */
+/** Сколько мс осталось у игрока (с учётом времени, уже прошедшего в текущем ходу). */
+  private getTimeLeftMs(room: Room, color: PlayerColor): number | undefined {
+    if (room.config.timeControl.baseMs === 0) return undefined;
+    const p = room.players.find((pp) => pp.color === color);
+    if (!p) return undefined;
+    const startedAt = room.turn.currentTurnStartedAtMs;
+    if (room.turn.currentPlayer === color && startedAt !== null) {
+      return Math.max(0, p.timeMs - (Date.now() - startedAt));
+    }
+    return Math.max(0, p.timeMs);
+  }
+
   private commitTurnTime(room: Room): void {
     const startedAt = room.turn.currentTurnStartedAtMs;
     if (startedAt === null) return;
@@ -948,9 +830,6 @@ export class RoomManager {
     const opp = room.players.find((p) => p.color !== cur.color)!;
     // currentTurnStartedAtMs уже сброшен выше, finalizeGameOver просто меняет статус
     this.finalizeGameOver(room, opp.color, 'time');
-    room.logger.event('time_out', {
-      player: { color: cur.color, name: cur.name, ip: cur.ip },
-    });
     return true;
   }
 
@@ -968,12 +847,6 @@ export class RoomManager {
     if (cell.owner === color) return { ok: false, error: 'Нельзя ставить метку на свою клетку' };
     room.marks[color][`${row},${col}`] = mark;
     const player = room.players.find((p) => p.color === color)!;
-    room.logger.event('mark_toggled', {
-      player: { color, name: player.name, ip: player.ip },
-      row,
-      col,
-      mark,
-    });
     return { ok: true };
   }
 

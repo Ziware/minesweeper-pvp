@@ -77,29 +77,145 @@ code {
   font-family: ui-monospace, SF Mono, Consolas, monospace;
 }
 
-/* ─── Список логов ─────────────────────────────────────────────────────── */
-.log-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
+/* ─── Timeline-список логов ────────────────────────────────────────────── */
+.log-filters {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+  align-items: center;
 }
-.log-item {
-  background: var(--bg-elev);
+.log-filter-btn {
+  padding: 4px 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.log-filter-btn.active {
+  background: var(--bg-elev);
+  color: var(--text);
+  border-color: var(--accent);
+}
+.log-filter-btn:hover { color: var(--text); }
+.log-filter-count {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-left: 4px;
+  opacity: 0.85;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.log-month {
+  display: flex;
+  flex-direction: column;
+}
+.log-month-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 0 0 6px;
+  padding: 2px 4px;
+}
+.log-day {
+  margin-bottom: 8px;
+}
+.log-day-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 2px 6px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.log-day-weekday {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.log-row {
+  display: grid;
+  grid-template-columns: 70px 60px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  background: var(--bg-elev);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.log-item:hover { background: var(--bg-soft); border-color: var(--accent); }
-.log-item-label { font-weight: 600; word-break: break-word; }
-.log-item-meta  { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+.log-row:hover { background: var(--bg-soft); }
+.log-row.solo { border-left-color: #8e44ad; }
+.log-row.pvp  { border-left-color: #16a085; }
+.log-row.unknown { border-left-color: #555; }
+.log-row-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.log-row-mode {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  color: var(--text);
+}
+.log-row.solo .log-row-mode { background: #4b2862; color: #e6c6f4; }
+.log-row.pvp  .log-row-mode { background: #1d4e44; color: #b6ead9; }
+.log-row-players {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.92rem;
+  min-width: 0;
+}
+.log-row-player.red  { color: #ff8979; }
+.log-row-player.blue { color: #6fb8ff; }
+.log-row-player.winner { font-weight: 700; }
+.log-row-vs { color: var(--muted); padding: 0 4px; }
+.log-row-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.log-row-meta .pill {
+  background: var(--bg-soft);
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
 .log-list-empty {
   color: var(--muted);
   padding: 24px;
   text-align: center;
   border: 1px dashed var(--border);
   border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+  .log-row {
+    grid-template-columns: 50px auto 1fr;
+  }
+  .log-row-mode { font-size: 0.62rem; }
+  .log-row-meta { display: none; }
 }
 
 /* ─── Просмотрщик ──────────────────────────────────────────────────────── */
@@ -162,13 +278,13 @@ code {
 }
 .cell {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 78px;
+  height: 78px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.55rem;
   background: var(--bg-elev);
   user-select: none;
 }
@@ -190,19 +306,19 @@ code {
 }
 
 .cell .mine {
-  font-size: 1.7rem;
+  font-size: 2.3rem;
   line-height: 1;
 }
 .cell .mine.red  { color: #ff5a47; }
 .cell .mine.blue { color: #5aa9ff; }
 .cell .number {
-  font-size: 1.15rem;
+  font-size: 1.5rem;
 }
 .cell .mark {
   position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 0.85rem;
+  top: 3px;
+  right: 5px;
+  font-size: 1rem;
 }
 
 /* ─── Side panel ───────────────────────────────────────────────────────── */
@@ -307,14 +423,19 @@ code {
     max-height: none;
   }
 }
-@media (max-width: 800px) {
-  .cell { width: 40px; height: 40px; font-size: 1rem; }
-  .cell .mine { font-size: 1.3rem; }
-  .cell .number { font-size: 0.95rem; }
+@media (max-width: 900px) {
+  .cell { width: 52px; height: 52px; font-size: 1.15rem; }
+  .cell .mine { font-size: 1.55rem; }
+  .cell .number { font-size: 1.05rem; }
   .screen { padding: 12px; }
 }
-@media (max-width: 520px) {
-  .cell { width: 32px; height: 32px; font-size: 0.85rem; }
-  .cell .mine { font-size: 1.1rem; }
-  .cell .number { font-size: 0.8rem; }
+@media (max-width: 600px) {
+  .cell { width: 38px; height: 38px; font-size: 0.95rem; }
+  .cell .mine { font-size: 1.25rem; }
+  .cell .number { font-size: 0.9rem; }
+}
+@media (max-width: 420px) {
+  .cell { width: 30px; height: 30px; font-size: 0.8rem; }
+  .cell .mine { font-size: 1.05rem; }
+  .cell .number { font-size: 0.75rem; }
 }

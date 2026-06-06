@@ -1,41 +1,19 @@
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { ServerToClientEvents, ClientToServerEvents } from '@minesweeper-pvp/shared';
+import {
+  ServerToClientEvents,
+  ClientToServerEvents,
+  PlayerColor,
+  SoloLogPayload,
+} from '@minesweeper-pvp/shared';
 import { RoomManager } from './roomManager';
-import { getClientIp } from './gameLogger';
+import { createGameRecorder, getClientIp, type GameRecorder } from './gameRecorder';
 
-const SOLO_LOG_ROOT = process.env.GAME_LOG_DIR
-  ? path.join(process.env.GAME_LOG_DIR, 'solo')
-  : path.resolve(process.cwd(), 'logs', 'solo');
-
-function safeSegmentSolo(value: string): string {
-  return value
-    .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 64) || 'unknown';
-}
-
-function appendSoloLog(
-  sessionId: string,
-  playerName: string,
-  payload: Record<string, unknown>,
-) {
-  try {
-    fs.mkdirSync(SOLO_LOG_ROOT, { recursive: true });
-    const file = path.join(
-      SOLO_LOG_ROOT,
-      `${safeSegmentSolo(playerName)}-${safeSegmentSolo(sessionId)}.log.jsonl`,
-    );
-    fs.appendFileSync(file, `${JSON.stringify(payload)}\n`, 'utf8');
-  } catch (err) {
-    console.warn('[soloLog] failed to write', err);
-  }
-}
+// Per-socket map of active solo recorders (one socket = at most one solo session
+// in flight; if a new session_start arrives we close the previous one).
+const soloRecorders = new Map<string, GameRecorder>();
 
 const app = express();
 app.use(cors());
@@ -47,6 +25,95 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 });
 
 const roomManager = new RoomManager();
+
+// ─── Solo-session handler ───────────────────────────────────────────────────
+//
+// Solo логи приходят с фронтенда (нет сервера-исполнителя — движок крутится
+// в браузере). Backend здесь — лишь «писатель»: переводит каждое сообщение
+// SoloLogPayload в соответствующий вызов GameRecorder, чтобы файлы на диске
+// выглядели идентично с PvP-играми (одна директория, meta.json + game.log.jsonl).
+function handleSoloLog(
+  socketId: string,
+  handshake: { address?: string; headers: Record<string, unknown> },
+  payload: SoloLogPayload,
+): void {
+  if (payload.kind === 'session_start') {
+    // Если уже была активная сессия (новая игра подряд без disconnect),
+    // закрываем её корректным aborted-финишем.
+    const prev = soloRecorders.get(socketId);
+    if (prev && !prev.meta.endedAt) prev.gameFinished(null, 'aborted');
+
+    const ip = getClientIp(handshake.address, handshake.headers['x-forwarded-for'] as string | string[] | undefined);
+    const humanColor: PlayerColor = payload.humanColor;
+    const botColor: PlayerColor = humanColor === 'red' ? 'blue' : 'red';
+    const rec = createGameRecorder({
+      sessionId: payload.sessionId,
+      mode: 'solo',
+      initialPlayer: {
+        color: humanColor,
+        name: payload.playerName,
+        ip,
+      },
+    });
+    rec.setConfig(payload.config);
+    rec.setPlayer({
+      color: botColor,
+      name: payload.botName || `Бот (${payload.difficulty})`,
+      difficulty: payload.difficulty,
+      isBot: true,
+    });
+    soloRecorders.set(socketId, rec);
+    return;
+  }
+
+  const rec = soloRecorders.get(socketId);
+  if (!rec) {
+    console.warn('[soloLog] event without active session', payload.kind);
+    return;
+  }
+
+  switch (payload.kind) {
+    case 'setup_mine':
+      rec.setupMine(payload.actor, payload.row, payload.col, payload.hasMine, payload.minesPlaced);
+      break;
+    case 'setup_confirmed':
+      rec.setupConfirmed(payload.actor, payload.minesPlaced);
+      break;
+    case 'game_started':
+      rec.gameStarted(payload.firstPlayer);
+      break;
+    case 'zone_select':
+      rec.zoneSelect(payload.actor, payload.clicked, payload.displayZone, payload.actionZone);
+      break;
+    case 'cell_open':
+      rec.cellOpen(payload.actor, payload.row, payload.col, {
+        viaChord: payload.viaChord,
+        viaDefuse: payload.viaDefuse,
+      });
+      break;
+    case 'mine_hit':
+      rec.mineHit(payload.actor, payload.row, payload.col, payload.livesLeft, {
+        viaChord: payload.viaChord,
+      });
+      break;
+    case 'mine_defused':
+      rec.mineDefused(payload.actor, payload.row, payload.col, payload.hadMine);
+      break;
+    case 'phase3_mine':
+      rec.phase3Mine(payload.actor, payload.row, payload.col);
+      break;
+    case 'turn_end':
+      rec.turnEnd(payload.actor, { turnsPlayed: payload.turnsPlayed });
+      break;
+    case 'game_finished':
+      rec.gameFinished(payload.winner, payload.reason);
+      soloRecorders.delete(socketId);
+      break;
+    case 'session_aux':
+      rec.appendAux(payload.auxKind, payload.details);
+      break;
+  }
+}
 
 function broadcastGameState(roomId: string) {
   const room = roomManager.getRoomById(roomId);
@@ -204,24 +271,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('soloLog', ({ sessionId, playerName, humanColor, difficulty, event, details }) => {
-    const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
-    appendSoloLog(sessionId, playerName, {
-      ts: new Date().toISOString(),
-      sessionId,
-      socketId: socket.id,
-      ip,
-      playerName,
-      humanColor,
-      difficulty,
-      event,
-      ...(details ?? {}),
-    });
+  socket.on('soloLog', (payload: SoloLogPayload) => {
+    handleSoloLog(socket.id, socket.handshake, payload);
   });
 
   socket.on('disconnect', () => {
     const { room } = roomManager.removePlayer(socket.id);
     if (room) console.log(`[disconnect] left room ${room.id}`);
+    // Закрыть незакрытую solo-сессию: пишем game_finished='aborted' если игра
+    // не дошла до естественного конца. Recorder сам закроет meta.
+    const rec = soloRecorders.get(socket.id);
+    if (rec) {
+      if (!rec.meta.endedAt) rec.gameFinished(null, 'aborted');
+      soloRecorders.delete(socket.id);
+    }
   });
 });
 

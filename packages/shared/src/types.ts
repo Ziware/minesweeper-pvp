@@ -170,14 +170,113 @@ export interface ClientToServerEvents {
   toggleMark:      (data: C2S_ToggleMark) => void;
   // tabId позволяет серверу различать вкладки одного устройства
   restoreSession:  (data: { roomId: string; playerColor: PlayerColor; tabId: string }) => void;
-  /** Технический канал для одиночной игры — события идут без изменения
-   *  состояния, только для логирования факта партии vs. компьютер. */
-  soloLog:         (data: {
-    sessionId: string;
-    playerName: string;
-    humanColor: PlayerColor;
-    difficulty: string;
-    event: string;
-    details?: Record<string, unknown>;
-  }) => void;
+  /**
+   * Технический канал для одиночной игры. Фронтенд отправляет упрощённые
+   * «игровые» события (унифицированный с PvP словарь — `setup_mine`,
+   * `cell_open`, `mine_hit`, `mine_defused`, `phase3_mine`, `turn_end`,
+   * `game_finished`, …), а также события «жизненного цикла сессии»
+   * (`session_start` / `session_meta` / `session_aux`).
+   *
+   * `session_start` ОБЯЗАН прийти первым — он создаёт recorder и
+   * назначает meta. После `game_finished` запись закрывается.
+   */
+  soloLog:         (data: SoloLogPayload) => void;
 }
+
+// ─── Solo-log payload (unified game-event channel for solo mode) ──────────
+
+export type SoloLogPayload =
+  | {
+      kind: 'session_start';
+      sessionId: string;
+      playerName: string;
+      humanColor: PlayerColor;
+      difficulty: string;
+      botName?: string;
+      config: GameConfig;
+    }
+  | {
+      kind: 'setup_mine';
+      sessionId: string;
+      actor: PlayerColor;
+      row: number;
+      col: number;
+      hasMine: boolean;
+      minesPlaced: number;
+    }
+  | {
+      kind: 'setup_confirmed';
+      sessionId: string;
+      actor: PlayerColor;
+      minesPlaced: number;
+    }
+  | {
+      kind: 'game_started';
+      sessionId: string;
+      firstPlayer: PlayerColor;
+    }
+  | {
+      kind: 'zone_select';
+      sessionId: string;
+      actor: PlayerColor;
+      clicked: { row: number; col: number };
+      displayZone: { row: number; col: number };
+      actionZone: { row: number; col: number };
+    }
+  | {
+      kind: 'cell_open';
+      sessionId: string;
+      actor: PlayerColor;
+      row: number;
+      col: number;
+      viaChord?: boolean;
+      viaDefuse?: boolean;
+    }
+  | {
+      kind: 'mine_hit';
+      sessionId: string;
+      actor: PlayerColor;
+      row: number;
+      col: number;
+      livesLeft: number;
+      viaChord?: boolean;
+    }
+  | {
+      kind: 'mine_defused';
+      sessionId: string;
+      actor: PlayerColor;
+      row: number;
+      col: number;
+      hadMine: boolean;
+    }
+  | {
+      kind: 'phase3_mine';
+      sessionId: string;
+      actor: PlayerColor;
+      row: number;
+      col: number;
+    }
+  | {
+      kind: 'turn_end';
+      sessionId: string;
+      actor: PlayerColor;
+      turnsPlayed: number;
+    }
+  | {
+      kind: 'game_finished';
+      sessionId: string;
+      winner: PlayerColor | null;
+      reason: string;
+    }
+  /**
+   * «Прочие» события сессии, не относящиеся к игровым ходам:
+   *   bot_decision, bot_setup_planned, bot_search_failed, … —
+   *   пишутся отдельным файлом `aux.log.jsonl` рядом с `game.log.jsonl`,
+   *   на просмотрщик не влияют. Backend просто складирует JSON «как есть».
+   */
+  | {
+      kind: 'session_aux';
+      sessionId: string;
+      auxKind: string;
+      details?: Record<string, unknown>;
+    };
