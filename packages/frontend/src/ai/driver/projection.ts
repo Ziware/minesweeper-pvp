@@ -15,6 +15,19 @@ import type {
 import type { EngineState } from '../types';
 
 function isDebugRevealEnabled(): boolean {
+  // 1. Build-time Vite env var (VITE_DEBUG_REVEAL_BOARD=1 yarn dev).
+  //    Mirrors the backend's DEBUG_REVEAL_BOARD=1 so the same CLI flag works
+  //    for both online play (env on backend) and local-vs-bot play (env on
+  //    frontend Vite dev server).
+  try {
+    if (typeof import.meta !== 'undefined'
+        && (import.meta as any).env?.VITE_DEBUG_REVEAL_BOARD === '1') {
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  // 2. Runtime override via DevTools: localStorage.setItem('debug_reveal_board','1').
   try {
     return typeof localStorage !== 'undefined'
       && localStorage.getItem('debug_reveal_board') === '1';

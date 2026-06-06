@@ -44,8 +44,10 @@ export const DIFFICULTY_PRESETS: Record<Difficulty, BotConfig> = {
     setupHeuristicNoise: 0.3,
   },
   normal: {
-    simulationBudget: 1500,
-    maxThinkMs: 1000,
+    // Думает «верхнеуровнево» — минимальный бюджет, почти без раздумий.
+    // Это самый быстрый из трёх уровней по времени хода.
+    simulationBudget: 750,
+    maxThinkMs: 500,
     deductionLevel: 'full',
     layoutSamples: 8,
     rolloutDepth: 4,
@@ -70,8 +72,9 @@ export const DIFFICULTY_PRESETS: Record<Difficulty, BotConfig> = {
     // numbers caused regressions (bot ignored HQ threats and wandered to
     // the opposite side of the board because no capture was legal under
     // the strict threshold and rollouts became too noisy).
-    simulationBudget: 8000,
-    maxThinkMs: 5000,
+    // Время раздумий как у прежнего «среднего» — секунда максимум.
+    simulationBudget: 1500,
+    maxThinkMs: 1000,
     deductionLevel: 'full',
     layoutSamples: 8,
     rolloutDepth: 4,

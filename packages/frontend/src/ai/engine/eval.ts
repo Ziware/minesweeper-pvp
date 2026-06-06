@@ -337,6 +337,16 @@ function scorePlaceMinePhase3(
   const justCaptured = state.turn.capturedThisTurn.has(cellKey(row, col)) ? 1 : 0;
 
   // CORNER / EDGE penalty.
+  // A "corner cell" per spec is any cell lying ON or BELOW the anti-diagonal
+  // of the 3×3 block touching one of the four board corners — i.e. cells
+  // whose Manhattan distance to the nearest board corner is ≤ 2. Mines in
+  // that triangular region are nearly useless: the enemy almost never has
+  // a capture path that passes through them, so they sit dead all game.
+  // We apply a HUGE penalty (an order of magnitude larger than any positive
+  // term in this function) so the bot effectively never picks a corner cell
+  // unless literally nothing else is available.
+  const cornerDist = isCornerTriangleDist(row, col, size);
+  const cornerPenalty = cornerDist <= 2 ? 10 : 0;
   const edgeDist = Math.min(row, col, size - 1 - row, size - 1 - col);
   const isCorner = (row === 0 || row === size - 1) && (col === 0 || col === size - 1);
   let edgePenalty = 0;
@@ -377,8 +387,20 @@ function scorePlaceMinePhase3(
     + 0.10 * offenseBonus
     - 0.60 * edgePenalty
     - 0.45 * clusterPenalty
+    - cornerPenalty
     + jitter
   );
+}
+
+/**
+ * Manhattan distance from (row, col) to the nearest board corner.
+ * Cells in the "corner triangle" (on/below the anti-diagonal of the 3×3
+ * corner block) are exactly those with `cornerTriangleDist(...) <= 2`.
+ */
+function isCornerTriangleDist(row: number, col: number, size: number): number {
+  const r0 = Math.min(row, size - 1 - row);
+  const c0 = Math.min(col, size - 1 - col);
+  return r0 + c0;
 }
 
 function scorePlaceMineSetup(
@@ -392,7 +414,9 @@ function scorePlaceMineSetup(
   const hqDist = minDistFromCellToHq(row, col, color, size);
   // Sweet spot: 2..4 cells from HQ.
   const sweet = 1 - Math.abs(hqDist - 3) / size;
-  return sweet;
+  // Heavy corner-triangle penalty (see scorePlaceMinePhase3 for rationale).
+  const cornerPenalty = isCornerTriangleDist(row, col, size) <= 2 ? 10 : 0;
+  return sweet - cornerPenalty;
 }
 
 function minDistFromCellToHq(row: number, col: number, hqColor: PlayerColor, size: number): number {
