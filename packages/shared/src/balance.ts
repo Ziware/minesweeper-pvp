@@ -95,7 +95,7 @@ export const ALLOWED_TIME_CONTROLS: TimeControl[] =
 
 /** Текст со списком пресетов, например "2+3, 3+5 или 5+7". */
 export function formatTimeControlPresetsList(): string {
-  const labels = BALANCE.timeControls.presets.map((p) => p.label.replace(/\s+/g, ''));
+  const labels = BALANCE.timeControls.presets.map((p) => p.label);
   if (labels.length <= 1) return labels.join('');
   return `${labels.slice(0, -1).join(', ')} или ${labels[labels.length - 1]}`;
 }

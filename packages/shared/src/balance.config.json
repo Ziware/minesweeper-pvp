@@ -22,7 +22,7 @@
       { "label": "2 + 3", "baseMinutes": 2, "incrementSeconds": 3 },
       { "label": "5 + 5", "baseMinutes": 5, "incrementSeconds": 5 },
       { "label": "10 + 15", "baseMinutes": 10, "incrementSeconds": 15 },
-      { "label": "∞ Без часов", "baseMinutes": 0, "incrementSeconds": 0 }
+      { "label": "Без часов", "baseMinutes": 0, "incrementSeconds": 0 }
     ]
   }
 }
