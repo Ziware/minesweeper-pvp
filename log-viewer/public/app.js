@@ -491,30 +491,9 @@ function applyEvent(s, ev) {
   }
 }
 
-// ─── Numbers: ONLY inside currently-active display zone ────────────────────
-function computeNumbersInDisplayZone(s) {
-  const numbers = new Map();
-  const dz = s.displayZone;
-  if (!dz) return numbers;
-  const size = s.config.boardSize;
-  for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 3; dc++) {
-    const r = dz.row + dr;
-    const c = dz.col + dc;
-    if (r < 0 || c < 0 || r >= size || c >= size) continue;
-    const cell = s.board[r][c];
-    if (!cell.owner) continue;
-    let count = 0;
-    for (let er = -1; er <= 1; er++) for (let ec = -1; ec <= 1; ec++) {
-      if (er === 0 && ec === 0) continue;
-      const nr = r + er, nc = c + ec;
-      if (nr < 0 || nc < 0 || nr >= size || nc >= size) continue;
-      const n = s.board[nr][nc];
-      if (n.hasMine && n.owner !== cell.owner) count++;
-    }
-    numbers.set(`${r},${c}`, count);
-  }
-  return numbers;
-}
+// Цифры на поле умышленно не отображаются: в просмотрщике мы и так видим
+// расположение всех мин обоих игроков, число «сколько мин соперника рядом»
+// никакой дополнительной информации не несёт.
 
 // ─── Visible-steps filter ──────────────────────────────────────────────────
 function rebuildVisible() {
@@ -542,7 +521,6 @@ function renderCurrent() {
   if (!snap) return;
   const s = snap.state;
   const size = s.config.boardSize;
-  const numbers = computeNumbersInDisplayZone(s);
 
   boardEl.style.gridTemplateColumns = `repeat(${size}, auto)`;
   boardEl.innerHTML = '';
@@ -571,15 +549,6 @@ function renderCurrent() {
         m.className = 'mine ' + (cell.owner || '');
         m.textContent = '💣';
         div.appendChild(m);
-      } else if (inDisplay) {
-        const n = numbers.get(`${r},${c}`);
-        if (n !== undefined && n > 0) {
-          const ns = document.createElement('span');
-          ns.className = 'number';
-          ns.textContent = String(n);
-          ns.style.color = numberColor(n);
-          div.appendChild(ns);
-        }
       }
       boardEl.appendChild(div);
     }
@@ -591,7 +560,6 @@ function renderCurrent() {
     <span><span class="legend-swatch" style="background:transparent;border-color:var(--highlight)"></span>HQ / display 3×3</span>
     <span><span class="legend-swatch" style="background:transparent;border-color:var(--accent)"></span>action 5×5</span>
     <span>💣 — мина (своя для цвета клетки)</span>
-    <span>Цифры — только внутри display 3×3</span>
   `;
 
   const pRed = s.players.red, pBlue = s.players.blue;
@@ -678,20 +646,6 @@ function renderEventDetail(ev) {
   if (kv.length) parts.push('<br>' + kv.join(' · '));
   if (ev.tsLocal || ev.ts) parts.push(`<br><span style="opacity:.6">ts: ${escapeHtml(ev.tsLocal || ev.ts)}${typeof ev.t === 'number' ? ` (+${formatDuration(ev.t)})` : ''}</span>`);
   return parts.join('');
-}
-
-function numberColor(n) {
-  switch (n) {
-    case 1: return '#5aa9ff';
-    case 2: return '#3ec78e';
-    case 3: return '#ff7a6a';
-    case 4: return '#9c6bff';
-    case 5: return '#e29a5b';
-    case 6: return '#5fd5d0';
-    case 7: return '#dddddd';
-    case 8: return '#888888';
-    default: return '#ccc';
-  }
 }
 
 // ─── Utilities ─────────────────────────────────────────────────────────────

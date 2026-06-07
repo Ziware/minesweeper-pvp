@@ -244,7 +244,7 @@ code {
 
 .viewer-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
   gap: 16px;
   align-items: start;
 }
@@ -348,23 +348,42 @@ code {
   grid-template-columns: auto 1fr;
   gap: 4px 10px;
   font-size: 0.9rem;
+  align-items: center;
 }
 .state-panel .lbl { color: var(--muted); }
 .state-panel .val { font-weight: 500; }
 
+/* Полоски игроков занимают всю ширину обоих столбцов сетки — это решает
+ * проблему разной ширины бара red/blue при коротких/длинных именах. */
 .player-bar {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
+  width: 100%;
+  box-sizing: border-box;
 }
 .player-bar.red  { background: var(--red-soft); }
 .player-bar.blue { background: var(--blue-soft); }
 .player-bar.active { outline: 1px solid var(--highlight); }
-.player-bar-name { font-weight: 600; }
-.player-bar-stats { font-size: 0.85rem; color: #eee; }
+.player-bar-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.player-bar-stats {
+  font-size: 0.85rem;
+  color: #eee;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
 
 .event-panel {
   font-size: 0.88rem;
