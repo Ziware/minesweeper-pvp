@@ -346,7 +346,7 @@ function scorePlaceMinePhase3(
   // steps away are mildly discouraged, and cells three+ steps away are
   // unaffected.
   const cornerDist = cornerManhattanDist(row, col, size);
-  const cornerPenalty = Math.max(0, (3 - cornerDist) / 3) * 10;
+  const cornerPenalty = Math.max(0, (2 - cornerDist) / 2) * 7;
   const edgeDist = Math.min(row, col, size - 1 - row, size - 1 - col);
   const isCorner = (row === 0 || row === size - 1) && (col === 0 || col === size - 1);
   let edgePenalty = 0;
@@ -416,7 +416,7 @@ function scorePlaceMineSetup(
   // Dynamic corner penalty: linear ramp, max at the corner, 0 at dist ≥ 3.
   // See scorePlaceMinePhase3 for full rationale.
   const cornerDist = cornerManhattanDist(row, col, size);
-  const cornerPenalty = Math.max(0, (3 - cornerDist) / 3) * 10;
+  const cornerPenalty = Math.max(0, (2 - cornerDist) / 2) * 10;
   return sweet - cornerPenalty;
 }
 
