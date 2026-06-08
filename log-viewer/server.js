@@ -25,6 +25,7 @@ const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 const url  = require('url');
+const { exec } = require('child_process');
 
 const PORT        = parseInt(process.env.PORT || '5174', 10);
 const ROOT        = __dirname;
@@ -181,6 +182,17 @@ const server = http.createServer((req, res) => {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return sendText(res, 405, 'Method not allowed');
+  }
+
+  if (pathname === '/api/sync') {
+    const rsyncCommand = `rsync -e 'ssh -o RemoteCommand=none -o RequestTTY=no' -avz --delete ziware@zishka:/home/ziware/minesweeper-pvp/logs/ ${LOGS_DIR}/`;
+    exec(rsyncCommand, (error, stdout, stderr) => {
+      if (error) {
+        return sendJson(res, 500, { error: `rsync failed: ${error.message}`, stderr });
+      }
+      return sendJson(res, 200, { success: true, message: 'Logs synced successfully', output: stdout });
+    });
+    return;
   }
 
   if (pathname === '/api/sessions') {

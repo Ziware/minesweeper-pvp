@@ -112,6 +112,7 @@ loadList();
 async function loadList() {
   logListEl.textContent = 'Загрузка…';
   try {
+    const a = await fetch('/api/sync');
     const r = await fetch('/api/sessions');
     const j = await r.json();
     allSessions = j.sessions || [];
