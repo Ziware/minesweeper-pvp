@@ -2,7 +2,7 @@ services:
   log-viewer:
     build:
       context: .
-      dockerfile: log-viewer/Dockerfile
+      dockerfile: Dockerfile
     container_name: minesweeper-log-viewer
     restart: unless-stopped
     ports:
