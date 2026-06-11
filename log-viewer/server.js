@@ -185,7 +185,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === '/api/sync') {
-    const rsyncCommand = `rsync -e 'ssh -o RemoteCommand=none -o RequestTTY=no' -avz --delete ziware@zishka:/home/ziware/minesweeper-pvp/logs/ ${LOGS_DIR}/`;
+    const rsyncCommand = `rsync -e 'ssh -i /root/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o RemoteCommand=none -o RequestTTY=no' -avz --delete ziware@zishka:/home/ziware/minesweeper-pvp/logs/ ${LOGS_DIR}/`;
     exec(rsyncCommand, (error, stdout, stderr) => {
       if (error) {
         return sendJson(res, 500, { error: `rsync failed: ${error.message}`, stderr });

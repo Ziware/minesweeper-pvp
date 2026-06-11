@@ -9,7 +9,7 @@ set -eu
 
 # Обновляем логи с удалённого сервера
 echo "[log-viewer] Syncing logs from remote server..."
-if rsync -e 'ssh -o RemoteCommand=none -o RequestTTY=no' \
+if rsync -e 'ssh -i /root/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o RemoteCommand=none -o RequestTTY=no' \
   -avz --delete \
   ziware@zishka:/home/ziware/minesweeper-pvp/logs/ \
   logs/; then
