@@ -16,7 +16,3 @@ services:
       - ./ssh-keys:/root/.ssh
     networks:
       - minesweeper-net
-
-networks:
-  minesweeper-net:
-    external: true
