@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # `RemoteCommand` в ~/.ssh/config для хоста zishka блокирует выполнение
 # любых пользовательских команд (включая rsync) с ошибкой
@@ -9,11 +9,14 @@ set -euo pipefail
 
 # Обновляем логи с удалённого сервера
 echo "[log-viewer] Syncing logs from remote server..."
-rsync -e 'ssh -o RemoteCommand=none -o RequestTTY=no' \
+if rsync -e 'ssh -o RemoteCommand=none -o RequestTTY=no' \
   -avz --delete \
   ziware@zishka:/home/ziware/minesweeper-pvp/logs/ \
-  logs/
-echo "[log-viewer] Log sync complete."
+  logs/; then
+  echo "[log-viewer] Log sync complete."
+else
+  echo "[log-viewer] Log sync failed; starting server without fresh remote logs."
+fi
 
 # Запускаем сервер
 echo "[log-viewer] Starting server..."
