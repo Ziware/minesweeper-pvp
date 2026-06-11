@@ -19,5 +19,5 @@ RUN chmod +x start.sh
 # Expose the port
 EXPOSE 5174
 
-# Start the server with log sync
-CMD ["./start.sh"]
+# Start the server with log sync. Run through sh so Alpine does not need bash.
+CMD ["sh", "./start.sh"]
