@@ -10,14 +10,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5174
-      # SSH connection settings (adjust as needed)
-      - SSH_HOST=zishka
-      - SSH_USER=ziware
-      - SSH_LOG_PATH=/home/ziware/minesweeper-pvp/logs/
     volumes:
       - ./logs:/app/logs
       # Persistent SSH keys storage
-      - ./log-viewer/ssh-keys:/root/.ssh
+      - ./ssh-keys:/root/.ssh
     networks:
       - minesweeper-net
 
