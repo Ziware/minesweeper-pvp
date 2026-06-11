@@ -7,10 +7,12 @@ services:
     restart: unless-stopped
     ports:
       - "5174:5174"
+    entrypoint: ["/bin/sh", "-c", "exec /bin/sh /app/start.sh"]
     environment:
       - NODE_ENV=production
       - PORT=5174
     volumes:
+      - ./start.sh:/app/start.sh:ro
       - ./logs:/app/logs
       # Persistent SSH keys storage
       - ./ssh-keys:/root/.ssh
