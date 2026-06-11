@@ -14,5 +14,3 @@ services:
       - ./logs:/app/logs
       # Persistent SSH keys storage
       - ./ssh-keys:/root/.ssh
-    networks:
-      - minesweeper-net
