@@ -36,10 +36,12 @@
 
 /* Avatar button (logged-in) */
 .avatarBtn {
-  /* Fill full height of the header (bleeds into padding via .anchor negative margins) */
+  /* Fill full height of the header; cap at 44px to prevent unbounded growth */
   width: auto;
-  aspect-ratio: 1 / 1;
   height: 100%;
+  max-height: 44px;
+  max-width: 44px;
+  aspect-ratio: 1 / 1;
   border-radius: 0;
   border: none;
   border-left: 2px solid #e67e22;

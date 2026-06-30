@@ -122,6 +122,34 @@
 .verifyResendBtn:hover:not(:disabled) { color: #aab8d0; }
 .verifyResendBtn:disabled { opacity: .4; cursor: default; }
 
+/* ── Verify modal ─────────────────────────────────────────────────────────── */
+
+.verifyModalTitle {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #eee;
+}
+
+.verifyModalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.verifyCodeLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #aab8d0;
+}
+
+.verifyResendRow {
+  margin-top: 12px;
+  text-align: center;
+}
+
 /* ── Profile card ─────────────────────────────────────────────────────────── */
 
 .card {
@@ -133,6 +161,17 @@
   padding: 24px;
   margin-bottom: 24px;
   align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+/* Activity calendar inside the card — takes up remaining space on the right */
+.activitySection {
+  flex: 1;
+  min-width: 280px;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 4px;
 }
 
 /* ── Avatar ───────────────────────────────────────────────────────────────── */
@@ -554,13 +593,17 @@
 
 /* ── Mobile ────────────────────────────────────────────────────────────────── */
 
-@media (max-width: 560px) {
+@media (max-width: 700px) {
   .card {
     flex-direction: column;
     align-items: center;
   }
   .info {
     width: 100%;
+  }
+  .activitySection {
+    width: 100%;
+    min-width: 0;
   }
   .statsGrid {
     grid-template-columns: repeat(3, 1fr);

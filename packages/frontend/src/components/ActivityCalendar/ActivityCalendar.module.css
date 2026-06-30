@@ -52,11 +52,9 @@
   overflow-x: auto;
 }
 
-/* Month labels row — CSS grid with 52 columns */
+/* Month labels row — columns set dynamically via inline style */
 .monthRow {
   display: grid;
-  grid-template-columns: repeat(52, 11px);
-  gap: 2px;
   margin-bottom: 2px;
   height: 14px;
 }

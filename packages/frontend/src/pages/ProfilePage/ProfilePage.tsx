@@ -2,11 +2,11 @@ import React, { useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useProfile, type GameRecord } from '../../hooks/useProfile';
-import { ActivityCalendar } from '../../components/ActivityCalendar/ActivityCalendar';
 import { useSettings } from '../../hooks/useSettings';
 import { ProfileButton } from '../../components/ProfileButton/ProfileButton';
 import { SettingsMenu } from '../../components/SettingsMenu/SettingsMenu';
 import { Icon } from '../../components/Icon/Icon';
+import { ActivityCalendar } from '../../components/ActivityCalendar/ActivityCalendar';
 import styles from './ProfilePage.module.css';
 import appStyles from '../../App.module.css';
 
@@ -95,10 +95,13 @@ export function ProfilePage() {
   const [editError,    setEditError]    = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Email verification dialog state
-  const [verifyStep,   setVerifyStep]   = useState<'idle' | 'entering' | 'submitting' | 'done' | 'error'>('idle');
-  const [verifyCode,   setVerifyCode]   = useState('');
-  const [verifyErrMsg, setVerifyErrMsg] = useState('');
+  // Email verification modal state
+  const [verifyModalOpen,  setVerifyModalOpen]  = useState(false);
+  const [verifySending,    setVerifySending]    = useState(false);
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
+  const [verifyCode,       setVerifyCode]       = useState('');
+  const [verifyErrMsg,     setVerifyErrMsg]     = useState('');
+  const [verifyDone,       setVerifyDone]       = useState(false);
 
   // Delete account dialog state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -146,6 +149,55 @@ export function ProfilePage() {
     }
   }, [deleteAvatar]);
 
+  // Open the verify modal: send the code first, then show modal
+  const handleOpenVerifyModal = async () => {
+    if (!profile?.email) return;
+    setVerifyErrMsg('');
+    setVerifyCode('');
+    setVerifySending(true);
+    try {
+      await resendVerification(profile.email);
+      setVerifyModalOpen(true);
+    } catch {
+      setVerifyErrMsg('Ошибка отправки кода');
+    } finally {
+      setVerifySending(false);
+    }
+  };
+
+  // Submit the code
+  const handleSubmitVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.email || !verifyCode.trim()) return;
+    setVerifySubmitting(true);
+    setVerifyErrMsg('');
+    try {
+      const { token } = await verifyEmailCode(profile.email, verifyCode.trim());
+      localStorage.setItem('auth_token', token);
+      setVerifyModalOpen(false);
+      setVerifyDone(true);
+    } catch (err) {
+      setVerifyErrMsg(err instanceof Error ? err.message : 'Неверный или истёкший код');
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
+  // Resend from inside the modal
+  const handleResendFromModal = async () => {
+    if (!profile?.email) return;
+    setVerifyErrMsg('');
+    setVerifyCode('');
+    setVerifySending(true);
+    try {
+      await resendVerification(profile.email);
+    } catch {
+      setVerifyErrMsg('Ошибка отправки кода');
+    } finally {
+      setVerifySending(false);
+    }
+  };
+
   // Delete account — called after confirmation
   const handleDeleteAccount = async () => {
     setDeleteInProgress(true);
@@ -160,42 +212,11 @@ export function ProfilePage() {
     }
   };
 
-  // Send the verification code and open the input dialog
-  const handleResend = async () => {
-    if (!profile?.email) return;
-    setVerifyErrMsg('');
-    try {
-      await resendVerification(profile.email);
-      setVerifyCode('');
-      setVerifyStep('entering');
-    } catch {
-      setVerifyStep('error');
-      setVerifyErrMsg('Ошибка отправки кода');
-    }
-  };
-
-  // Submit the code the user entered
-  const handleSubmitVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile?.email || !verifyCode.trim()) return;
-    setVerifyStep('submitting');
-    setVerifyErrMsg('');
-    try {
-      const { token } = await verifyEmailCode(profile.email, verifyCode.trim());
-      // Update the stored JWT so the auth state reflects the verified status
-      localStorage.setItem('auth_token', token);
-      setVerifyStep('done');
-    } catch (err) {
-      setVerifyErrMsg(err instanceof Error ? err.message : 'Неверный или истёкший код');
-      setVerifyStep('entering');
-    }
-  };
-
   // ── Shared header ────────────────────────────────────────────────────────────
 
   const renderHeader = () => (
     <div className={appStyles.gameHeader}>
-      <h2 className={appStyles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
+      <h2 className={appStyles.logo}><Icon name="headquarters" size="1.1em" /> Minesweeper PvP</h2>
       <div className={appStyles.headerActions}>
         <div className={appStyles.settingsAnchor} data-settings-anchor>
           <button
@@ -231,8 +252,10 @@ export function ProfilePage() {
     return (
       <div className={appStyles.gameLayout}>
         {renderHeader()}
-        <div className={styles.page}>
-          <div className={styles.loading}>Загрузка профиля…</div>
+        <div className={styles.pageBody}>
+          <div className={styles.page}>
+            <div className={styles.loading}>Загрузка профиля…</div>
+          </div>
         </div>
       </div>
     );
@@ -242,11 +265,13 @@ export function ProfilePage() {
     return (
       <div className={appStyles.gameLayout}>
         {renderHeader()}
-        <div className={styles.page}>
-          <div className={styles.error}>
-            {error ?? 'Профиль не найден'}
-            <br />
-            <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
+        <div className={styles.pageBody}>
+          <div className={styles.page}>
+            <div className={styles.error}>
+              {error ?? 'Профиль не найден'}
+              <br />
+              <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
+            </div>
           </div>
         </div>
       </div>
@@ -269,51 +294,20 @@ export function ProfilePage() {
       {/* Email verification banner (only for the owner) */}
       {isMe && profile.emailVerified === false && (
         <div className={styles.verifyBanner}>
-          {verifyStep === 'done' ? (
+          {verifyDone ? (
             <span className={styles.verifySent}>✓ Email подтверждён!</span>
-          ) : verifyStep === 'entering' || verifyStep === 'submitting' ? (
-            /* Inline code entry form */
-            <form className={styles.verifyForm} onSubmit={handleSubmitVerifyCode}>
-              <span>Введите код из письма:</span>
-              <input
-                className={styles.verifyCodeInput}
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="______"
-                value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value)}
-                disabled={verifyStep === 'submitting'}
-                autoFocus
-              />
-              <button
-                className={styles.verifyBtn}
-                type="submit"
-                disabled={verifyStep === 'submitting' || !verifyCode.trim()}
-              >
-                {verifyStep === 'submitting' ? '…' : 'Подтвердить'}
-              </button>
-              <button
-                className={styles.verifyResendBtn}
-                type="button"
-                onClick={handleResend}
-                disabled={verifyStep === 'submitting'}
-              >
-                Отправить снова
-              </button>
-              {verifyErrMsg && <span className={styles.verifyErr}>{verifyErrMsg}</span>}
-            </form>
           ) : (
             <>
               <span>⚠️ Email не подтверждён. Некоторые функции могут быть недоступны.</span>
-              {verifyStep === 'idle' && (
-                <button className={styles.verifyBtn} onClick={handleResend}>Подтвердить</button>
-              )}
-              {verifyStep === 'error' && (
-                <>
-                  <span className={styles.verifyErr}>{verifyErrMsg}</span>
-                  <button className={styles.verifyBtn} onClick={handleResend}>Повторить</button>
-                </>
+              <button
+                className={styles.verifyBtn}
+                onClick={handleOpenVerifyModal}
+                disabled={verifySending}
+              >
+                {verifySending ? '…' : 'Подтвердить'}
+              </button>
+              {verifyErrMsg && !verifyModalOpen && (
+                <span className={styles.verifyErr}>{verifyErrMsg}</span>
               )}
             </>
           )}
@@ -410,10 +404,12 @@ export function ProfilePage() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Activity calendar */}
-      <ActivityCalendar activity={activity} />
+        {/* Activity calendar — right side of card */}
+        <div className={styles.activitySection}>
+          <ActivityCalendar activity={activity} weeks={26} />
+        </div>
+      </div>
 
       {/* Stats grid */}
       {stats && (
@@ -518,6 +514,65 @@ export function ProfilePage() {
                 disabled={deleteInProgress}
               >
                 Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email verification modal */}
+      {verifyModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.confirmDialog}>
+            <h3 className={styles.verifyModalTitle}>Подтверждение email</h3>
+            <p className={styles.confirmText}>
+              Мы отправили 6-значный код на <strong>{profile.email}</strong>.<br />
+              Введите его ниже. Код действителен 15 минут.
+            </p>
+            <form onSubmit={handleSubmitVerifyCode} className={styles.verifyModalForm}>
+              <label className={styles.verifyCodeLabel}>
+                Код из письма
+                <input
+                  className={styles.verifyCodeInput}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                  disabled={verifySubmitting}
+                  autoFocus
+                  required
+                />
+              </label>
+              {verifyErrMsg && <p className={styles.confirmError}>{verifyErrMsg}</p>}
+              <div className={styles.confirmActions}>
+                <button
+                  className={styles.saveBtn}
+                  type="submit"
+                  disabled={verifySubmitting || verifyCode.length !== 6}
+                >
+                  {verifySubmitting ? 'Проверяем…' : 'Подтвердить'}
+                </button>
+                <button
+                  className={styles.confirmCancelBtn}
+                  type="button"
+                  onClick={() => { setVerifyModalOpen(false); setVerifyErrMsg(''); }}
+                  disabled={verifySubmitting}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+            <div className={styles.verifyResendRow}>
+              <button
+                className={styles.verifyResendBtn}
+                type="button"
+                onClick={handleResendFromModal}
+                disabled={verifySending || verifySubmitting}
+              >
+                {verifySending ? 'Отправляем…' : 'Отправить код снова'}
               </button>
             </div>
           </div>
