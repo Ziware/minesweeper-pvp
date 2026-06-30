@@ -23,6 +23,7 @@
     "fastify-plugin": "^4.5.1",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.14",
+    "prisma": "^5.14.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -30,7 +31,6 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.0.0",
     "@types/nodemailer": "^6.4.15",
-    "prisma": "^5.14.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.0.0"
   }
