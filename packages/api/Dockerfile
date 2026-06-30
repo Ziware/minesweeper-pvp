@@ -48,4 +48,4 @@ WORKDIR /app/packages/api
 
 EXPOSE 3002
 
-CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy --schema=src/prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "/app/node_modules/.bin/prisma db push --schema=src/prisma/schema.prisma --accept-data-loss && node dist/index.js"]
