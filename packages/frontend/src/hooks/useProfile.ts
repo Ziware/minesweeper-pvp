@@ -1,8 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_BASE = '/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ActivityDay {
+  date:  string;
+  count: number;
+}
 
 export interface PublicProfileStats {
   avatarUrl:         string | null;
@@ -83,6 +88,16 @@ async function apiUpload<T>(path: string, file: File, token: string): Promise<T>
   return data as T;
 }
 
+async function apiDelete<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message ?? 'Ошибка сервера');
+  return data as T;
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useProfile(login: string, myId?: string, token?: string | null) {
@@ -93,6 +108,9 @@ export function useProfile(login: string, myId?: string, token?: string | null) 
   const [page,       setPage]       = useState(1);
   const [isLoading,  setIsLoading]  = useState(true);
   const [error,      setError]      = useState<string | null>(null);
+  const [activity,   setActivity]   = useState<ActivityDay[]>([]);
+  // Track last login fetched to avoid double-fetching on token change
+  const activityFetchedRef = useRef<string | null>(null);
 
   const isMe = !!myId && profile?.id === myId;
 
@@ -122,6 +140,15 @@ export function useProfile(login: string, myId?: string, token?: string | null) 
       .catch(() => { /* silently fail for games list */ });
   }, [login, page, token]);
 
+  // Load activity heatmap once per login
+  useEffect(() => {
+    if (!login || activityFetchedRef.current === login) return;
+    activityFetchedRef.current = login;
+    apiFetch<{ activity: ActivityDay[] }>(`/users/${login}/activity`, token)
+      .then(({ activity }) => setActivity(activity))
+      .catch(() => { /* silently fail */ });
+  }, [login, token]);
+
   const updateProfile = useCallback(async (bio: string | null, avatarUrl?: string | null) => {
     if (!token) throw new Error('Требуется авторизация');
     const { profile: updated } = await apiPatch<{ profile: PublicProfileStats }>(
@@ -142,6 +169,17 @@ export function useProfile(login: string, myId?: string, token?: string | null) 
     return avatarUrl;
   }, [token]);
 
+  const deleteAvatar = useCallback(async (): Promise<void> => {
+    if (!token) throw new Error('Требуется авторизация');
+    const { profile: updated } = await apiDelete<{ profile: PublicProfileStats }>('/users/me/avatar', token);
+    setProfile((prev) => prev ? { ...prev, profile: updated } : prev);
+  }, [token]);
+
+  const deleteAccount = useCallback(async (): Promise<void> => {
+    if (!token) throw new Error('Требуется авторизация');
+    await apiDelete<{ ok: boolean }>('/users/me', token);
+  }, [token]);
+
   const resendVerification = useCallback(async (email: string) => {
     const res = await fetch(`${API_BASE}/auth/resend-verification`, {
       method: 'POST',
@@ -154,9 +192,23 @@ export function useProfile(login: string, myId?: string, token?: string | null) 
     }
   }, []);
 
+  const verifyEmailCode = useCallback(async (email: string, code: string): Promise<{ token: string }> => {
+    const res = await fetch(`${API_BASE}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message ?? 'Ошибка сервера');
+    // Mark profile as verified locally
+    setProfile((prev) => prev ? { ...prev, emailVerified: true } : prev);
+    return { token: data.token };
+  }, []);
+
   return {
     profile,
     games,
+    activity,
     total,
     totalPages,
     page,
@@ -166,6 +218,9 @@ export function useProfile(login: string, myId?: string, token?: string | null) 
     isMe,
     updateProfile,
     uploadAvatar,
+    deleteAvatar,
+    deleteAccount,
     resendVerification,
+    verifyEmailCode,
   };
 }

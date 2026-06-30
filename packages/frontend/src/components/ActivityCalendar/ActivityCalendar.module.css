@@ -1,0 +1,101 @@
+.wrapper {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #aab8d0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.total {
+  font-size: 0.75rem;
+  color: #7a8090;
+}
+
+.calendarArea {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+/* Vertical day-of-week labels (Mon, Wed, Fri) */
+.dayLabels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 18px; /* align with grid rows, below month labels */
+  flex-shrink: 0;
+}
+
+.dayLabel {
+  font-size: 0.6rem;
+  color: #7a8090;
+  line-height: 1;
+  height: 9px;
+  display: flex;
+  align-items: center;
+}
+
+.gridWrapper {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Month labels row — CSS grid with 52 columns */
+.monthRow {
+  display: grid;
+  grid-template-columns: repeat(52, 11px);
+  gap: 2px;
+  margin-bottom: 2px;
+  height: 14px;
+}
+
+.monthLabel {
+  font-size: 0.6rem;
+  color: #7a8090;
+  white-space: nowrap;
+  line-height: 14px;
+}
+
+/* Grid of weeks */
+.grid {
+  display: flex;
+  gap: 2px;
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cell {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Activity levels */
+.level0 { background: #0f1a30; border: 1px solid #1e3460; }
+.level1 { background: #1a4f80; border: 1px solid #2a6090; }
+.level2 { background: #1a6fb0; border: 1px solid #2a7fc0; }
+.level3 { background: #e67e22; border: 1px solid #f39c12; }
+.level4 { background: #f39c12; border: 1px solid #f5b041; box-shadow: 0 0 4px rgba(243,156,18,.4); }
+
+/* Hover tooltip feel */
+.cell:hover {
+  opacity: 0.8;
+  cursor: default;
+}

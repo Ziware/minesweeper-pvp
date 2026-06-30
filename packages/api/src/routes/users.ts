@@ -164,6 +164,37 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ games, total, page, limit, totalPages: Math.ceil(total / limit) });
   });
 
+  // ── GET /users/:login/activity — activity heatmap (last 365 days) ─────────
+  app.get('/:login/activity', async (request, reply) => {
+    const { login } = request.params as { login: string };
+    const user = await prisma.user.findUnique({ where: { login }, select: { id: true } });
+    if (!user) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Пользователь не найден' });
+
+    // Fetch all games in the last 366 days, grouped by date (UTC)
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 365);
+
+    type ActivityRow = { date: string; count: bigint };
+    const rows = await prisma.$queryRaw<ActivityRow[]>`
+      SELECT
+        TO_CHAR("startedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        COUNT(*)::bigint AS count
+      FROM "Game" g
+      JOIN "GameParticipant" gp ON gp."gameId" = g.id
+      WHERE gp."userId" = ${user.id}
+        AND g."startedAt" >= ${cutoff}
+      GROUP BY date
+      ORDER BY date
+    `;
+
+    const activity = rows.map((r: ActivityRow) => ({
+      date:  r.date,
+      count: Number(r.count),
+    }));
+
+    return reply.send({ activity });
+  });
+
   // ── PATCH /users/me/profile — update bio / avatarUrl ──────────────────────
   app.patch('/me/profile', async (request, reply) => {
     const token = extractToken(request.headers.authorization);
@@ -187,10 +218,84 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
         ...(bio       !== undefined ? { bio }       : {}),
         ...(avatarUrl !== undefined ? { avatarUrl } : {}),
       },
-      select: { avatarUrl: true, bio: true, rating: true, gamesPlayed: true, wins: true },
+      select: {
+        avatarUrl:        true,
+        bio:              true,
+        rating:           true,
+        gamesPlayed:      true,
+        wins:             true,
+        ratedGamesPlayed: true,
+        ratedWins:        true,
+      },
     });
 
     return reply.send({ profile });
+  });
+
+  // ── DELETE /users/me/avatar — remove avatar ───────────────────────────────
+  app.delete('/me/avatar', async (request, reply) => {
+    const token = extractToken(request.headers.authorization);
+    if (!token) return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Требуется авторизация' });
+
+    let payload;
+    try { payload = verifyToken(token); }
+    catch { return reply.status(401).send({ error: 'INVALID_TOKEN', message: 'Токен недействителен или истёк' }); }
+
+    // Get current avatar path to delete the file
+    const current = await prisma.userProfile.findUnique({
+      where:  { userId: payload.sub },
+      select: { avatarUrl: true },
+    });
+
+    if (current?.avatarUrl) {
+      // avatarUrl looks like /uploads/avatars/userId.jpg
+      const rel = current.avatarUrl.replace(/^\/uploads\//, '');
+      const localPath = path.join(env.UPLOADS_DIR, rel);
+      try { fs.unlinkSync(localPath); } catch { /* file may already be gone */ }
+    }
+
+    const profile = await prisma.userProfile.upsert({
+      where:  { userId: payload.sub },
+      create: { userId: payload.sub, avatarUrl: null },
+      update: { avatarUrl: null },
+      select: {
+        avatarUrl:        true,
+        bio:              true,
+        rating:           true,
+        gamesPlayed:      true,
+        wins:             true,
+        ratedGamesPlayed: true,
+        ratedWins:        true,
+      },
+    });
+
+    return reply.send({ profile });
+  });
+
+  // ── DELETE /users/me — permanently delete own account ────────────────────
+  app.delete('/me', async (request, reply) => {
+    const token = extractToken(request.headers.authorization);
+    if (!token) return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Требуется авторизация' });
+
+    let payload;
+    try { payload = verifyToken(token); }
+    catch { return reply.status(401).send({ error: 'INVALID_TOKEN', message: 'Токен недействителен или истёк' }); }
+
+    // Delete avatar file if present
+    const profile = await prisma.userProfile.findUnique({
+      where:  { userId: payload.sub },
+      select: { avatarUrl: true },
+    });
+    if (profile?.avatarUrl) {
+      const rel = profile.avatarUrl.replace(/^\/uploads\//, '');
+      const localPath = path.join(env.UPLOADS_DIR, rel);
+      try { fs.unlinkSync(localPath); } catch { /* file may already be gone */ }
+    }
+
+    // Cascade deletes UserProfile + EmailVerification; sets GameParticipant.userId = null
+    await prisma.user.delete({ where: { id: payload.sub } });
+
+    return reply.send({ ok: true });
   });
 
   // ── POST /users/me/avatar — upload avatar file ────────────────────────────

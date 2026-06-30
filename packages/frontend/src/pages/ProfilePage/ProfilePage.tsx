@@ -1,8 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useProfile, type GameRecord } from '../../hooks/useProfile';
+import { ActivityCalendar } from '../../components/ActivityCalendar/ActivityCalendar';
+import { useSettings } from '../../hooks/useSettings';
+import { ProfileButton } from '../../components/ProfileButton/ProfileButton';
+import { SettingsMenu } from '../../components/SettingsMenu/SettingsMenu';
+import { Icon } from '../../components/Icon/Icon';
 import styles from './ProfilePage.module.css';
+import appStyles from '../../App.module.css';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,11 +75,17 @@ export function ProfilePage() {
   const { login } = useParams<{ login: string }>();
   const navigate = useNavigate();
   const auth = useAuth();
+  const {
+    settings,
+    toggleMuted, setVolume, toggleHideControls, toggleFlagClickDefuse,
+  } = useSettings();
+  const [showSettings, setShowSettings] = useState(false);
 
   const {
-    profile, games, total, totalPages, page, setPage,
+    profile, games, activity, total, totalPages, page, setPage,
     isLoading, error, isMe,
-    updateProfile, uploadAvatar, resendVerification,
+    updateProfile, uploadAvatar, deleteAvatar, deleteAccount,
+    resendVerification, verifyEmailCode,
   } = useProfile(login ?? '', auth.user?.id, auth.token);
 
   // Edit mode state
@@ -81,8 +93,17 @@ export function ProfilePage() {
   const [editBio,      setEditBio]      = useState('');
   const [editSaving,   setEditSaving]   = useState(false);
   const [editError,    setEditError]    = useState('');
-  const [verifyStatus, setVerifyStatus] = useState<'idle' | 'sent' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Email verification dialog state
+  const [verifyStep,   setVerifyStep]   = useState<'idle' | 'entering' | 'submitting' | 'done' | 'error'>('idle');
+  const [verifyCode,   setVerifyCode]   = useState('');
+  const [verifyErrMsg, setVerifyErrMsg] = useState('');
+
+  // Delete account dialog state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError,       setDeleteError]       = useState('');
+  const [deleteInProgress,  setDeleteInProgress]  = useState(false);
 
   const startEdit = () => {
     setEditBio(profile?.profile?.bio ?? '');
@@ -116,33 +137,117 @@ export function ProfilePage() {
     }
   };
 
-  const handleResend = async () => {
-    if (!profile?.email) return;
+  const handleDeleteAvatar = useCallback(async () => {
+    setEditError('');
     try {
-      await resendVerification(profile.email);
-      setVerifyStatus('sent');
-    } catch {
-      setVerifyStatus('error');
+      await deleteAvatar();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Ошибка удаления аватара');
+    }
+  }, [deleteAvatar]);
+
+  // Delete account — called after confirmation
+  const handleDeleteAccount = async () => {
+    setDeleteInProgress(true);
+    setDeleteError('');
+    try {
+      await deleteAccount();
+      auth.logout();
+      navigate('/');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Ошибка удаления аккаунта');
+      setDeleteInProgress(false);
     }
   };
+
+  // Send the verification code and open the input dialog
+  const handleResend = async () => {
+    if (!profile?.email) return;
+    setVerifyErrMsg('');
+    try {
+      await resendVerification(profile.email);
+      setVerifyCode('');
+      setVerifyStep('entering');
+    } catch {
+      setVerifyStep('error');
+      setVerifyErrMsg('Ошибка отправки кода');
+    }
+  };
+
+  // Submit the code the user entered
+  const handleSubmitVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.email || !verifyCode.trim()) return;
+    setVerifyStep('submitting');
+    setVerifyErrMsg('');
+    try {
+      const { token } = await verifyEmailCode(profile.email, verifyCode.trim());
+      // Update the stored JWT so the auth state reflects the verified status
+      localStorage.setItem('auth_token', token);
+      setVerifyStep('done');
+    } catch (err) {
+      setVerifyErrMsg(err instanceof Error ? err.message : 'Неверный или истёкший код');
+      setVerifyStep('entering');
+    }
+  };
+
+  // ── Shared header ────────────────────────────────────────────────────────────
+
+  const renderHeader = () => (
+    <div className={appStyles.gameHeader}>
+      <h2 className={appStyles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
+      <div className={appStyles.headerActions}>
+        <div className={appStyles.settingsAnchor} data-settings-anchor>
+          <button
+            className={`${appStyles.headerBtn} ${showSettings ? appStyles.headerBtnActive : ''}`}
+            onClick={() => setShowSettings((v) => !v)}
+            aria-expanded={showSettings}
+            aria-haspopup="menu"
+          >
+            ⚙️<span className={appStyles.headerBtnLabel}> Настройки</span>
+          </button>
+          {showSettings && (
+            <SettingsMenu
+              muted={settings.muted}
+              volume={settings.volume}
+              hideControls={settings.hideControls}
+              flagClickDefuse={settings.flagClickDefuse}
+              onToggleMuted={toggleMuted}
+              onVolumeChange={setVolume}
+              onToggleHideControls={toggleHideControls}
+              onToggleFlagClickDefuse={toggleFlagClickDefuse}
+              onClose={() => setShowSettings(false)}
+            />
+          )}
+        </div>
+        <ProfileButton auth={auth} />
+      </div>
+    </div>
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
-      <div className={styles.page}>
-        <div className={styles.loading}>Загрузка профиля…</div>
+      <div className={appStyles.gameLayout}>
+        {renderHeader()}
+        <div className={styles.page}>
+          <div className={styles.loading}>Загрузка профиля…</div>
+        </div>
       </div>
     );
   }
 
   if (error || !profile) {
     return (
-      <div className={styles.page}>
-        <div className={styles.error}>
-          {error ?? 'Профиль не найден'}
-          <br />
-          <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
+      <div className={appStyles.gameLayout}>
+        {renderHeader()}
+        <div className={styles.page}>
+          <div className={styles.error}>
+            {error ?? 'Профиль не найден'}
+            <br />
+            <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
+          </div>
         </div>
       </div>
     );
@@ -152,7 +257,10 @@ export function ProfilePage() {
   const avatarLetter = profile.login.charAt(0).toUpperCase();
 
   return (
-    <div className={styles.page}>
+    <div className={appStyles.gameLayout}>
+      {renderHeader()}
+      <div className={styles.pageBody}>
+      <div className={styles.page}>
       {/* Back link */}
       <div className={styles.topNav}>
         <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
@@ -161,12 +269,54 @@ export function ProfilePage() {
       {/* Email verification banner (only for the owner) */}
       {isMe && profile.emailVerified === false && (
         <div className={styles.verifyBanner}>
-          <span>⚠️ Email не подтверждён. Некоторые функции могут быть недоступны.</span>
-          {verifyStatus === 'idle' && (
-            <button className={styles.verifyBtn} onClick={handleResend}>Подтвердить</button>
+          {verifyStep === 'done' ? (
+            <span className={styles.verifySent}>✓ Email подтверждён!</span>
+          ) : verifyStep === 'entering' || verifyStep === 'submitting' ? (
+            /* Inline code entry form */
+            <form className={styles.verifyForm} onSubmit={handleSubmitVerifyCode}>
+              <span>Введите код из письма:</span>
+              <input
+                className={styles.verifyCodeInput}
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="______"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value)}
+                disabled={verifyStep === 'submitting'}
+                autoFocus
+              />
+              <button
+                className={styles.verifyBtn}
+                type="submit"
+                disabled={verifyStep === 'submitting' || !verifyCode.trim()}
+              >
+                {verifyStep === 'submitting' ? '…' : 'Подтвердить'}
+              </button>
+              <button
+                className={styles.verifyResendBtn}
+                type="button"
+                onClick={handleResend}
+                disabled={verifyStep === 'submitting'}
+              >
+                Отправить снова
+              </button>
+              {verifyErrMsg && <span className={styles.verifyErr}>{verifyErrMsg}</span>}
+            </form>
+          ) : (
+            <>
+              <span>⚠️ Email не подтверждён. Некоторые функции могут быть недоступны.</span>
+              {verifyStep === 'idle' && (
+                <button className={styles.verifyBtn} onClick={handleResend}>Подтвердить</button>
+              )}
+              {verifyStep === 'error' && (
+                <>
+                  <span className={styles.verifyErr}>{verifyErrMsg}</span>
+                  <button className={styles.verifyBtn} onClick={handleResend}>Повторить</button>
+                </>
+              )}
+            </>
           )}
-          {verifyStatus === 'sent' && <span className={styles.verifySent}>Код отправлен на {profile.email}</span>}
-          {verifyStatus === 'error' && <span className={styles.verifyErr}>Ошибка отправки</span>}
         </div>
       )}
 
@@ -197,6 +347,14 @@ export function ProfilePage() {
               >
                 📷 Изменить
               </button>
+              {stats?.avatarUrl && (
+                <button
+                  className={styles.deleteAvatarBtn}
+                  onClick={handleDeleteAvatar}
+                >
+                  🗑 Удалить
+                </button>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -233,7 +391,7 @@ export function ProfilePage() {
           )}
 
           <div className={styles.rating}>
-            ⭐ Рейтинг: {stats?.rating ?? 1000}
+            ⭐ Рейтинг: {stats?.ratedGamesPlayed ? stats.rating : '—'}
           </div>
 
           {editError && <div className={styles.editError}>{editError}</div>}
@@ -253,6 +411,9 @@ export function ProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Activity calendar */}
+      <ActivityCalendar activity={activity} />
 
       {/* Stats grid */}
       {stats && (
@@ -315,6 +476,55 @@ export function ProfilePage() {
           </>
         )}
       </section>
+
+      {/* Account actions — only visible to profile owner */}
+      {isMe && (
+        <div className={styles.accountActions}>
+          <button
+            className={styles.logoutBtn}
+            onClick={() => { auth.logout(); navigate('/'); }}
+          >
+            🚪 Выйти из аккаунта
+          </button>
+          <button
+            className={styles.deleteAccountBtn}
+            onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
+          >
+            🗑 Удалить аккаунт
+          </button>
+        </div>
+      )}
+
+      {/* Delete account confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.confirmDialog}>
+            <h3 className={styles.confirmTitle}>Удалить аккаунт?</h3>
+            <p className={styles.confirmText}>
+              Это действие необратимо. Все данные профиля будут удалены безвозвратно.
+            </p>
+            {deleteError && <p className={styles.confirmError}>{deleteError}</p>}
+            <div className={styles.confirmActions}>
+              <button
+                className={styles.confirmDeleteBtn}
+                onClick={handleDeleteAccount}
+                disabled={deleteInProgress}
+              >
+                {deleteInProgress ? 'Удаление…' : '✓ Да, удалить'}
+              </button>
+              <button
+                className={styles.confirmCancelBtn}
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteInProgress}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+    </div>
     </div>
   );
 }

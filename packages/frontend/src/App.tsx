@@ -402,7 +402,7 @@ export default function App() {
     previousPhaseRef.current = null;
   }, [roomId]);
 
-  const renderHeader = (content?: React.ReactNode) => (
+  const renderHeader = (content?: React.ReactNode, showHelpBtn = false) => (
     <div className={styles.gameHeader}>
       <h2 className={styles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
       {content}
@@ -438,14 +438,16 @@ export default function App() {
             />
           )}
         </div>
-        <button
-          className={styles.headerBtn}
-          onClick={() => {
-            setShowHelp(true);
-          }}
-        >
-          ❓<span className={styles.headerBtnLabel}> Правила</span>
-        </button>
+        {showHelpBtn && (
+          <button
+            className={styles.headerBtn}
+            onClick={() => {
+              setShowHelp(true);
+            }}
+          >
+            ❓<span className={styles.headerBtnLabel}> Правила</span>
+          </button>
+        )}
         <ProfileButton auth={auth} />
       </div>
     </div>
@@ -478,9 +480,9 @@ export default function App() {
     );
   };
 
-  const renderShell = (content: React.ReactNode, headerContent?: React.ReactNode) => (
+  const renderShell = (content: React.ReactNode, headerContent?: React.ReactNode, showHelpBtn = false) => (
     <div className={styles.gameLayout}>
-      {renderHeader(headerContent)}
+      {renderHeader(headerContent, showHelpBtn)}
       {content}
       {renderErrorToast()}
       {renderMobileNoticeToast()}
@@ -876,7 +878,8 @@ export default function App() {
           />
         </div>
       </div>,
-      headerContent
+      headerContent,
+      true /* showHelpBtn */
     );
   }
 

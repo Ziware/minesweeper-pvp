@@ -1,12 +1,16 @@
 .anchor {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: stretch;
+  /* Bleed into header's 8px top/bottom padding so the avatar fills header edge-to-edge */
+  margin-top: -8px;
+  margin-bottom: -8px;
 }
 
 .skeleton {
   width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  height: 100%;
+  border-radius: 0;
   background: #1e3460;
   animation: pulse 1.2s ease-in-out infinite;
 }
@@ -32,15 +36,19 @@
 
 /* Avatar button (logged-in) */
 .avatarBtn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 2px solid #e67e22;
+  /* Fill full height of the header (bleeds into padding via .anchor negative margins) */
+  width: auto;
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  border-left: 2px solid #e67e22;
   background: #1a3060;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 4px;
   transition: background 0.15s, border-color 0.15s;
 }
 .avatarBtn:hover { background: #253d70; border-color: #f39c12; }

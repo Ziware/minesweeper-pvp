@@ -222,7 +222,7 @@
 .headerActions {
   margin-left: auto;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
 }
 
