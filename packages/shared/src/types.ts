@@ -128,8 +128,10 @@ export interface S2C_GameState {
 
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
-  winnerColor: PlayerColor;
+  winnerColor: PlayerColor | null;
   reason: 'lives' | 'headquarters' | 'time';
+  /** API sessionId for guest game claiming after registration. */
+  sessionId?: string;
 }
 
 export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; userId?: string; }

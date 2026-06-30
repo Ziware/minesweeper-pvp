@@ -28,6 +28,8 @@ export function verifyToken(token: string): JwtPayload {
 
 // ─── Register ──────────────────────────────────────────────────────────────
 
+const RESERVED_LOGINS = ['guest', 'admin', 'system', 'moderator', 'support'];
+
 export type RegisterError =
   | 'EMAIL_TAKEN'
   | 'LOGIN_TAKEN';
@@ -37,6 +39,11 @@ export async function register(
   login: string,
   password: string,
 ): Promise<{ error: RegisterError } | { userId: string }> {
+  // Check reserved logins
+  if (RESERVED_LOGINS.includes(login.toLowerCase())) {
+    return { error: 'LOGIN_TAKEN' };
+  }
+
   // Check uniqueness
   const existing = await prisma.user.findFirst({
     where: { OR: [{ email }, { login }] },

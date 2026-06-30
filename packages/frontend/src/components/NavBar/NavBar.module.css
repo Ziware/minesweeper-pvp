@@ -1,0 +1,111 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: #12192e;
+  border-bottom: 1px solid #1e2d50;
+  flex-shrink: 0;
+  gap: 12px;
+  position: relative;
+  z-index: 100;
+}
+
+/* ── Logo ── */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: #eef;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.logo:hover { color: #fff; }
+
+.logoText {
+  letter-spacing: 0.5px;
+}
+
+/* ── Center nav links (desktop) ── */
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.navLink {
+  text-decoration: none;
+  color: #8899bb;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+.navLink:hover {
+  color: #eef;
+  background: rgba(255, 255, 255, 0.06);
+}
+.navLink.active {
+  color: #eef;
+}
+
+/* ── Right actions ── */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #8899bb;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.actionBtn:hover {
+  color: #eef;
+  background: rgba(255, 255, 255, 0.06);
+}
+.actionBtnActive {
+  color: #eef;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #2a3a5e;
+}
+
+.settingsAnchor {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+/* Hide text labels on small screens to keep the bar compact */
+@media (max-width: 600px) {
+  .navbar {
+    padding: 0 12px;
+    height: 48px;
+  }
+
+  .navLinks {
+    display: none;
+  }
+
+  .actionBtnLabel {
+    display: none;
+  }
+}

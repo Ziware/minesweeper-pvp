@@ -1,25 +1,24 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { TimeControl, TIME_CONTROL_PRESETS, BALANCE, PlayerColor } from '@minesweeper-pvp/shared';
 import type { Difficulty } from '../../ai/types';
 import { DIFFICULTY_LABELS } from '../../ai/difficulty';
 import styles from './Lobby.module.css';
 
 interface LobbyProps {
-  onCreateRoom:        (name: string, timeControl: TimeControl) => void;
-  onJoinRoom:          (roomId: string, name: string) => void;
+  onCreateRoom:        (timeControl: TimeControl) => void;
+  onJoinRoom:          (roomId: string) => void;
   /** Запустить локальную игру против компьютера. */
-  onStartSolo?:        (name: string, difficulty: Difficulty, humanColor: PlayerColor) => void;
+  onStartSolo?:        (difficulty: Difficulty, humanColor: PlayerColor) => void;
   /** Опциональный звук-эффект «клик», прокидывается из App. */
   onUiClick?:          () => void;
 }
 
 const DEFAULT_PRESET_INDEX = BALANCE.timeControls.defaultPresetIndex;
-const NAME_STORAGE_KEY = 'minesweeper_player_name';
-const MODE_STORAGE_KEY = 'minesweeper_mode';
 const DIFFICULTY_STORAGE_KEY = 'minesweeper_solo_difficulty';
 const COLOR_STORAGE_KEY = 'minesweeper_solo_color';
 
-type Mode = 'pvp' | 'solo';
+type ActiveCard = 'pvp' | 'solo' | null;
 
 function loadStored<T extends string>(key: string, fallback: T): T {
   try {
@@ -30,20 +29,11 @@ function loadStored<T extends string>(key: string, fallback: T): T {
   }
 }
 
-function loadStoredName(): string {
-  try {
-    return localStorage.getItem(NAME_STORAGE_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
 export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: LobbyProps) {
-  const [name,   setName]   = useState<string>(() => loadStoredName());
+  const [activeCard, setActiveCard] = useState<ActiveCard>(null);
   const [joinId, setJoinId] = useState('');
-  const [nameErr, setNameErr] = useState('');
+  const [joinErr, setJoinErr] = useState('');
   const [presetIdx, setPresetIdx] = useState(DEFAULT_PRESET_INDEX);
-  const [mode, setMode] = useState<Mode>(() => loadStored<Mode>(MODE_STORAGE_KEY, 'pvp'));
   const [difficulty, setDifficulty] = useState<Difficulty>(() =>
     loadStored<Difficulty>(DIFFICULTY_STORAGE_KEY, 'normal'),
   );
@@ -52,97 +42,119 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: Lobb
   );
 
   useEffect(() => {
-    try {
-      const trimmed = name.trim();
-      if (trimmed) localStorage.setItem(NAME_STORAGE_KEY, trimmed);
-    } catch { /* ignore */ }
-  }, [name]);
-
-  useEffect(() => {
-    try { localStorage.setItem(MODE_STORAGE_KEY, mode); } catch { /* ignore */ }
-  }, [mode]);
-  useEffect(() => {
     try { localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty); } catch { /* ignore */ }
   }, [difficulty]);
   useEffect(() => {
     try { localStorage.setItem(COLOR_STORAGE_KEY, humanColor); } catch { /* ignore */ }
   }, [humanColor]);
 
+  const toggleCard = (card: ActiveCard) => {
+    onUiClick?.();
+    setActiveCard((prev) => (prev === card ? null : card));
+  };
+
   const handleCreate = () => {
-    if (!name.trim()) { setNameErr('Введите имя'); return; }
-    setNameErr('');
-    onCreateRoom(name.trim(), TIME_CONTROL_PRESETS[presetIdx].timeControl);
+    onCreateRoom(TIME_CONTROL_PRESETS[presetIdx].timeControl);
   };
 
   const handleJoin = () => {
-    if (!name.trim()) { setNameErr('Введите имя'); return; }
-    if (!joinId.trim()) return;
-    setNameErr('');
-    onJoinRoom(joinId.trim(), name.trim());
+    if (!joinId.trim()) { setJoinErr('Введите ID комнаты'); return; }
+    setJoinErr('');
+    onJoinRoom(joinId.trim());
   };
 
   const handleStartSolo = () => {
-    if (!name.trim()) { setNameErr('Введите имя'); return; }
-    setNameErr('');
-    onStartSolo?.(name.trim(), difficulty, humanColor);
-  };
-
-  const switchMode = (next: Mode) => {
-    if (next === mode) return;
-    onUiClick?.();
-    setMode(next);
+    onStartSolo?.(difficulty, humanColor);
   };
 
   return (
     <div className={styles.container}>
-      <div className={styles.brandHeader}>
-        <h1 className={styles.brandTitle}>Minesweeper PvP</h1>
-        <p className={styles.brandSubtitle}>Дуэль на минном поле</p>
+      {/* ── Hero ── */}
+      <div className={styles.hero}>
+        <h1 className={styles.heroTitle}>💣 Minesweeper PvP</h1>
+        <p className={styles.heroTagline}>Тактическая дуэль на минном поле</p>
+        <p className={styles.heroDesc}>
+          Два игрока. Одна доска. Мины противника скрыты.
+          Захвати штаб врага — и победишь.
+        </p>
       </div>
 
-      {/* Имя — общее для обоих режимов */}
-      <div className={styles.card}>
-        <input
-          className={`${styles.input} ${nameErr ? styles.inputError : ''}`}
-          placeholder="Ваше имя"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setNameErr(''); }}
-          maxLength={20}
-        />
-        {nameErr && <div className={styles.fieldError}>{nameErr}</div>}
-
-        <div className={styles.tcOptions}>
+      {/* ── Mode cards ── */}
+      <div className={styles.cards}>
+        {/* PvP Card */}
+        <div
+          className={`${styles.modeCard} ${activeCard === 'pvp' ? styles.modeCardActive : ''}`}
+          onClick={() => toggleCard('pvp')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && toggleCard('pvp')}
+          aria-expanded={activeCard === 'pvp'}
+        >
+          <div className={styles.modeCardIcon}>👥</div>
+          <div className={styles.modeCardBody}>
+            <div className={styles.modeCardTitle}>Против игрока</div>
+            <div className={styles.modeCardDesc}>
+              Онлайн-дуэль с живым противником. Создай комнату и поделись кодом или введи код друга.
+            </div>
+          </div>
           <button
+            className={`${styles.modeCardBtn} ${activeCard === 'pvp' ? styles.modeCardBtnActive : ''}`}
+            onClick={(e) => { e.stopPropagation(); toggleCard('pvp'); }}
             type="button"
-            className={`${styles.tcOption} ${mode === 'pvp' ? styles.tcOptionActive : ''}`}
-            onClick={() => switchMode('pvp')}
           >
-            👥 Против игрока
-          </button>
-          <button
-            type="button"
-            className={`${styles.tcOption} ${mode === 'solo' ? styles.tcOptionActive : ''}`}
-            onClick={() => switchMode('solo')}
-          >
-            🤖 Против компьютера
+            {activeCard === 'pvp' ? '▲ Скрыть' : 'Играть'}
           </button>
         </div>
+
+        {/* Bot Card */}
+        <div
+          className={`${styles.modeCard} ${activeCard === 'solo' ? styles.modeCardActive : ''}`}
+          onClick={() => toggleCard('solo')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && toggleCard('solo')}
+          aria-expanded={activeCard === 'solo'}
+        >
+          <div className={styles.modeCardIcon}>🤖</div>
+          <div className={styles.modeCardBody}>
+            <div className={styles.modeCardTitle}>Против компьютера</div>
+            <div className={styles.modeCardDesc}>
+              Тренируйся оффлайн против ИИ трёх уровней сложности — без регистрации.
+            </div>
+          </div>
+          <button
+            className={`${styles.modeCardBtn} ${activeCard === 'solo' ? styles.modeCardBtnActive : ''}`}
+            onClick={(e) => { e.stopPropagation(); toggleCard('solo'); }}
+            type="button"
+          >
+            {activeCard === 'solo' ? '▲ Скрыть' : 'Играть'}
+          </button>
+        </div>
+
+        {/* Classic Card */}
+        <Link to="/classic" className={styles.modeCard} onClick={() => onUiClick?.()}>
+          <div className={styles.modeCardIcon}>💣</div>
+          <div className={styles.modeCardBody}>
+            <div className={styles.modeCardTitle}>Классический сапёр</div>
+            <div className={styles.modeCardDesc}>
+              Стандартный Сапёр на скорость. Пресеты новичок/любитель/эксперт или своё поле.
+            </div>
+          </div>
+          <div className={styles.modeCardBtn}>Открыть</div>
+        </Link>
       </div>
 
-      {mode === 'pvp' ? (
-        <>
-          {/* Контроль времени — единая карточка над парой Создать/Войти */}
-          <div className={styles.card}>
-            <div className={styles.tcLabel}>⏱️ Контроль времени</div>
-            <div className={`${styles.tcOptions} ${styles.tcOptionsGrid}`}>
+      {/* ── Inline expand: PvP ── */}
+      {activeCard === 'pvp' && (
+        <div className={styles.expandPanel}>
+          <div className={styles.expandSection}>
+            <div className={styles.expandLabel}>⏱️ Контроль времени</div>
+            <div className={styles.presetGrid}>
               {TIME_CONTROL_PRESETS.map((preset, idx) => (
                 <button
                   key={preset.label}
-                  className={`${styles.tcOption} ${idx === presetIdx ? styles.tcOptionActive : ''}`}
-                  onClick={() => {
-                    if (idx !== presetIdx) onUiClick?.();
-                    setPresetIdx(idx);
-                  }}
+                  className={`${styles.presetBtn} ${idx === presetIdx ? styles.presetBtnActive : ''}`}
+                  onClick={() => { if (idx !== presetIdx) onUiClick?.(); setPresetIdx(idx); }}
                   type="button"
                 >
                   {preset.label}
@@ -151,28 +163,33 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: Lobb
             </div>
           </div>
 
-          <div className={styles.row}>
-            {/* Создать комнату */}
-            <div className={styles.card}>
-              <h2>Создать комнату</h2>
-              <p className={styles.hint}>Вы будете играть за 🔴 Красного</p>
-              <p className={styles.hint}>Красный ходит первым</p>
+          <div className={styles.expandRow}>
+            {/* Создать */}
+            <div className={styles.expandCard}>
+              <div className={styles.expandCardTitle}>Создать комнату</div>
+              <div className={styles.expandCardHint}>Вы играете за 🔴 Красного · ходит первым</div>
               <button className={styles.btnRed} onClick={handleCreate}>
-                Создать комнату
+                Создать
               </button>
             </div>
 
-            {/* Войти в комнату */}
-            <div className={styles.card}>
-              <h2>Войти в комнату</h2>
+            <div className={styles.expandDivider} />
+
+            {/* Войти */}
+            <div className={styles.expandCard}>
+              <div className={styles.expandCardTitle}>Войти в комнату</div>
               <input
-                className={styles.input}
-                placeholder="ID комнаты"
+                className={`${styles.input} ${joinErr ? styles.inputError : ''}`}
+                placeholder="ID комнаты (5 букв)"
                 value={joinId}
-                onChange={(e) => setJoinId(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase())}
+                onChange={(e) => {
+                  setJoinId(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase());
+                  setJoinErr('');
+                }}
                 maxLength={5}
               />
-              <p className={styles.hint}>Вы будете играть за 🔵 Синего</p>
+              {joinErr && <div className={styles.fieldError}>{joinErr}</div>}
+              <div className={styles.expandCardHint}>Вы играете за 🔵 Синего</div>
               <button
                 className={styles.btnBlue}
                 onClick={handleJoin}
@@ -182,51 +199,46 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: Lobb
               </button>
             </div>
           </div>
-        </>
-      ) : (
-        <div className={styles.card}>
-          <h2>Против компьютера</h2>
+        </div>
+      )}
 
-          <div className={styles.tcLabel}>Сложность</div>
-          <div className={styles.tcOptions}>
-            {(['easy', 'normal', 'hard'] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`${styles.tcOption} ${difficulty === d ? styles.tcOptionActive : ''}`}
-                onClick={() => {
-                  if (d !== difficulty) onUiClick?.();
-                  setDifficulty(d);
-                }}
-              >
-                {DIFFICULTY_LABELS[d]}
-              </button>
-            ))}
+      {/* ── Inline expand: Solo ── */}
+      {activeCard === 'solo' && (
+        <div className={styles.expandPanel}>
+          <div className={styles.expandSection}>
+            <div className={styles.expandLabel}>Сложность</div>
+            <div className={styles.presetRow}>
+              {(['easy', 'normal', 'hard'] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className={`${styles.presetBtn} ${difficulty === d ? styles.presetBtnActive : ''}`}
+                  onClick={() => { if (d !== difficulty) onUiClick?.(); setDifficulty(d); }}
+                >
+                  {DIFFICULTY_LABELS[d]}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className={styles.tcLabel}>Ваш цвет</div>
-          <p className={styles.hint}>Красный ходит первым</p>
-          <div className={styles.tcOptions}>
-            <button
-              type="button"
-              className={`${styles.tcOption} ${humanColor === 'red' ? styles.tcOptionActive : ''}`}
-              onClick={() => {
-                if (humanColor !== 'red') onUiClick?.();
-                setHumanColor('red');
-              }}
-            >
-              🔴 Красный
-            </button>
-            <button
-              type="button"
-              className={`${styles.tcOption} ${humanColor === 'blue' ? styles.tcOptionActive : ''}`}
-              onClick={() => {
-                if (humanColor !== 'blue') onUiClick?.();
-                setHumanColor('blue');
-              }}
-            >
-              🔵 Синий
-            </button>
+          <div className={styles.expandSection}>
+            <div className={styles.expandLabel}>Ваш цвет · Красный ходит первым</div>
+            <div className={styles.presetRow}>
+              <button
+                type="button"
+                className={`${styles.presetBtn} ${humanColor === 'red' ? styles.presetBtnActive : ''}`}
+                onClick={() => { if (humanColor !== 'red') onUiClick?.(); setHumanColor('red'); }}
+              >
+                🔴 Красный
+              </button>
+              <button
+                type="button"
+                className={`${styles.presetBtn} ${humanColor === 'blue' ? styles.presetBtnActive : ''}`}
+                onClick={() => { if (humanColor !== 'blue') onUiClick?.(); setHumanColor('blue'); }}
+              >
+                🔵 Синий
+              </button>
+            </div>
           </div>
 
           <button

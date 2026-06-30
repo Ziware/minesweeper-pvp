@@ -168,10 +168,16 @@
 .activitySection {
   flex: 1;
   min-width: 280px;
-  align-self: stretch;
   display: flex;
-  align-items: flex-start;
-  padding-top: 4px;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Logout / delete account buttons inside the card (above activity) */
+.cardActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ── Avatar ───────────────────────────────────────────────────────────────── */

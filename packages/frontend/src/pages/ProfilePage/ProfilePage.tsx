@@ -3,9 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useProfile, type GameRecord } from '../../hooks/useProfile';
 import { useSettings } from '../../hooks/useSettings';
-import { ProfileButton } from '../../components/ProfileButton/ProfileButton';
-import { SettingsMenu } from '../../components/SettingsMenu/SettingsMenu';
-import { Icon } from '../../components/Icon/Icon';
+import { NavBar } from '../../components/NavBar/NavBar';
 import { ActivityCalendar } from '../../components/ActivityCalendar/ActivityCalendar';
 import styles from './ProfilePage.module.css';
 import appStyles from '../../App.module.css';
@@ -42,10 +40,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function GameRow({ game, viewerLogin }: { game: GameRecord; viewerLogin: string }) {
-  const viewer = game.participants.find((p) => p.name === viewerLogin);
-  const opponent = game.participants.find((p) => p.name !== viewerLogin);
-  const isWon = viewer?.isWinner ?? false;
+function GameRow({ game, viewerUserId }: { game: GameRecord; viewerUserId: string | null }) {
+  // Match by userId so login ≠ in-game name doesn't break the lookup.
+  const viewer   = viewerUserId ? game.participants.find((p) => p.userId === viewerUserId) : null;
+  const opponent = game.participants.find((p) => p.userId !== viewerUserId);
+  const isWon    = viewer?.isWinner ?? false;
 
   return (
     <tr className={`${styles.gameRow} ${isWon ? styles.won : styles.lost}`}>
@@ -53,9 +52,11 @@ function GameRow({ game, viewerLogin }: { game: GameRecord; viewerLogin: string 
       <td>
         {opponent ? (
           opponent.isBot ? `🤖 ${opponent.name}` : (
-            <Link to={`/profile/${opponent.name}`} className={styles.opponentLink}>
-              {opponent.name}
-            </Link>
+            opponent.userId ? (
+              <Link to={`/profile/${opponent.name}`} className={styles.opponentLink}>
+                {opponent.name}
+              </Link>
+            ) : opponent.name
           )
         ) : '—'}
       </td>
@@ -75,11 +76,7 @@ export function ProfilePage() {
   const { login } = useParams<{ login: string }>();
   const navigate = useNavigate();
   const auth = useAuth();
-  const {
-    settings,
-    toggleMuted, setVolume, toggleHideControls, toggleFlagClickDefuse,
-  } = useSettings();
-  const [showSettings, setShowSettings] = useState(false);
+  const settingsApi = useSettings();
 
   const {
     profile, games, activity, total, totalPages, page, setPage,
@@ -135,6 +132,8 @@ export function ProfilePage() {
     setEditError('');
     try {
       await uploadAvatar(file);
+      // Refresh auth state so the header avatar updates immediately
+      await auth.refreshUser();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Ошибка загрузки аватара');
     }
@@ -144,10 +143,11 @@ export function ProfilePage() {
     setEditError('');
     try {
       await deleteAvatar();
+      await auth.refreshUser();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'Ошибка удаления аватара');
     }
-  }, [deleteAvatar]);
+  }, [deleteAvatar, auth]);
 
   // Open the verify modal: send the code first, then show modal
   const handleOpenVerifyModal = async () => {
@@ -215,35 +215,7 @@ export function ProfilePage() {
   // ── Shared header ────────────────────────────────────────────────────────────
 
   const renderHeader = () => (
-    <div className={appStyles.gameHeader}>
-      <h2 className={appStyles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
-      <div className={appStyles.headerActions}>
-        <div className={appStyles.settingsAnchor} data-settings-anchor>
-          <button
-            className={`${appStyles.headerBtn} ${showSettings ? appStyles.headerBtnActive : ''}`}
-            onClick={() => setShowSettings((v) => !v)}
-            aria-expanded={showSettings}
-            aria-haspopup="menu"
-          >
-            ⚙️<span className={appStyles.headerBtnLabel}> Настройки</span>
-          </button>
-          {showSettings && (
-            <SettingsMenu
-              muted={settings.muted}
-              volume={settings.volume}
-              hideControls={settings.hideControls}
-              flagClickDefuse={settings.flagClickDefuse}
-              onToggleMuted={toggleMuted}
-              onVolumeChange={setVolume}
-              onToggleHideControls={toggleHideControls}
-              onToggleFlagClickDefuse={toggleFlagClickDefuse}
-              onClose={() => setShowSettings(false)}
-            />
-          )}
-        </div>
-        <ProfileButton auth={auth} />
-      </div>
-    </div>
+    <NavBar auth={auth} settings={settingsApi} />
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -405,9 +377,25 @@ export function ProfilePage() {
           )}
         </div>
 
-        {/* Activity calendar — right side of card */}
+        {/* Right column: account actions (owner) + activity calendar */}
         <div className={styles.activitySection}>
-          <ActivityCalendar activity={activity} weeks={26} />
+          {isMe && (
+            <div className={styles.cardActions}>
+              <button
+                className={styles.logoutBtn}
+                onClick={() => { auth.logout(); navigate('/'); }}
+              >
+                🚪 Выйти
+              </button>
+              <button
+                className={styles.deleteAccountBtn}
+                onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
+              >
+                🗑 Удалить аккаунт
+              </button>
+            </div>
+          )}
+          <ActivityCalendar activity={activity} />
         </div>
       </div>
 
@@ -444,7 +432,7 @@ export function ProfilePage() {
                 </thead>
                 <tbody>
                   {games.map((g) => (
-                    <GameRow key={g.id} game={g} viewerLogin={profile.login} />
+                    <GameRow key={g.id} game={g} viewerUserId={auth.user?.id ?? null} />
                   ))}
                 </tbody>
               </table>
@@ -472,24 +460,6 @@ export function ProfilePage() {
           </>
         )}
       </section>
-
-      {/* Account actions — only visible to profile owner */}
-      {isMe && (
-        <div className={styles.accountActions}>
-          <button
-            className={styles.logoutBtn}
-            onClick={() => { auth.logout(); navigate('/'); }}
-          >
-            🚪 Выйти из аккаунта
-          </button>
-          <button
-            className={styles.deleteAccountBtn}
-            onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
-          >
-            🗑 Удалить аккаунт
-          </button>
-        </div>
-      )}
 
       {/* Delete account confirmation dialog */}
       {showDeleteConfirm && (

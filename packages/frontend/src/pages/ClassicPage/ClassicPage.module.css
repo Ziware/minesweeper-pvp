@@ -1,0 +1,271 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 40px;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+/* ── Top row ── */
+.topRow {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  color: #e67e22;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.backLink:hover { color: #f39c12; }
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #eef;
+}
+
+/* ── Preset buttons ── */
+.presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.presetBtn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #2a2f55;
+  background: #0f3460;
+  color: #cfd0d6;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.presetBtn:hover { background: #142060; }
+
+.presetBtnActive {
+  background: #1f6fb2;
+  color: #fff;
+  border-color: #3498db;
+  box-shadow: 0 0 6px rgba(52, 152, 219, 0.4);
+}
+
+/* ── Custom panel ── */
+.customPanel {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: #12192e;
+  border: 1px solid #1e2d50;
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+
+.customLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: #8899bb;
+  font-weight: 600;
+}
+
+.customInput {
+  padding: 7px 10px;
+  background: #0e1535;
+  border: 1px solid #1e3460;
+  border-radius: 7px;
+  color: #eee;
+  font-size: 0.92rem;
+  outline: none;
+  width: 80px;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.customInput:focus { border-color: #3498db; }
+
+.applyBtn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #e67e22;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.applyBtn:hover { background: #f39c12; }
+
+/* ── Status bar ── */
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #12192e;
+  border: 1px solid #1e2d50;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 0.95rem;
+}
+
+.statusItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #8899bb;
+}
+
+.statusValue {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #dde;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: right;
+}
+
+.statusLabel {
+  font-size: 0.82rem;
+}
+
+.restartBtn {
+  background: transparent;
+  border: 1px solid #2a3a5e;
+  color: #8899bb;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: color 0.15s, background 0.15s;
+}
+.restartBtn:hover { color: #eef; background: rgba(255,255,255,0.06); }
+
+/* ── Result banner ── */
+.resultBanner {
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  animation: bannerIn 0.25s ease-out;
+}
+
+@keyframes bannerIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.resultWon {
+  background: #0d2a1a;
+  border: 1px solid #27ae60;
+  color: #2ecc71;
+}
+
+.resultLost {
+  background: #2c1515;
+  border: 1px solid #e74c3c;
+  color: #ff8080;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
+.bestBadge {
+  color: #ffe066;
+}
+
+.tryAgainBtn {
+  background: #c0392b;
+  border: none;
+  color: #fff;
+  padding: 5px 14px;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tryAgainBtn:hover { background: #e74c3c; }
+
+/* ── Board wrapper — injects --cell-size CSS var ── */
+.boardWrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* ── Best times footer ── */
+.bestTimes {
+  margin-top: 8px;
+  background: #12192e;
+  border: 1px solid #1e2d50;
+  border-radius: 10px;
+  padding: 14px 20px;
+  text-align: center;
+}
+
+.bestTimesTitle {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #7788aa;
+  margin-bottom: 10px;
+}
+
+.bestTimesRow {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.bestTimeItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.bestTimeLabel {
+  font-size: 0.78rem;
+  color: #6677aa;
+}
+
+.bestTimeValue {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffe066;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .body { padding: 16px 10px 32px; gap: 12px; }
+  .title { font-size: 1.2rem; }
+  .statusBar { gap: 12px; padding: 8px 14px; }
+  .bestTimesRow { gap: 16px; }
+}

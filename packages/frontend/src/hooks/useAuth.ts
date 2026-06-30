@@ -32,12 +32,14 @@ export interface AuthState {
 
 export interface AuthApi extends AuthState {
   /** Step 1 of registration: creates user, sends verification email. */
-  register:    (email: string, login: string, password: string) => Promise<void>;
+  register:     (email: string, login: string, password: string) => Promise<void>;
   /** Step 2: submit code received by email → returns JWT. */
-  verifyEmail: (email: string, code: string) => Promise<void>;
+  verifyEmail:  (email: string, code: string) => Promise<void>;
   /** Login with email or login + password. */
-  login:       (emailOrLogin: string, password: string) => Promise<void>;
-  logout:      () => void;
+  login:        (emailOrLogin: string, password: string) => Promise<void>;
+  logout:       () => void;
+  /** Re-fetch /users/me to sync profile changes (e.g. after avatar upload). */
+  refreshUser:  () => Promise<void>;
 }
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -126,5 +128,14 @@ export function useAuth(): AuthApi {
     setState({ user: null, isGuest: true, isLoading: false, token: null });
   }, []);
 
-  return { ...state, register, verifyEmail, login, logout };
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    try {
+      const { user } = await apiGet<{ user: AuthUser }>('/users/me', token);
+      setState({ user, isGuest: false, isLoading: false, token });
+    } catch { /* silently ignore — keep existing state */ }
+  }, []);
+
+  return { ...state, register, verifyEmail, login, logout, refreshUser };
 }

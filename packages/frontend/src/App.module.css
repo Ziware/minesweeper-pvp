@@ -222,7 +222,7 @@
 .headerActions {
   margin-left: auto;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
 }
 
@@ -264,7 +264,8 @@
 /* Якорь для выпадающего меню настроек */
 .settingsAnchor {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: center;
 }
 
 .gameBody {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import styles from './ActivityCalendar.module.css';
 
 export interface ActivityDay {
@@ -8,8 +8,8 @@ export interface ActivityDay {
 
 interface Props {
   activity: ActivityDay[];
-  /** Number of weeks to show (default 26 = ~6 months) */
-  weeks?: number;
+  /** Max weeks to show (default 26 = ~6 months). Actual count is adaptive. */
+  maxWeeks?: number;
 }
 
 // Build a full grid of days: [week][day], week starts on Monday
@@ -23,10 +23,10 @@ function buildGrid(activity: ActivityDay[], weeks: number): (ActivityDay & { lev
   const endDay = new Date(today);
   endDay.setDate(today.getDate() + daysUntilSunday);
 
-  // startDay is the Monday weeks*7 days before Sunday, so grid is weeks full Mon-Sun weeks
+  // startDay lands on Monday (weeks * 7 days before endDay + 1)
   const totalDays = weeks * 7;
   const startDay = new Date(endDay);
-  startDay.setDate(endDay.getDate() - totalDays + 1); // should land on a Monday
+  startDay.setDate(endDay.getDate() - totalDays + 1);
 
   const grid: (ActivityDay & { level: 0 | 1 | 2 | 3 | 4 })[][] = [];
   let week: (ActivityDay & { level: 0 | 1 | 2 | 3 | 4 })[] = [];
@@ -54,6 +54,10 @@ const WEEKDAY_NAMES = ['воскресенье', 'понедельник', 'вт
 // Mon=0 through Sun=6 (within each week column)
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+// Cell size in px (includes gap)
+const CELL_STEP = 14; // 12px cell + 2px gap
+const DAY_LABELS_WIDTH = 22; // approx width of day-label column
+
 function formatTooltip(date: string, count: number): string {
   const d = new Date(date + 'T12:00:00'); // noon to avoid TZ edge cases
   const dayName = WEEKDAY_NAMES[d.getDay()];
@@ -66,11 +70,37 @@ function formatTooltip(date: string, count: number): string {
   return `${dateStr}\n${count} ${word}`;
 }
 
-export function ActivityCalendar({ activity, weeks = 26 }: Props) {
+export function ActivityCalendar({ activity, maxWeeks = 26 }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [weeks, setWeeks] = useState(maxWeeks);
+
+  // Measure container width and compute how many weeks fit
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const compute = (width: number) => {
+      const availableForGrid = width - DAY_LABELS_WIDTH - 8; // 8 = gap between labels and grid
+      const w = Math.max(4, Math.min(maxWeeks, Math.floor(availableForGrid / CELL_STEP)));
+      setWeeks(w);
+    };
+
+    // Initial measurement
+    compute(el.offsetWidth);
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) compute(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [maxWeeks]);
+
   const grid = buildGrid(activity, weeks);
   const numWeeks = grid.length;
 
-  // Month labels: scan first day (Monday) of each week to detect month changes
+  // Month labels: scan first day (Monday) of each week
   const monthLabels: { col: number; label: string }[] = [];
   let lastMonth = -1;
   grid.forEach((week, col) => {
@@ -83,22 +113,20 @@ export function ActivityCalendar({ activity, weeks = 26 }: Props) {
 
   const totalGames = activity.reduce((s, d) => s + d.count, 0);
 
-  // Cell width (12px) + gap (2px) = 14px per column
-  const cellStep = 14;
   const monthRowStyle = {
     gridTemplateColumns: `repeat(${numWeeks}, 12px)`,
     gap: '2px',
   };
 
   return (
-    <div className={styles.wrapper}>
+    <div className={styles.wrapper} ref={wrapperRef}>
       <div className={styles.header}>
         <span className={styles.title}>Активность</span>
         <span className={styles.total}>{totalGames} игр за период</span>
       </div>
 
       <div className={styles.calendarArea}>
-        {/* Day-of-week labels on the left — only show Mon, Wed, Fri */}
+        {/* Day-of-week labels — only Mon, Wed, Fri visible */}
         <div className={styles.dayLabels}>
           {DAY_LABELS.map((d, i) => (
             <span

@@ -142,10 +142,12 @@ function broadcastGameState(roomId: string) {
   }
   if (room.winner) {
     roomManager.logGameFinishedIfNeeded(room);
+    const sessionId = room.recorder.sessionId;
     for (const player of room.players) {
       io.to(player.id).emit('gameOver', {
         winnerColor: room.winner!,
         reason: room.winReason || 'lives',
+        sessionId,
       });
     }
   }

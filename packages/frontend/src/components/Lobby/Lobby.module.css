@@ -2,94 +2,246 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   background: #1a1a2e;
   color: #eee;
-  gap: 12px;
-  /* Верхний паддинг рассчитан так, чтобы PvP-вариант оказался примерно
-     в центре экрана; при переключении в solo нижняя часть просто
-     становится короче, а верхние блоки (бренд, имя, переключатель)
-     остаются на месте — UI не «прыгает». */
-  padding: 12vh 20px 20px;
+  padding: 40px 20px 40px;
   width: 100%;
   box-sizing: border-box;
+  gap: 32px;
 }
 
-/* ───── Минималистичная шапка ───── */
-.brandHeader {
+/* ── Hero ── */
+.hero {
   text-align: center;
+  max-width: 600px;
+}
+
+.heroTitle {
+  margin: 0 0 8px;
+  font-size: 2rem;
+  font-weight: 800;
+  color: #eef;
+  letter-spacing: -0.5px;
+}
+
+.heroTagline {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+  color: #8899cc;
+  font-weight: 600;
+}
+
+.heroDesc {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #667799;
+  line-height: 1.6;
+}
+
+/* ── Mode cards row ── */
+.cards {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 900px;
+}
+
+.modeCard {
+  flex: 1 1 240px;
+  max-width: 280px;
+  background: #16213e;
+  border: 1px solid #1e2d50;
+  border-radius: 14px;
+  padding: 22px 18px 18px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 2px;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.12s;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  user-select: none;
+  outline: none;
 }
-.brandTitle {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #eef;
-  letter-spacing: 0.3px;
+.modeCard:hover {
+  border-color: #2a4080;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
 }
-.brandSubtitle {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #889;
+.modeCard:focus-visible {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.3);
 }
 
-/* ───── Сетка с двумя соседними карточками (Создать/Войти) ───── */
-.row {
+.modeCardActive {
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52,152,219,0.35), 0 4px 18px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
+}
+
+.modeCardIcon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.modeCardBody {
+  flex: 1;
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: stretch;
-  width: 100%;
-  max-width: 720px;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
 }
 
-/* ───── Универсальная карточка ───── */
-.card {
-  background: #16213e;
-  border-radius: 10px;
-  padding: 14px 16px;
+.modeCardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #dde;
+}
+
+.modeCardDesc {
+  font-size: 0.82rem;
+  color: #778;
+  line-height: 1.5;
+}
+
+.modeCardBtn {
+  margin-top: 4px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #2a3a5e;
+  background: #0f3460;
+  color: #9ac;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  pointer-events: none; /* clicks handled by modeCard wrapper */
+}
+/* For the <Link> classic card, show pointer properly */
+.modeCard:is(a) .modeCardBtn {
+  pointer-events: none;
+}
+.modeCard:hover .modeCardBtn,
+.modeCardActive .modeCardBtn {
+  background: #1f6fb2;
+  color: #fff;
+}
+.modeCardBtnActive {
+  background: #1f6fb2;
+  color: #fff;
+  border-color: #3498db;
+}
+
+/* ── Expanded inline panel ── */
+.expandPanel {
+  width: 100%;
+  max-width: 640px;
+  background: #12192e;
+  border: 1px solid #1e2d50;
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  animation: panelIn 0.15s ease-out;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.expandSection {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
-  max-width: 360px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  flex: 0 0 auto;
 }
 
-/* Внутри .row карточки делят пространство поровну и тянутся на одну высоту */
-.row .card {
-  flex: 1 1 280px;
-  min-width: 0;
-}
-/* Кнопка/последний элемент карточки прижимается к низу, чтобы выровнять
-   высоты карточек «Создать» и «Войти» (у второй есть дополнительный input). */
-.row .card > .btnRed,
-.row .card > .btnBlue {
-  margin-top: auto;
-}
-
-.card h2 {
-  margin: 0;
-  font-size: 1rem;
-  color: #eef;
-  text-align: center;
-}
-
-.hint {
-  margin: 0;
+.expandLabel {
   font-size: 0.82rem;
-  color: #889;
+  color: #7788aa;
+  font-weight: 600;
   text-align: center;
 }
 
+.expandRow {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.expandCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expandCardTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #dde;
+  text-align: center;
+}
+
+.expandCardHint {
+  font-size: 0.8rem;
+  color: #778;
+  text-align: center;
+}
+
+.expandDivider {
+  width: 1px;
+  background: #1e2d50;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.presetRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.presetBtn {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #2a2f55;
+  background: #0f3460;
+  color: #cfd0d6;
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-weight: 600;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.presetBtn:hover { background: #142060; }
+
+.presetBtnActive {
+  background: #1f6fb2;
+  color: #fff;
+  border-color: #3498db;
+  box-shadow: 0 0 6px rgba(52, 152, 219, 0.4);
+}
+
+/* ── Action buttons ── */
 .input {
   padding: 9px 12px;
   border-radius: 8px;
@@ -104,108 +256,68 @@
 .input:focus { border-color: #3498db; }
 
 .inputError { border-color: #e74c3c; }
-.fieldError { color: #e74c3c; font-size: 0.8rem; margin-top: -4px; text-align: center; }
+.fieldError { color: #e74c3c; font-size: 0.8rem; text-align: center; }
 
 .btnRed,
 .btnBlue {
-  padding: 10px;
+  padding: 11px;
   border-radius: 8px;
   border: none;
   color: white;
   font-size: 0.95rem;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
   transition: filter 0.15s, transform 0.05s;
+  width: 100%;
 }
 .btnRed  { background: #c0392b; }
 .btnBlue { background: #1f6fb2; }
 .btnRed:hover,
-.btnBlue:hover { filter: brightness(1.1); }
+.btnBlue:hover { filter: brightness(1.12); }
 .btnRed:active,
 .btnBlue:active { transform: translateY(1px); }
 .btnBlue:disabled { background: #2c2f4a; color: #777; cursor: not-allowed; }
 
-/* ───── Метки и пресеты ───── */
-.tcLabel {
-  font-size: 0.82rem;
-  color: #aab;
-  font-weight: 600;
-  text-align: center;
-}
-
-.tcOptions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-/* 2×2 для четырёх пресетов времени */
-.tcOptionsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.tcOption {
-  flex: 1;
-  padding: 8px 8px;
-  border-radius: 8px;
-  border: 1px solid #2a2f55;
-  background: #0f3460;
-  color: #cfd0d6;
-  font-size: 0.9rem;
-  cursor: pointer;
-  font-weight: 600;
-  text-align: center;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.tcOption:hover { background: #142060; }
-
-.tcOptionActive {
-  background: #1f6fb2;
-  color: #fff;
-  border-color: #3498db;
-  box-shadow: 0 0 6px rgba(52, 152, 219, 0.45);
-}
-
-.error {
-  color: #e74c3c;
-  background: #2c1515;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: bold;
-}
-
-/* ────────── Мобильная раскладка ────────── */
-@media (max-width: 900px) {
+/* ── Mobile ── */
+@media (max-width: 700px) {
   .container {
-    gap: 10px;
-    padding: 6vh 12px 14px;
-    padding-top: max(6vh, env(safe-area-inset-top));
-    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding: 24px 14px 32px;
+    gap: 24px;
   }
-  .brandTitle { font-size: 1.2rem; }
-  .brandSubtitle { font-size: 0.8rem; }
-  .row {
+
+  .heroTitle { font-size: 1.5rem; }
+  .heroTagline { font-size: 0.95rem; }
+
+  .cards {
+    gap: 12px;
+  }
+
+  .modeCard {
+    flex: 1 1 100%;
+    max-width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 14px;
+  }
+
+  .modeCardIcon { font-size: 1.8rem; }
+  .modeCardBody { text-align: left; }
+  .modeCardBtn { width: auto; white-space: nowrap; pointer-events: none; margin-top: 0; }
+
+  .expandPanel {
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .expandRow {
     flex-direction: column;
-    width: 100%;
-    gap: 10px;
   }
-  .card {
-    width: 100%;
-    min-width: 0;
-    max-width: none;
-    padding: 12px 14px;
+
+  .expandDivider {
+    width: auto;
+    height: 1px;
+    align-self: auto;
   }
-  /* Desktop ставит `.row .card { flex: 1 1 280px }`, чтобы две карточки
-     в ряд тянулись на одну ширину ≥ 280px. На мобайле .row становится
-     колонкой → flex-basis: 280px интерпретируется как min-height, и
-     карточки раздуваются по высоте, оставляя пустоту вокруг содержимого.
-     Сбрасываем flex обратно в auto-режим, чтобы карточка была ровно той
-     высоты, которая нужна её содержимому. */
-  .row .card {
-    flex: 0 0 auto;
-  }
-  .tcOptions { flex-wrap: wrap; }
-  .tcOption { flex: 1 1 30%; }
 }

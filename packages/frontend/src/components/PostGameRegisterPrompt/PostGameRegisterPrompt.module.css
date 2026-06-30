@@ -1,0 +1,149 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.modal {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 16px;
+  padding: 32px 28px 28px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.closeBtn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: #556;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.closeBtn:hover { color: #eee; background: rgba(255,255,255,0.08); }
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.3rem;
+  color: #eee;
+  font-weight: 700;
+}
+
+.desc {
+  color: #aab8d0;
+  font-size: 0.9rem;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+.desc strong { color: #eee; }
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.88rem;
+  color: #aab8d0;
+  font-weight: 600;
+}
+
+.hint {
+  font-weight: 400;
+  color: #6a7a90;
+  font-size: 0.78rem;
+}
+
+.input {
+  padding: 10px 12px;
+  background: #0f1a30;
+  border: 1px solid #1e3460;
+  border-radius: 8px;
+  color: #eee;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: #e67e22; }
+.input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.codeInput {
+  font-size: 1.8rem;
+  letter-spacing: 0.5em;
+  text-align: center;
+  font-family: monospace;
+  font-weight: bold;
+  color: #ffe066;
+}
+
+.error {
+  background: #2c1515;
+  color: #ff8080;
+  border: 1px solid #e74c3c44;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}
+
+.submitBtn {
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: #e67e22;
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 4px;
+}
+.submitBtn:hover:not(:disabled) { background: #f39c12; }
+.submitBtn:disabled {
+  background: #3a3f55;
+  color: #7a8090;
+  cursor: not-allowed;
+}
+
+.skipRow {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.backRow {
+  margin-top: 16px;
+}
+
+.skipBtn {
+  background: none;
+  border: none;
+  color: #6a7a90;
+  cursor: pointer;
+  font-size: 0.88rem;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+.skipBtn:hover { color: #aab8d0; }
+
+.doneIcon {
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 12px;
+}

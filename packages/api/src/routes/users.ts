@@ -298,6 +298,63 @@ export async function usersRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ ok: true });
   });
 
+  // ── POST /users/me/claim-game — link a guest game to authenticated account ─
+  app.post('/me/claim-game', async (request, reply) => {
+    const token = extractToken(request.headers.authorization);
+    if (!token) return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'Требуется авторизация' });
+
+    let payload;
+    try { payload = verifyToken(token); }
+    catch { return reply.status(401).send({ error: 'INVALID_TOKEN', message: 'Токен недействителен или истёк' }); }
+
+    const body = request.body as { sessionId?: string; color?: string };
+    if (!body.sessionId || !body.color || !['red', 'blue'].includes(body.color)) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', message: 'Укажите sessionId и color (red/blue)' });
+    }
+    const { sessionId, color } = body as { sessionId: string; color: 'red' | 'blue' };
+
+    // Find the game and the participant slot
+    const game = await prisma.game.findUnique({
+      where: { sessionId },
+      select: { id: true, isRated: true, participants: { select: { id: true, userId: true, color: true, isWinner: true } } },
+    });
+    if (!game) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Игра не найдена' });
+
+    const participant = game.participants.find((p: { id: string; userId: string | null; color: string; isWinner: boolean }) => p.color === color);
+    if (!participant) return reply.status(404).send({ error: 'NOT_FOUND', message: 'Участник не найден' });
+    if (participant.userId !== null) {
+      // Already claimed — idempotent OK if claimed by same user
+      if (participant.userId === payload.sub) return reply.send({ ok: true });
+      return reply.status(409).send({ error: 'ALREADY_CLAIMED', message: 'Игра уже привязана к другому аккаунту' });
+    }
+
+    // Link participant and update stats in a transaction
+    await prisma.$transaction(async (tx: import('@prisma/client').Prisma.TransactionClient) => {
+      await tx.gameParticipant.update({
+        where: { id: participant.id },
+        data:  { userId: payload.sub },
+      });
+      await tx.userProfile.upsert({
+        where:  { userId: payload.sub },
+        create: {
+          userId:          payload.sub,
+          gamesPlayed:     1,
+          wins:            participant.isWinner ? 1 : 0,
+          ratedGamesPlayed: game.isRated ? 1 : 0,
+          ratedWins:        game.isRated && participant.isWinner ? 1 : 0,
+        },
+        update: {
+          gamesPlayed:      { increment: 1 },
+          wins:             participant.isWinner ? { increment: 1 } : undefined,
+          ratedGamesPlayed: game.isRated ? { increment: 1 } : undefined,
+          ratedWins:        game.isRated && participant.isWinner ? { increment: 1 } : undefined,
+        },
+      });
+    });
+
+    return reply.send({ ok: true });
+  });
+
   // ── POST /users/me/avatar — upload avatar file ────────────────────────────
   app.post('/me/avatar', async (request, reply) => {
     const token = extractToken(request.headers.authorization);

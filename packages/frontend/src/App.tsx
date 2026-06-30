@@ -5,7 +5,10 @@ import { useSound } from './hooks/useSound';
 import { useSettings } from './hooks/useSettings';
 import { useLocalGame } from './ai/driver/useLocalGame';
 import type { Difficulty } from './ai/types';
+import { DIFFICULTY_LABELS } from './ai/difficulty';
 import { Lobby }     from './components/Lobby/Lobby';
+import { NavBar }    from './components/NavBar/NavBar';
+import { PostGameRegisterPrompt } from './components/PostGameRegisterPrompt/PostGameRegisterPrompt';
 import { Board, MobileInputMode } from './components/Board/Board';
 import { GameInfo, SideNotice, describeLastAction }  from './components/GameInfo/GameInfo';
 import { HelpModal } from './components/HelpModal/HelpModal';
@@ -24,7 +27,6 @@ export default function App() {
   const [soloEnabled, setSoloEnabled] = useState(false);
   const [soloHumanColor, setSoloHumanColor] = useState<PlayerColor>('red');
   const [soloDifficulty, setSoloDifficulty] = useState<Difficulty>('normal');
-  const [soloHumanName, setSoloHumanName] = useState('');
   const [soloNonce, setSoloNonce] = useState(0);
   // sessionId стабилен на одну партию vs. бот — бэкенд использует его, чтобы
   // склеивать события одного матча в один JSONL-файл.
@@ -33,10 +35,13 @@ export default function App() {
   const auth = useAuth();
   const pvpSession = useSocket();
   const logSoloEvent = pvpSession.logSoloEvent;
+  // Derive player name from auth — authenticated users use their login, guests use 'Гость'
+  const playerName = auth.isGuest ? 'Гость' : (auth.user?.login ?? 'Гость');
+
   const soloSession = useLocalGame({
     enabled: soloEnabled,
     humanColor: soloHumanColor,
-    humanName: soloHumanName || 'Игрок',
+    humanName: playerName,
     difficulty: soloDifficulty,
     gameNonce: soloNonce,
     onSession: (kind, meta) => {
@@ -50,6 +55,8 @@ export default function App() {
           humanColor: meta.humanColor,
           difficulty: meta.difficulty,
           config: meta.config,
+          botName: `Бот (${DIFFICULTY_LABELS[meta.difficulty as Difficulty]})`,
+          userId: auth.user?.id ?? undefined,
         });
       }
       // 'session_finished' специально не отправляем — recorder закроется по
@@ -81,6 +88,7 @@ export default function App() {
     sessionReturnToMenu();
     setSoloEnabled(false);
     setGameMode('pvp');
+    setShowRegisterPrompt(false);
   };
   const leaveRoom = () => {
     sessionLeaveRoom();
@@ -90,12 +98,14 @@ export default function App() {
 
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showRegisterPrompt, setShowRegisterPrompt] = useState(false);
   const [boardHeight, setBoardHeight] = useState<number | null>(null);
   const [roomIdCopied, setRoomIdCopied] = useState(false);
   // Залипающие кнопки на мобиле: 'flag' (тап = ПКМ-цикл),
   // 'defuse' (тап = Ctrl+ЛКМ). 'normal' — выключены обе.
   const [mobileInputMode, setMobileInputMode] = useState<MobileInputMode>('normal');
 
+  const settingsApi = useSettings();
   const {
     settings,
     mutedRef,
@@ -104,7 +114,7 @@ export default function App() {
     setVolume,
     toggleHideControls,
     toggleFlagClickDefuse,
-  } = useSettings();
+  } = settingsApi;
   const { muted, hideControls, volume, flagClickDefuse } = settings;
 
   const { play, playDelayed, preload } = useSound({ mutedRef, volumeRef });
@@ -388,6 +398,13 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [gameState, play]);
 
+  // Показываем приглашение к регистрации при завершении игры у гостя
+  useEffect(() => {
+    if (gameOver && auth.isGuest) {
+      setShowRegisterPrompt(true);
+    }
+  }, [gameOver, auth.isGuest]);
+
   // При смене партии (новый roomId / возврат в лобби) сбрасываем флаги
   // low-time, иначе при новой игре звук может не сработать.
   useEffect(() => {
@@ -488,23 +505,31 @@ export default function App() {
       {renderMobileNoticeToast()}
       {renderOfflineBanner()}
       {showHelp && <HelpModal onClose={closeHelp} />}
+      {showRegisterPrompt && auth.isGuest && myColor && (
+        <PostGameRegisterPrompt
+          sessionId={gameMode === 'solo' ? soloSessionIdRef.current : (gameOver?.sessionId ?? '')}
+          color={myColor}
+          auth={auth}
+          onDismiss={() => setShowRegisterPrompt(false)}
+        />
+      )}
     </div>
   );
 
   if (screen === 'lobby') {
-    return renderShell(
-      <div className={styles.screenBody}>
+    return (
+      <div className={styles.gameLayout}>
+        <NavBar auth={auth} settings={settingsApi} />
         <Lobby
-          onCreateRoom={(name, timeControl) => {
+          onCreateRoom={(timeControl) => {
             setGameMode('pvp');
-            createRoom(name, timeControl);
+            createRoom(playerName, timeControl);
           }}
-          onJoinRoom={(id, name) => {
+          onJoinRoom={(id) => {
             setGameMode('pvp');
-            joinRoom(id, name);
+            joinRoom(id, playerName);
           }}
-          onStartSolo={(name, difficulty, humanColor) => {
-            setSoloHumanName(name);
+          onStartSolo={(difficulty, humanColor) => {
             setSoloDifficulty(difficulty);
             setSoloHumanColor(humanColor);
             soloSessionIdRef.current = `solo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -514,6 +539,10 @@ export default function App() {
           }}
           onUiClick={() => {}}
         />
+        {renderErrorToast()}
+        {renderMobileNoticeToast()}
+        {renderOfflineBanner()}
+        {showHelp && <HelpModal onClose={closeHelp} />}
       </div>
     );
   }
