@@ -258,9 +258,25 @@ export function ProfilePage() {
       {renderHeader()}
       <div className={styles.pageBody}>
       <div className={styles.page}>
-      {/* Back link */}
+      {/* Back link + account actions on the same row */}
       <div className={styles.topNav}>
         <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
+        {isMe && (
+          <>
+            <button
+              className={styles.logoutBtn}
+              onClick={() => { auth.logout(); navigate('/'); }}
+            >
+              🚪 Выйти
+            </button>
+            <button
+              className={styles.deleteAccountBtn}
+              onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
+            >
+              🗑 Удалить аккаунт
+            </button>
+          </>
+        )}
       </div>
 
       {/* Email verification banner (only for the owner) */}
@@ -377,24 +393,8 @@ export function ProfilePage() {
           )}
         </div>
 
-        {/* Right column: account actions (owner) + activity calendar */}
+        {/* Right column: activity calendar */}
         <div className={styles.activitySection}>
-          {isMe && (
-            <div className={styles.cardActions}>
-              <button
-                className={styles.logoutBtn}
-                onClick={() => { auth.logout(); navigate('/'); }}
-              >
-                🚪 Выйти
-              </button>
-              <button
-                className={styles.deleteAccountBtn}
-                onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
-              >
-                🗑 Удалить аккаунт
-              </button>
-            </div>
-          )}
           <ActivityCalendar activity={activity} />
         </div>
       </div>

@@ -1,5 +1,6 @@
-/* Classic board uses the same dark aesthetic as PvP Board.
-   Cell size adapts to the number of columns via a CSS variable injected inline. */
+/* Classic board — matches PvP Cell.module.css aesthetic exactly.
+   Unrevealed = dark red (ownerRed), revealed = dark blue (ownerBlue),
+   explosion flash identical to PvP. */
 
 .wrapper {
   display: flex;
@@ -18,84 +19,105 @@
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.6);
 }
 
-/* ── Base cell ── */
+/* ── Base cell — mirrors .cell from Cell.module.css ── */
 .cell {
-  --cell-size: 28px;
-  width: var(--cell-size, 28px);
-  height: var(--cell-size, 28px);
+  border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  cursor: pointer;
   font-size: 0.95rem;
-  font-weight: bold;
+  cursor: pointer;
   user-select: none;
-  transition: filter 0.08s;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: filter 0.1s, box-shadow 0.1s;
+  box-sizing: border-box;
   position: relative;
   overflow: hidden;
 }
 
-/* ── Unrevealed: dark red/enemy-like to match PvP feel ── */
+.cell:hover { filter: brightness(1.18); }
+
+/* ── Unrevealed: dark red, same as .ownerRed ── */
 .cellHidden {
-  background: #2a1a1a;
-  border: 1px solid #3e2020;
-  color: #eee;
-}
-.cellHidden:hover {
-  filter: brightness(1.25);
+  background: #5c1a1a;
 }
 
-/* ── Flagged ── */
-.cellFlagged {
-  background: #2a1a1a;
-  border: 1px solid #8b3030;
-}
-
-/* ── Revealed: blue/player-captured tone ── */
+/* ── Revealed: dark blue, same as .ownerBlue ── */
 .cellRevealed {
-  background: #0e1f38;
-  border: 1px solid #1a3055;
+  background: #1a3d5c;
   cursor: default;
 }
+.cellRevealed:hover { filter: none; }
 
-/* ── Exploded mine ── */
-.cellExploded {
-  background: #6b1c1c;
-  border: 1px solid #e74c3c;
-  animation: explodePulse 0.4s ease-out;
+/* ── Mine hit cell: brighter red, same as .mineRed ── */
+.mineHit {
+  background: #8b1a1a;
+  cursor: default;
+}
+.mineHit:hover { filter: none; }
+
+/* ── Exploding mine (shake + flash) ── */
+.exploding {
+  animation: explosionShake 0.5s ease-out;
 }
 
-@keyframes explodePulse {
-  0%   { background: #ff4444; }
-  100% { background: #6b1c1c; }
-}
-
-/* ── Chord preview highlight (unflagged neighbors of a chordable number) ── */
-.cellChordPreview {
-  filter: brightness(1.35);
-  border-color: #66ccff !important;
-}
-
-/* ── First-click hint: center area glow before board is generated ── */
+/* ── First-click hint glow on center area ── */
 .cellHint {
   animation: hintPulse 1.8s ease-in-out infinite;
 }
-
 @keyframes hintPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
   50%       { box-shadow: 0 0 6px 2px rgba(52, 152, 219, 0.4); }
 }
 
-.icon {
-  font-size: 0.85em;
-  line-height: 1;
+/* ── Explosion flash overlay ── */
+.explosionFlash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background: #fff2a8;
+  box-shadow: 0 0 14px 4px rgba(255, 220, 120, 0.85);
+  animation: explosionFade 1s ease-out forwards;
 }
 
-/* ── Responsive: shrink cells for large grids ── */
-@media (max-width: 700px) {
-  .board {
-    padding: 4px;
-    gap: 1px;
+@keyframes explosionFade {
+  0% {
+    background: #ffffff;
+    box-shadow: 0 0 22px 8px rgba(255, 240, 180, 0.95);
+    opacity: 1;
   }
+  25% {
+    background: #ffd24a;
+    box-shadow: 0 0 18px 6px rgba(255, 200, 80, 0.85);
+    opacity: 0.95;
+  }
+  60% {
+    background: #ff8a3a;
+    box-shadow: 0 0 12px 3px rgba(255, 140, 60, 0.55);
+    opacity: 0.6;
+  }
+  100% {
+    background: rgba(255, 120, 40, 0);
+    box-shadow: 0 0 0 0 rgba(255, 120, 40, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes explosionShake {
+  0%   { transform: translate(0, 0); }
+  20%  { transform: translate(-1px, 1px); }
+  40%  { transform: translate(1px, -1px); }
+  60%  { transform: translate(-1px, -1px); }
+  80%  { transform: translate(1px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(12px, 3vw, 24px);
+  line-height: 1;
 }

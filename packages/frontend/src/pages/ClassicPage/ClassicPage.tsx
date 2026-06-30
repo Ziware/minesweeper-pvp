@@ -35,9 +35,9 @@ function formatTime(ms: number): string {
 
 // Determine appropriate cell size based on board columns
 function cellSize(cols: number): number {
-  if (cols <= 9) return 34;
-  if (cols <= 16) return 28;
-  return 22;
+  if (cols <= 9) return 40;
+  if (cols <= 16) return 32;
+  return 26;
 }
 
 export function ClassicPage() {
@@ -181,10 +181,11 @@ export function ClassicPage() {
         )}
 
         {/* ── Board ── */}
-        <div className={styles.boardWrap} style={{ '--cell-size': `${cs}px` } as React.CSSProperties}>
+        <div className={styles.boardWrap}>
           <ClassicBoard
             cells={game.board}
             status={game.status}
+            cellSize={cs}
             onReveal={game.reveal}
             onFlag={game.cycleFlag}
             onChord={game.chord}
