@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Copy workspace root files
@@ -25,6 +27,8 @@ RUN yarn workspace @minesweeper-pvp/api build
 
 # ─── Runtime ────────────────────────────────────────────────────────────────
 FROM node:20-alpine
+
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 
