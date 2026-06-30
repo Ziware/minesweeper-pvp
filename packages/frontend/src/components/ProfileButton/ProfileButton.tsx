@@ -62,6 +62,9 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
             <div className={styles.dropdownUser}>
               <span className={styles.dropdownLogin}>{auth.user.login}</span>
               <span className={styles.dropdownEmail}>{auth.user.email}</span>
+              {!auth.user.emailVerified && (
+                <span className={styles.unverifiedBadge}>⚠️ Email не подтверждён</span>
+              )}
             </div>
             <div className={styles.dropdownDivider} />
             <button
@@ -88,6 +91,15 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
           onVerifyEmail={auth.verifyEmail}
           onSwitchToLogin={() => setModal('login')}
           onClose={() => setModal('none')}
+          onSkipVerification={async (email, password) => {
+            try {
+              await auth.login(email, password);
+              setModal('none');
+            } catch {
+              // ignore — user can try again from login modal
+              setModal('login');
+            }
+          }}
         />
       )}
     </>

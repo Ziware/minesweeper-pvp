@@ -91,6 +91,13 @@
   color: #7a8090;
 }
 
+.unverifiedBadge {
+  font-size: 0.72rem;
+  color: #f5a623;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 .dropdownDivider {
   height: 1px;
   background: #1e3460;

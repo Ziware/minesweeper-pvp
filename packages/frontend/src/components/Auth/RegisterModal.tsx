@@ -3,10 +3,12 @@ import { ApiError } from '../../hooks/useAuth';
 import styles from './Auth.module.css';
 
 interface RegisterModalProps {
-  onRegister:       (email: string, login: string, password: string) => Promise<void>;
-  onVerifyEmail:    (email: string, code: string) => Promise<void>;
-  onSwitchToLogin:  () => void;
-  onClose:          () => void;
+  onRegister:          (email: string, login: string, password: string) => Promise<void>;
+  onVerifyEmail:       (email: string, code: string) => Promise<void>;
+  onSwitchToLogin:     () => void;
+  onClose:             () => void;
+  /** Called when user skips email verification and wants to log in right away */
+  onSkipVerification?: (email: string, password: string) => void;
 }
 
 type Step = 'form' | 'verify';
@@ -16,6 +18,7 @@ export function RegisterModal({
   onVerifyEmail,
   onSwitchToLogin,
   onClose,
+  onSkipVerification,
 }: RegisterModalProps) {
   const [step,            setStep]            = useState<Step>('form');
   const [email,           setEmail]           = useState('');
@@ -178,6 +181,15 @@ export function RegisterModal({
               >
                 ← Назад
               </button>
+              {onSkipVerification && (
+                <button
+                  className={styles.switchBtn}
+                  onClick={() => onSkipVerification(email.trim(), password)}
+                  type="button"
+                >
+                  Войти без подтверждения →
+                </button>
+              )}
             </div>
           </>
         )}

@@ -12,9 +12,10 @@ function generateCode(): string {
 }
 
 export interface JwtPayload {
-  sub:   string;
-  login: string;
-  email: string;
+  sub:           string;
+  login:         string;
+  email:         string;
+  emailVerified: boolean;
 }
 
 export function signToken(payload: JwtPayload): string {
@@ -67,7 +68,12 @@ export async function register(
     },
   });
 
-  await sendVerificationCode(email, code);
+  // Send verification email — non-fatal: user is already created even if email fails
+  try {
+    await sendVerificationCode(email, code);
+  } catch (err) {
+    console.error('[authService] Failed to send verification email:', err);
+  }
 
   return { userId: user.id };
 }
@@ -82,7 +88,7 @@ export type VerifyError =
 export async function verifyEmail(
   email: string,
   code: string,
-): Promise<{ error: VerifyError } | { token: string; user: { id: string; login: string; email: string } }> {
+): Promise<{ error: VerifyError } | { token: string; user: { id: string; login: string; email: string; emailVerified: boolean } }> {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return { error: 'USER_NOT_FOUND' };
   if (user.emailVerified) return { error: 'ALREADY_VERIFIED' };
@@ -108,21 +114,20 @@ export async function verifyEmail(
     }),
   ]);
 
-  const token = signToken({ sub: user.id, login: user.login, email: user.email });
-  return { token, user: { id: user.id, login: user.login, email: user.email } };
+  const token = signToken({ sub: user.id, login: user.login, email: user.email, emailVerified: true });
+  return { token, user: { id: user.id, login: user.login, email: user.email, emailVerified: true } };
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────
 
 export type LoginError =
   | 'NOT_FOUND'
-  | 'WRONG_PASSWORD'
-  | 'EMAIL_NOT_VERIFIED';
+  | 'WRONG_PASSWORD';
 
 export async function login(
   emailOrLogin: string,
   password: string,
-): Promise<{ error: LoginError } | { token: string; user: { id: string; login: string; email: string } }> {
+): Promise<{ error: LoginError } | { token: string; user: { id: string; login: string; email: string; emailVerified: boolean } }> {
   const user = await prisma.user.findFirst({
     where: {
       OR: [{ email: emailOrLogin }, { login: emailOrLogin }],
@@ -133,8 +138,7 @@ export async function login(
   const match = await bcrypt.compare(password, user.passwordHash);
   if (!match) return { error: 'WRONG_PASSWORD' };
 
-  if (!user.emailVerified) return { error: 'EMAIL_NOT_VERIFIED' };
-
-  const token = signToken({ sub: user.id, login: user.login, email: user.email });
-  return { token, user: { id: user.id, login: user.login, email: user.email } };
+  // Allow login even if email is not verified — emailVerified flag is in JWT/response
+  const token = signToken({ sub: user.id, login: user.login, email: user.email, emailVerified: user.emailVerified });
+  return { token, user: { id: user.id, login: user.login, email: user.email, emailVerified: user.emailVerified } };
 }

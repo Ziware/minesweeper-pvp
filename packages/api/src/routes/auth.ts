@@ -68,13 +68,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const { emailOrLogin, password } = parse.data;
     const result = await authService.login(emailOrLogin, password);
     if ('error' in result) {
-      const status = result.error === 'EMAIL_NOT_VERIFIED' ? 403 : 401;
       const messages: Record<string, string> = {
-        NOT_FOUND:           'Неверный логин/email или пароль',
-        WRONG_PASSWORD:      'Неверный логин/email или пароль',
-        EMAIL_NOT_VERIFIED:  'Email не подтверждён. Проверьте почту.',
+        NOT_FOUND:      'Неверный логин/email или пароль',
+        WRONG_PASSWORD: 'Неверный логин/email или пароль',
       };
-      return reply.status(status).send({ error: result.error, message: messages[result.error] });
+      return reply.status(401).send({ error: result.error, message: messages[result.error] });
     }
     return reply.send({ token: result.token, user: result.user });
   });
