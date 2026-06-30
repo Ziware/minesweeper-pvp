@@ -1,0 +1,56 @@
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Table 1: Authentication data — rarely changes.
+/// Source of truth for identity and login.
+model User {
+  id            String    @id @default(uuid())
+  login         String    @unique
+  email         String    @unique
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  emailVerified Boolean   @default(false)
+  verifiedAt    DateTime?
+
+  profile       UserProfile?
+  verifications EmailVerification[]
+
+  @@map("users")
+}
+
+/// Table 2: Mutable profile data — avatar, rating, stats.
+/// Always JOIN via userId.
+model UserProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarUrl   String?
+  rating      Int      @default(1000)
+  gamesPlayed Int      @default(0)
+  wins        Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+/// Temporary email verification codes. TTL = 15 minutes.
+model EmailVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String   // 6-digit numeric code
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("email_verifications")
+}

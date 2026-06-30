@@ -90,6 +90,12 @@ export interface TurnState {
   selectedZone: { row: number; col: number } | null;
   actionZone: { row: number; col: number } | null;
   canDefuse: boolean;
+  /**
+   * Флаг «фаза 2 заблокирована»: устанавливается после взрыва мины или
+   * дефьюза пустой клетки. В этом состоянии запрещены захваты, дефьюзы и
+   * аккорд — доступна только расстановка флагов и кнопка «Завершить захват».
+   */
+  phase2Locked?: boolean;
   minesPlacedThisTurn: number;
   // Лимит мин на 3-ю фазу для текущего игрока (база + бонус за зону над штабом)
   minesAllowedThisTurn: number;

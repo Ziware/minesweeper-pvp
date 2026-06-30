@@ -101,6 +101,9 @@ export interface EngineTurn {
   selectedZone: { row: number; col: number } | null;
   actionZone: { row: number; col: number } | null;
   canDefuse: boolean;
+  /** Флаг «фаза 2 заблокирована»: устанавливается после взрыва мины или
+   * дефьюза пустой клетки. При true разрешены только флаги и кнопка завершения. */
+  phase2Locked: boolean;
   minesPlacedThisTurn: number;
   minesAllowedThisTurn: number;
   /** Plain array of "r,c" strings. We keep it as a Set internally and project

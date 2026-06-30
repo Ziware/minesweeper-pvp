@@ -420,6 +420,7 @@ export class RoomManager {
   captureCell(room: Room, color: PlayerColor, row: number, col: number) {
     if (room.turn.phase !== 'phase2') return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не фаза захвата' };
     if (room.turn.currentPlayer !== color) return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
+    if (room.turn.phase2Locked) return { ok: false, hitMine: false, gameOver: false, error: 'Захват заблокирован — завершите фазу захвата кнопкой' };
     const actionZone  = room.turn.actionZone!;
     const displayZone = room.turn.selectedZone!;
     const captured    = room.turn.capturedThisTurn as Set<string>;
@@ -443,7 +444,8 @@ export class RoomManager {
         this.finalizeGameOver(room, opp.color, 'lives');
         return { ok: true, hitMine: true, gameOver: true };
       }
-      this.startPhase3(room);
+      // Блокируем дальнейшие захваты — только флаги и кнопка «Завершить захват».
+      room.turn.phase2Locked = true;
     } else {
       this.clearMarkOnCell(room, row, col);
       cell.owner = color;
@@ -474,6 +476,9 @@ export class RoomManager {
     }
     if (room.turn.currentPlayer !== color) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
+    }
+    if (room.turn.phase2Locked) {
+      return { ok: false, hadMine: false, gameOver: false, error: 'Захват заблокирован — завершите фазу захвата кнопкой' };
     }
     if (!room.turn.canDefuse || room.turn.defusesUsedThisTurn >= room.turn.defusesPerTurn) {
       return { ok: false, hadMine: false, gameOver: false, error: 'Лимит разминирований на ход исчерпан' };
@@ -522,10 +527,23 @@ export class RoomManager {
       this.clearMarkOnCell(room, row, col);
       cell.owner   = color;
       (room.turn.capturedThisTurn as Set<string>).add(`${row},${col}`);
+
+      const inDisplayZoneNoMine =
+        row >= displayZone.row && row < displayZone.row + 3 &&
+        col >= displayZone.col && col < displayZone.col + 3 &&
+        isInBounds(row, col, room.config.boardSize);
+
+      if (inDisplayZoneNoMine) {
+        revealNumberForCell(room.board, row, col, color, room.config);
+      }
+      refreshNumbersInDisplayZone(room.board, displayZone.row, displayZone.col, color, room.config);
+
       if (this.checkHeadquartersCapture(room, color, row, col)) {
         return { ok: true, hadMine, gameOver: true };
       }
-      this.startPhase3(room, { type: 'defuse_no_mine', actorColor: color });
+      // Блокируем дальнейшие захваты — только флаги и кнопка «Завершить захват».
+      room.turn.phase2Locked = true;
+      room.turn.lastAction = { type: 'defuse_no_mine', actorColor: color };
     }
 
     return { ok: true, hadMine, gameOver: false };
@@ -558,6 +576,9 @@ export class RoomManager {
     }
     if (room.turn.currentPlayer !== color) {
       return { ok: false, hitMine: false, gameOver: false, error: 'Сейчас не ваш ход' };
+    }
+    if (room.turn.phase2Locked) {
+      return { ok: false, hitMine: false, gameOver: false, error: 'Захват заблокирован — завершите фазу захвата кнопкой' };
     }
     const size = room.config.boardSize;
     if (!isInBounds(row, col, size)) {
@@ -618,7 +639,7 @@ export class RoomManager {
         this.finalizeGameOver(room, opp.color, 'lives');
         return { ok: true, hitMine: true, gameOver: true };
       }
-      this.startPhase3(room);
+      // Не переходим автоматически в фазу 3 — игрок сам завершит фазу 2 кнопкой.
       return { ok: true, hitMine: true, gameOver: false };
     }
 

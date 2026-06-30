@@ -328,6 +328,7 @@ export function createInitialTurnState(
     selectedZone: null,
     actionZone: null,
     canDefuse: defusesPerTurn > 0,
+    phase2Locked: false,
     minesPlacedThisTurn: 0,
     minesAllowedThisTurn,
     capturedThisTurn: new Set<string>(),

@@ -17,7 +17,7 @@
     "grantInterval": 3
   },
   "timeControls": {
-    "defaultPresetIndex": 1,
+    "defaultPresetIndex": 3,
     "presets": [
       { "label": "2 + 3", "baseMinutes": 2, "incrementSeconds": 3 },
       { "label": "5 + 5", "baseMinutes": 5, "incrementSeconds": 5 },

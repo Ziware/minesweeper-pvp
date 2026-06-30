@@ -123,6 +123,9 @@ function enumeratePhase1(state: EngineState, opts: EnumerateOpts): EngineMove[] 
 // ─── phase 2 — captures / defuses / chord / end ──────────────────────────────
 
 function enumeratePhase2(state: EngineState, opts: EnumerateOpts): EngineMove[] {
+  // When phase2Locked, only allow ending phase2 (player must press the button).
+  if (state.turn.phase2Locked) return [{ type: 'end_phase2' }];
+
   const color = state.turn.currentPlayer;
   const size = state.config.boardSize;
   const az = state.turn.actionZone;

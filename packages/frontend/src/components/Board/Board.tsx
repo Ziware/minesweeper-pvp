@@ -38,6 +38,11 @@ interface BoardProps {
   onWrapperRef?: (el: HTMLDivElement | null) => void;
   /** Текущий режим тапа в мобильной раскладке. На десктопе обычно 'normal'. */
   mobileInputMode?: MobileInputMode;
+  /**
+   * Клик по клетке с флагом в фазе 2 работает как дефьюз (Ctrl+Click).
+   * По умолчанию включено.
+   */
+  flagClickDefuse?: boolean;
 }
 
 // Вычисляем размер клетки в зависимости от размера экрана и boardSize
@@ -105,6 +110,7 @@ export function Board({
   onLocalError,
   onWrapperRef,
   mobileInputMode = 'normal',
+  flagClickDefuse = true,
 }: BoardProps) {
   const { board, turn, config, players } = gameState;
   const isMyTurn = turn.currentPlayer === myColor;
@@ -277,6 +283,29 @@ export function Board({
       return;
     }
     if (phase === 'phase2') {
+      // Если фаза 2 заблокирована — захваты запрещены, но флаги и авто-флаг аккорд разрешены.
+      if (turn.phase2Locked) {
+        // Авто-флаг аккорд: ставит флажки, не захватывает клетки — разрешён.
+        if (isChordSource(r, c)) {
+          const { flagCount, unflaggedClosedNeighbors } = summarizeChord(r, c);
+          const need = cell.number ?? 0;
+          if (
+            unflaggedClosedNeighbors.length > 0 &&
+            flagCount + unflaggedClosedNeighbors.length === need
+          ) {
+            for (const { row: fr, col: fc } of unflaggedClosedNeighbors) {
+              onToggleMark(fr, fc, 'flag');
+            }
+          }
+          // Захватывающий аккорд (flagCount === need) — заблокирован.
+          return;
+        }
+        // Флаг/вопрос на чужой клетке — разрешён.
+        if (cell.owner !== myColor) {
+          onToggleMark(r, c, cycleMark(cell.mark));
+        }
+        return;
+      }
       // Аккорд: клик по своей открытой цифре в зоне 3×3 в фазе 2.
       //   - флажков == цифре → отправляем chord на сервер;
       //   - флажков > цифры  → локальная ошибка «слишком много флажков»;
@@ -330,7 +359,13 @@ export function Board({
       //     ничего не делает, иначе можно случайно подорваться. Снять флажок
       //     можно ПКМ или мобильной кнопкой «флаг».
       //   - знак вопроса: тап сбрасывает метку, не пытаясь захватить клетку.
-      if (cell.mark === 'flag') return;
+      if (cell.mark === 'flag') {
+        // Если настройка включена — клик по флагу = дефьюз (как Ctrl+Click).
+        if (flagClickDefuse) {
+          onDefuseCell(r, c);
+        }
+        return;
+      }
       if (cell.mark === 'question') {
         onToggleMark(r, c, 'none');
         return;

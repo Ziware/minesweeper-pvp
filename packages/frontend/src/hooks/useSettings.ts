@@ -10,6 +10,8 @@ export interface UserSettings {
   volume: number;
   /** Скрыть блок «Управление» в правой колонке */
   hideControls: boolean;
+  /** Клик по флагу в фазе 2 работает как дефьюз (Ctrl+Click) */
+  flagClickDefuse: boolean;
 }
 
 const STORAGE_KEY = 'minesweeper_settings';
@@ -18,6 +20,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   muted: false,
   volume: 1,
   hideControls: false,
+  flagClickDefuse: true,
 };
 
 export const VOLUME_MIN = 0;
@@ -37,7 +40,10 @@ function loadSettings(): UserSettings {
     const hideControls = typeof parsed.hideControls === 'boolean'
       ? parsed.hideControls
       : DEFAULT_SETTINGS.hideControls;
-    return { muted, volume, hideControls };
+    const flagClickDefuse = typeof parsed.flagClickDefuse === 'boolean'
+      ? parsed.flagClickDefuse
+      : DEFAULT_SETTINGS.flagClickDefuse;
+    return { muted, volume, hideControls, flagClickDefuse };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -63,6 +69,8 @@ export interface SettingsApi {
   setVolume: (value: number) => void;
   setHideControls: (value: boolean) => void;
   toggleHideControls: () => void;
+  setFlagClickDefuse: (value: boolean) => void;
+  toggleFlagClickDefuse: () => void;
 }
 
 export function useSettings(): SettingsApi {
@@ -93,6 +101,12 @@ export function useSettings(): SettingsApi {
   const toggleHideControls = useCallback(() => {
     setSettings((s) => ({ ...s, hideControls: !s.hideControls }));
   }, []);
+  const setFlagClickDefuse = useCallback((value: boolean) => {
+    setSettings((s) => ({ ...s, flagClickDefuse: value }));
+  }, []);
+  const toggleFlagClickDefuse = useCallback(() => {
+    setSettings((s) => ({ ...s, flagClickDefuse: !s.flagClickDefuse }));
+  }, []);
 
   return {
     settings,
@@ -103,5 +117,7 @@ export function useSettings(): SettingsApi {
     setVolume,
     setHideControls,
     toggleHideControls,
+    setFlagClickDefuse,
+    toggleFlagClickDefuse,
   };
 }

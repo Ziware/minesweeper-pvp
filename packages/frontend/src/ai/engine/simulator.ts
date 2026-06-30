@@ -267,6 +267,7 @@ export function createInitialState(opts: CreateInitialStateOpts): EngineState {
     selectedZone: null,
     actionZone: null,
     canDefuse: true,
+    phase2Locked: false,
     minesPlacedThisTurn: 0,
     minesAllowedThisTurn: config.minesPerTurn,
     capturedThisTurn: new Set<string>(),
@@ -412,6 +413,7 @@ function createInitialTurn(currentPlayer: PlayerColor, turnsPlayed: number, mine
     selectedZone: null,
     actionZone: null,
     canDefuse: defusesPerTurn > 0,
+    phase2Locked: false,
     minesPlacedThisTurn: 0,
     minesAllowedThisTurn,
     capturedThisTurn: new Set<string>(),
@@ -452,6 +454,7 @@ function applySelectZone(s: EngineState, clickedRow: number, clickedCol: number)
 
 function applyCapture(s: EngineState, row: number, col: number): ApplyEvent {
   if (s.turn.phase !== 'phase2') return err('Сейчас не фаза захвата');
+  if (s.turn.phase2Locked) return err('Захват заблокирован — завершите фазу захвата кнопкой');
   const color = s.turn.currentPlayer;
   const size = s.config.boardSize;
   const az = s.turn.actionZone!;
@@ -470,7 +473,8 @@ function applyCapture(s: EngineState, row: number, col: number): ApplyEvent {
       finalizeGameOver(s, oppositeColor(color), 'lives');
       return { kind: 'mine_exploded', row, col, actor: color };
     }
-    startPhase3(s);
+    // Блокируем дальнейшие захваты — только флаги и кнопка «Завершить захват».
+    s.turn.phase2Locked = true;
     return { kind: 'mine_exploded', row, col, actor: color };
   }
   // Safe capture.
@@ -494,6 +498,7 @@ function applyCapture(s: EngineState, row: number, col: number): ApplyEvent {
 
 function applyDefuse(s: EngineState, row: number, col: number): ApplyEvent {
   if (s.turn.phase !== 'phase2') return err('Сейчас не фаза захвата');
+  if (s.turn.phase2Locked) return err('Захват заблокирован — завершите фазу захвата кнопкой');
   const color = s.turn.currentPlayer;
   const size = s.config.boardSize;
   if (!s.turn.canDefuse || s.turn.defusesUsedThisTurn >= s.turn.defusesPerTurn) {
@@ -530,16 +535,25 @@ function applyDefuse(s: EngineState, row: number, col: number): ApplyEvent {
     clearMarkOnCell(s, row, col);
     cell.owner = color;
     s.turn.capturedThisTurn.add(`${row},${col}`);
+    const inDzNoMine =
+      row >= dz.row && row < dz.row + 3 &&
+      col >= dz.col && col < dz.col + 3 &&
+      isInBounds(row, col, size);
+    if (inDzNoMine) revealNumberForCell(s.board, row, col, color, size);
+    refreshNumbersInDisplayZone(s.board, dz.row, dz.col, color, size);
     if (checkHeadquartersCapture(s, color, row, col)) {
       return { kind: 'defuse_no_mine', row, col, actor: color };
     }
-    startPhase3(s, { type: 'defuse_no_mine', actorColor: color, row, col, id: nextActionId() });
+    // Блокируем дальнейшие захваты — только флаги и кнопка «Завершить захват».
+    s.turn.phase2Locked = true;
+    s.turn.lastAction = { type: 'defuse_no_mine', actorColor: color, row, col, id: nextActionId() };
     return { kind: 'defuse_no_mine', row, col, actor: color };
   }
 }
 
 function applyChord(s: EngineState, row: number, col: number): ApplyEvent {
   if (s.turn.phase !== 'phase2') return err('Сейчас не фаза захвата');
+  if (s.turn.phase2Locked) return err('Захват заблокирован — завершите фазу захвата кнопкой');
   const color = s.turn.currentPlayer;
   const size = s.config.boardSize;
   if (!isInBounds(row, col, size)) return err('Клетка вне поля');
@@ -578,7 +592,8 @@ function applyChord(s: EngineState, row: number, col: number): ApplyEvent {
       finalizeGameOver(s, oppositeColor(color), 'lives');
       return { kind: 'mine_exploded', row: r, col: c, actor: color };
     }
-    startPhase3(s);
+    // Блокируем дальнейшие захваты — только флаги и кнопка «Завершить захват».
+    s.turn.phase2Locked = true;
     return { kind: 'mine_exploded', row: r, col: c, actor: color };
   }
 

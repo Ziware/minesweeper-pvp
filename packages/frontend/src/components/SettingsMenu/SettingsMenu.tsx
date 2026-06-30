@@ -6,9 +6,11 @@ interface SettingsMenuProps {
   muted: boolean;
   volume: number;
   hideControls: boolean;
+  flagClickDefuse: boolean;
   onToggleMuted: () => void;
   onVolumeChange: (value: number) => void;
   onToggleHideControls: () => void;
+  onToggleFlagClickDefuse: () => void;
   /** Закрыть меню (клик вне области или Esc) */
   onClose: () => void;
 }
@@ -21,9 +23,11 @@ export function SettingsMenu({
   muted,
   volume,
   hideControls,
+  flagClickDefuse,
   onToggleMuted,
   onVolumeChange,
   onToggleHideControls,
+  onToggleFlagClickDefuse,
   onClose,
 }: SettingsMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +102,18 @@ export function SettingsMenu({
           className={`${styles.toggle} ${hideControls ? styles.toggleOn : styles.toggleOff}`}
           onClick={onToggleHideControls}
           aria-pressed={hideControls}
+        >
+          <span className={styles.toggleKnob} />
+        </button>
+      </div>
+
+      <div className={styles.row}>
+        <span className={styles.label}>🚩 Клик по флагу = разминирование</span>
+        <button
+          type="button"
+          className={`${styles.toggle} ${flagClickDefuse ? styles.toggleOn : styles.toggleOff}`}
+          onClick={onToggleFlagClickDefuse}
+          aria-pressed={flagClickDefuse}
         >
           <span className={styles.toggleKnob} />
         </button>

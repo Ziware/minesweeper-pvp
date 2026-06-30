@@ -11,6 +11,8 @@ import { GameInfo, SideNotice, describeLastAction }  from './components/GameInfo
 import { HelpModal } from './components/HelpModal/HelpModal';
 import { SettingsMenu } from './components/SettingsMenu/SettingsMenu';
 import { Icon } from './components/Icon/Icon';
+import { useAuth } from './hooks/useAuth';
+import { ProfileButton } from './components/ProfileButton/ProfileButton';
 import styles from './App.module.css';
 
 type GameMode = 'pvp' | 'solo';
@@ -28,6 +30,7 @@ export default function App() {
   // склеивать события одного матча в один JSONL-файл.
   const soloSessionIdRef = useRef<string>('');
 
+  const auth = useAuth();
   const pvpSession = useSocket();
   const logSoloEvent = pvpSession.logSoloEvent;
   const soloSession = useLocalGame({
@@ -100,8 +103,9 @@ export default function App() {
     toggleMuted,
     setVolume,
     toggleHideControls,
+    toggleFlagClickDefuse,
   } = useSettings();
-  const { muted, hideControls, volume } = settings;
+  const { muted, hideControls, volume, flagClickDefuse } = settings;
 
   const { play, playDelayed, preload } = useSound({ mutedRef, volumeRef });
 
@@ -421,6 +425,7 @@ export default function App() {
               muted={muted}
               volume={volume}
               hideControls={hideControls}
+              flagClickDefuse={flagClickDefuse}
               onToggleMuted={() => {
                 toggleMuted();
               }}
@@ -428,6 +433,10 @@ export default function App() {
               onToggleHideControls={() => {
                 playButton();
                 toggleHideControls();
+              }}
+              onToggleFlagClickDefuse={() => {
+                playButton();
+                toggleFlagClickDefuse();
               }}
               onClose={() => setShowSettings(false)}
             />
@@ -442,6 +451,7 @@ export default function App() {
         >
           ❓<span className={styles.headerBtnLabel}> Правила</span>
         </button>
+        <ProfileButton auth={auth} />
       </div>
     </div>
   );
@@ -458,11 +468,27 @@ export default function App() {
     ) : null
   );
 
+  const renderMobileNoticeToast = () => {
+    if (!sideNotice) return null;
+    const toneClass = sideNotice.tone === 'danger'  ? styles.toastNoticeDanger
+                    : sideNotice.tone === 'warning' ? styles.toastNoticeWarning
+                    : '';
+    return (
+      <div
+        key={`mobile-notice-${sideNotice.nonce}`}
+        className={`${styles.toastNotice} ${toneClass}`}
+      >
+        {sideNotice.text}
+      </div>
+    );
+  };
+
   const renderShell = (content: React.ReactNode, headerContent?: React.ReactNode) => (
     <div className={styles.gameLayout}>
       {renderHeader(headerContent)}
       {content}
       {renderErrorToast()}
+      {renderMobileNoticeToast()}
       {renderOfflineBanner()}
       {showHelp && <HelpModal onClose={closeHelp} />}
     </div>
@@ -745,6 +771,7 @@ export default function App() {
           gameState={gameState}
           myColor={myColor}
           mobileInputMode={mobileInputMode}
+          flagClickDefuse={flagClickDefuse}
           onWrapperRef={boardWrapperRefSetter}
           onSelectZone={(row, col) => {
             play('scan');

@@ -73,7 +73,7 @@ export function describeLastAction(
         : { text: '✅ Противник успешно разминировал клетку и захватил её.',         tone: 'success' };
     case 'defuse_no_mine':
       return mine
-        ? { text: '⚠️ Мины не оказалось. Клетка захвачена. Ход переходит к фазе 3.', tone: 'warning' }
+        ? { text: '⚠️ Мины не оказалось. Клетка захвачена. Завершите ход по готовности.', tone: 'warning' }
         : { text: '⚠️ Противник попытался разминировать пустую клетку и захватил её.', tone: 'warning' };
   }
 }
@@ -393,6 +393,11 @@ export function GameInfo({
         <div className={styles.phaseBox}>
           <div className={styles.phaseTitle}>{PHASE_LABELS[turn.phase] ?? turn.phase}</div>
           <div className={styles.phaseDesc}>{PHASE_DESCRIPTIONS[turn.phase]}</div>
+          {turn.phase === 'phase2' && turn.phase2Locked && (
+            <div className={`${styles.actionMessage} ${styles.messageDanger}`} style={{ marginTop: '0.5rem' }}>
+              🚫 Захваты заблокированы.
+            </div>
+          )}
         </div>
       )}
 
