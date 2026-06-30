@@ -39,7 +39,6 @@ RUN yarn install --frozen-lockfile --production
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
 COPY --from=builder /app/packages/api/src/prisma ./packages/api/src/prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/packages/api/node_modules/.prisma ./packages/api/node_modules/.prisma 2>/dev/null || true
 
 WORKDIR /app/packages/api
 
