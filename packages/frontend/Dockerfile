@@ -26,9 +26,10 @@ RUN apk add --no-cache gettext
 # Копируем собранный dist
 COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
 
-# Шаблон production-конфига и bootstrap-конфиг для первого запуска без сертификата
+# Шаблон production-конфига, bootstrap-конфиг и HTTP-only конфиг (IS_DEBUG режим)
 COPY packages/frontend/nginx.conf.template     /etc/nginx/templates/nginx.conf.template
 COPY packages/frontend/nginx.bootstrap.conf    /etc/nginx/templates/nginx.bootstrap.conf
+COPY packages/frontend/nginx.conf              /etc/nginx/templates/nginx.http.conf
 COPY packages/frontend/docker-entrypoint.sh    /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 

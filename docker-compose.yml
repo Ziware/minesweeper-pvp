@@ -30,7 +30,7 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM:-Minesweeper PvP <noreply@example.com>}
-      - CORS_ORIGINS=https://${DOMAIN}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://${DOMAIN}}
     depends_on:
       - postgres
     networks:
@@ -65,6 +65,7 @@ services:
     environment:
       # DOMAIN читается из .env-файла рядом с docker-compose.yml.
       - DOMAIN=${DOMAIN}
+      - IS_DEBUG=${IS_DEBUG:-false}
     volumes:
       # Сертификаты Let's Encrypt (общая папка с certbot).
       - ./letsencrypt/etc:/etc/letsencrypt

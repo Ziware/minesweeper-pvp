@@ -14,22 +14,27 @@
 
 set -e
 
-: "${DOMAIN:?env DOMAIN is required (the public domain name, e.g. example.com)}"
-
 CONF_DIR=/etc/nginx/conf.d
 TEMPLATE=/etc/nginx/templates/nginx.conf.template
 BOOTSTRAP=/etc/nginx/templates/nginx.bootstrap.conf
-CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+HTTP_CONF=/etc/nginx/templates/nginx.http.conf
 
 mkdir -p /var/www/certbot
 
-if [ -f "$CERT_FILE" ]; then
-    echo "[entrypoint] certificate found at $CERT_FILE, applying HTTPS config for $DOMAIN"
-    envsubst '${DOMAIN}' < "$TEMPLATE" > "$CONF_DIR/default.conf"
+if [ "${IS_DEBUG:-false}" = "true" ] || [ "${IS_DEBUG:-false}" = "True" ] || [ "${IS_DEBUG:-false}" = "1" ]; then
+    echo "[entrypoint] IS_DEBUG=true — starting in HTTP-only mode (no SSL, no domain required)"
+    cp "$HTTP_CONF" "$CONF_DIR/default.conf"
 else
-    echo "[entrypoint] no certificate at $CERT_FILE yet — starting with HTTP-only bootstrap config"
-    echo "[entrypoint] run './init-letsencrypt.sh' on the host to obtain the certificate, then \`docker compose restart frontend\`"
-    cp "$BOOTSTRAP" "$CONF_DIR/default.conf"
+    : "${DOMAIN:?env DOMAIN is required (the public domain name, e.g. example.com)}"
+    CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+    if [ -f "$CERT_FILE" ]; then
+        echo "[entrypoint] certificate found at $CERT_FILE, applying HTTPS config for $DOMAIN"
+        envsubst '${DOMAIN}' < "$TEMPLATE" > "$CONF_DIR/default.conf"
+    else
+        echo "[entrypoint] no certificate at $CERT_FILE yet — starting with HTTP-only bootstrap config"
+        echo "[entrypoint] run './init-letsencrypt.sh' on the host to obtain the certificate, then \`docker compose restart frontend\`"
+        cp "$BOOTSTRAP" "$CONF_DIR/default.conf"
+    fi
 fi
 
 # Фоновая задача: каждые 6 часов проверяем обновление сертификата и шлём nginx SIGHUP,
