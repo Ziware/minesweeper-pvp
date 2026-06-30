@@ -85,6 +85,7 @@ export function useSocket() {
     const socket: AppSocket = io(SOCKET_URL, {
       path: '/socket.io',
       query: { tabId: TAB_ID },
+      auth: { token: localStorage.getItem('auth_token') ?? '' },
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

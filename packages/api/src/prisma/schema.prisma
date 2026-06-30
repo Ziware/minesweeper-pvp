@@ -24,21 +24,27 @@ model User {
 
   profile       UserProfile?
   verifications EmailVerification[]
+  participants  GameParticipant[]
 
   @@map("users")
 }
 
-/// Table 2: Mutable profile data — avatar, rating, stats.
+/// Table 2: Mutable profile data — avatar, bio, rating, stats.
 /// Always JOIN via userId.
 model UserProfile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  avatarUrl   String?
-  rating      Int      @default(1000)
-  gamesPlayed Int      @default(0)
-  wins        Int      @default(0)
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarUrl         String?
+  bio               String?
+  rating            Int      @default(1000)
+  gamesPlayed       Int      @default(0)
+  wins              Int      @default(0)
+  ratedGamesPlayed  Int      @default(0)
+  ratedWins         Int      @default(0)
+  tournamentsPlayed Int      @default(0)
+  tournamentWins    Int      @default(0)
+  updatedAt         DateTime @updatedAt
 
   @@map("user_profiles")
 }
@@ -54,4 +60,40 @@ model EmailVerification {
   createdAt DateTime @default(now())
 
   @@map("email_verifications")
+}
+
+/// Completed game record. Aborted games are not stored here.
+model Game {
+  id          String   @id @default(uuid())
+  sessionId   String   @unique
+  mode        String   // 'pvp' | 'solo'
+  isRated     Boolean  @default(false)
+  startedAt   DateTime
+  endedAt     DateTime
+  durationMs  Int
+  turnsPlayed Int      @default(0)
+  winnerColor String?  // 'red' | 'blue' | null (draw)
+  winReason   String   // 'lives' | 'headquarters' | 'time' | 'draw'
+  logPath     String?  // relative path to the game log directory
+  createdAt   DateTime @default(now())
+
+  participants GameParticipant[]
+
+  @@index([startedAt(sort: Desc)])
+  @@map("games")
+}
+
+/// Per-player record within a game.
+model GameParticipant {
+  id       String  @id @default(uuid())
+  gameId   String
+  game     Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId   String?
+  user     User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  color    String  // 'red' | 'blue'
+  name     String
+  isBot    Boolean @default(false)
+  isWinner Boolean @default(false)
+
+  @@map("game_participants")
 }

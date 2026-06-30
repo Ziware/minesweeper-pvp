@@ -132,8 +132,8 @@ export interface S2C_GameOver {
   reason: 'lives' | 'headquarters' | 'time';
 }
 
-export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; }
-export interface C2S_JoinRoom   { roomId: string; playerName: string; }
+export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; userId?: string; }
+export interface C2S_JoinRoom   { roomId: string; playerName: string; userId?: string; }
 export interface C2S_PlaceMine  { row: number; col: number; }
 export interface C2S_SelectZone { row: number; col: number; }
 export interface C2S_CaptureCell     { row: number; col: number; }
@@ -156,6 +156,8 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
+  /** Аутентификация по JWT-токену. Бэкенд сохраняет userId для текущего сокета. */
+  authenticate:    (data: { token: string }) => void;
   createRoom:      (data: C2S_CreateRoom) => void;
   joinRoom:        (data: C2S_JoinRoom) => void;
   /** Добровольный выход из комнаты (например, с экрана ожидания соперника).
@@ -200,6 +202,8 @@ export type SoloLogPayload =
       difficulty: string;
       botName?: string;
       config: GameConfig;
+      /** userId игрока-человека (из JWT, если авторизован). */
+      userId?: string;
     }
   | {
       kind: 'setup_mine';

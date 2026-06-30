@@ -25,12 +25,16 @@ services:
       - PORT=3002
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/minesweeper
       - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - SMTP_FROM=${SMTP_FROM:-Minesweeper PvP <noreply@example.com>}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://${DOMAIN}}
+      - UPLOADS_DIR=/app/uploads
+    volumes:
+      - uploads-data:/app/uploads
     depends_on:
       - postgres
     networks:
@@ -48,6 +52,9 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - GAME_LOG_DIR=/app/logs
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - INTERNAL_API_URL=http://api:3002
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -103,3 +110,4 @@ networks:
 
 volumes:
   postgres-data:
+  uploads-data:

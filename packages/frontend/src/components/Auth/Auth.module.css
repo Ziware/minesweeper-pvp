@@ -120,6 +120,16 @@
   color: #7a8090;
 }
 
+.switchRowSpread {
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  color: #7a8090;
+  gap: 12px;
+}
+
 .switchBtn {
   background: none;
   border: none;

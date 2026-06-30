@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import jwt from 'jsonwebtoken';
 import {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -11,9 +12,24 @@ import {
 import { RoomManager } from './roomManager';
 import { createGameRecorder, getClientIp, type GameRecorder } from './gameRecorder';
 
+const JWT_SECRET = process.env.JWT_SECRET || '';
+
 // Per-socket map of active solo recorders (one socket = at most one solo session
 // in flight; if a new session_start arrives we close the previous one).
 const soloRecorders = new Map<string, GameRecorder>();
+
+// Per-socket userId (populated via 'authenticate' event or createRoom/joinRoom data).
+const socketToUserId = new Map<string, string>();
+
+function extractUserId(token: string | undefined): string | undefined {
+  if (!token || !JWT_SECRET) return undefined;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { sub?: string };
+    return typeof payload.sub === 'string' ? payload.sub : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -46,6 +62,7 @@ function handleSoloLog(
     const ip = getClientIp(handshake.address, handshake.headers['x-forwarded-for'] as string | string[] | undefined);
     const humanColor: PlayerColor = payload.humanColor;
     const botColor: PlayerColor = humanColor === 'red' ? 'blue' : 'red';
+    const userId = payload.userId || socketToUserId.get(socketId);
     const rec = createGameRecorder({
       sessionId: payload.sessionId,
       mode: 'solo',
@@ -53,6 +70,7 @@ function handleSoloLog(
         color: humanColor,
         name: payload.playerName,
         ip,
+        userId,
       },
     });
     rec.setConfig(payload.config);
@@ -136,6 +154,18 @@ function broadcastGameState(roomId: string) {
 io.on('connection', (socket) => {
   console.log('[connect]', socket.id);
 
+  // Try to authenticate from handshake auth token immediately on connect
+  const handshakeToken = socket.handshake.auth?.token as string | undefined;
+  const initialUserId = extractUserId(handshakeToken);
+  if (initialUserId) socketToUserId.set(socket.id, initialUserId);
+
+  socket.on('authenticate', ({ token }) => {
+    const userId = extractUserId(token);
+    if (userId) {
+      socketToUserId.set(socket.id, userId);
+    }
+  });
+
   socket.on('restoreSession', ({ roomId, playerColor, tabId }) => {
     const result = roomManager.restoreSession(socket.id, roomId, playerColor, tabId);
     if (!result.room) {
@@ -150,19 +180,21 @@ io.on('connection', (socket) => {
     console.log(`[restore] ${playerColor} tab=${tabId} room=${roomId}`);
   });
 
-  socket.on('createRoom', ({ playerName, timeControl }) => {
+  socket.on('createRoom', ({ playerName, timeControl, userId: userIdFromEvent }) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
-    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip, timeControl);
+    const userId = userIdFromEvent || socketToUserId.get(socket.id);
+    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip, timeControl, userId);
     socket.join(room.id);
     socket.emit('roomCreated', { roomId: room.id, playerColor: 'red' });
     socket.emit('waitingForOpponent');
   });
 
-  socket.on('joinRoom', ({ roomId, playerName }) => {
+  socket.on('joinRoom', ({ roomId, playerName, userId: userIdFromEvent }) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
-    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName, ip);
+    const userId = userIdFromEvent || socketToUserId.get(socket.id);
+    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName, ip, userId);
     if (!room) {
       socket.emit('error', { message: 'Комната не найдена или заполнена' });
       return;
@@ -285,6 +317,7 @@ io.on('connection', (socket) => {
       if (!rec.meta.endedAt) rec.gameFinished(null, 'aborted');
       soloRecorders.delete(socket.id);
     }
+    socketToUserId.delete(socket.id);
   });
 });
 

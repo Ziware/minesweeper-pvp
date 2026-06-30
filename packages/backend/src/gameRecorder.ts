@@ -23,6 +23,66 @@ import fs from 'fs';
 import path from 'path';
 import type { GameConfig, PlayerColor } from '@minesweeper-pvp/shared';
 
+const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://api:3002';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+
+async function reportGameToApi(meta: GameMeta, directory: string): Promise<void> {
+  if (!INTERNAL_API_KEY) {
+    console.warn('[gameRecorder] INTERNAL_API_KEY not set, skipping game report');
+    return;
+  }
+  if (!meta.result || !meta.endedAt || meta.durationMs == null) return;
+
+  // Compute relative logPath: strip LOG_ROOT prefix
+  const relPath = path.relative(LOG_ROOT, directory);
+
+  const colors: Array<'red' | 'blue'> = ['red', 'blue'];
+  const participants = colors
+    .map((color) => {
+      const p = meta.players[color];
+      if (!p) return null;
+      const isWinner = meta.result!.winner === color;
+      return {
+        userId:   p.userId ?? null,
+        color,
+        name:     p.name,
+        isBot:    p.isBot ?? false,
+        isWinner,
+      };
+    })
+    .filter(Boolean);
+
+  if (participants.length === 0) return;
+
+  const body = {
+    sessionId:   meta.sessionId,
+    mode:        meta.mode,
+    isRated:     false,
+    startedAt:   meta.startedAt,
+    endedAt:     meta.endedAt,
+    durationMs:  meta.durationMs,
+    turnsPlayed: meta.totals.turnsPlayed,
+    winnerColor: meta.result.winner ?? null,
+    winReason:   meta.result.reason,
+    logPath:     relPath,
+    participants,
+  };
+
+  const resp = await fetch(`${INTERNAL_API_URL}/internal/games`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'X-Internal-Key': INTERNAL_API_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    console.warn(`[gameRecorder] API returned ${resp.status}:`, text);
+  }
+}
+
 const LOG_ROOT = process.env.GAME_LOG_DIR || path.resolve(process.cwd(), 'logs');
 
 // ─── Time helpers ──────────────────────────────────────────────────────────
@@ -62,6 +122,8 @@ export interface PlayerMeta {
   color: PlayerColor;
   name: string;
   ip?: string;
+  /** Authenticated user id (UUID from the API). */
+  userId?: string;
   /** Только для solo и только для бота. */
   difficulty?: string;
   /** true для бота в solo. */
@@ -146,6 +208,8 @@ export interface GameRecorder {
   readonly meta: GameMeta;
 
   setPlayer(player: PlayerMeta): void;
+  /** Update userId for an already-registered player (call before gameFinished). */
+  setPlayerUserId(color: PlayerColor, userId: string): void;
   setConfig(config: GameConfig): void;
 
   setupMine(color: PlayerColor, row: number, col: number, hasMine: boolean, minesPlaced: number): void;
@@ -264,6 +328,11 @@ export function createGameRecorder(opts: CreateRecorderOpts): GameRecorder {
       meta.config = config;
       writeMeta();
     },
+    setPlayerUserId(color, userId) {
+      if (meta.players[color]) {
+        meta.players[color]!.userId = userId;
+      }
+    },
 
     setupMine(color, row, col, hasMine, minesPlaced) {
       emit('setup_mine', { actor: color, row, col, hasMine, minesPlaced });
@@ -331,6 +400,13 @@ export function createGameRecorder(opts: CreateRecorderOpts): GameRecorder {
       meta.durationMs = endedAt.getTime() - startedAtDate.getTime();
       meta.result = { winner, reason };
       emit('game_finished', { actor: winner ?? undefined, winner, reason, durationMs: meta.durationMs });
+
+      // Report to API (non-blocking, non-fatal) — skip aborted games
+      if (reason !== 'aborted') {
+        reportGameToApi(meta, directory).catch((err: unknown) => {
+          console.warn('[gameRecorder] reportGameToApi failed:', err);
+        });
+      }
     },
     appendAux(auxKind, details) {
       const now = new Date();

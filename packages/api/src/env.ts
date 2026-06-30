@@ -31,4 +31,13 @@ export const env = {
 
   /** Comma-separated list of allowed frontend origins. */
   CORS_ORIGINS: optional('CORS_ORIGINS', 'http://localhost:5173,http://localhost:80'),
+
+  /** Shared secret for backend → api internal calls. */
+  INTERNAL_API_KEY: required('INTERNAL_API_KEY'),
+
+  /** Directory where uploaded avatars are stored. */
+  UPLOADS_DIR: optional('UPLOADS_DIR', '/app/uploads'),
+
+  /** Maximum avatar upload size in MB. */
+  MAX_AVATAR_SIZE_MB: parseInt(optional('MAX_AVATAR_SIZE_MB', '2'), 10),
 };

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as authService from '../services/authService';
+import prisma from '../db';
+import { sendVerificationCode } from '../services/mailService';
 
 const registerBody = z.object({
   email:           z.string().email('Некорректный email'),
@@ -21,6 +23,10 @@ const verifyEmailBody = z.object({
 const loginBody = z.object({
   emailOrLogin: z.string().min(1, 'Введите email или логин'),
   password:     z.string().min(1, 'Введите пароль'),
+});
+
+const resendVerificationBody = z.object({
+  email: z.string().email('Некорректный email'),
 });
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -75,5 +81,42 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(401).send({ error: result.error, message: messages[result.error] });
     }
     return reply.send({ token: result.token, user: result.user });
+  });
+
+  // POST /auth/resend-verification
+  app.post('/resend-verification', async (request, reply) => {
+    const parse = resendVerificationBody.safeParse(request.body);
+    if (!parse.success) {
+      return reply.status(400).send({ error: 'VALIDATION_ERROR', details: parse.error.flatten() });
+    }
+    const { email } = parse.data;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Don't reveal whether the email exists
+      return reply.send({ message: 'Если email зарегистрирован, код был отправлен' });
+    }
+    if (user.emailVerified) {
+      return reply.status(409).send({ error: 'ALREADY_VERIFIED', message: 'Email уже подтверждён' });
+    }
+
+    const CODE_TTL_MS = 15 * 60 * 1000;
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+
+    await prisma.emailVerification.create({
+      data: {
+        userId:    user.id,
+        code,
+        expiresAt: new Date(Date.now() + CODE_TTL_MS),
+      },
+    });
+
+    try {
+      await sendVerificationCode(email, code);
+    } catch (err) {
+      console.error('[authRoutes] Failed to resend verification email:', err);
+    }
+
+    return reply.send({ message: 'Если email зарегистрирован, код был отправлен' });
   });
 }

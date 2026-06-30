@@ -152,7 +152,6 @@ export default function App() {
 
   const playButton = () => play('button');
   const closeHelp = () => {
-    playButton();
     setShowHelp(false);
   };
 
@@ -412,7 +411,6 @@ export default function App() {
           <button
             className={`${styles.headerBtn} ${showSettings ? styles.headerBtnActive : ''}`}
             onClick={() => {
-              playButton();
               setShowSettings((v) => !v);
             }}
             aria-expanded={showSettings}
@@ -431,11 +429,9 @@ export default function App() {
               }}
               onVolumeChange={(v) => setVolume(v)}
               onToggleHideControls={() => {
-                playButton();
                 toggleHideControls();
               }}
               onToggleFlagClickDefuse={() => {
-                playButton();
                 toggleFlagClickDefuse();
               }}
               onClose={() => setShowSettings(false)}
@@ -445,7 +441,6 @@ export default function App() {
         <button
           className={styles.headerBtn}
           onClick={() => {
-            playButton();
             setShowHelp(true);
           }}
         >
@@ -500,16 +495,13 @@ export default function App() {
         <Lobby
           onCreateRoom={(name, timeControl) => {
             setGameMode('pvp');
-            playButton();
             createRoom(name, timeControl);
           }}
           onJoinRoom={(id, name) => {
             setGameMode('pvp');
-            playButton();
             joinRoom(id, name);
           }}
           onStartSolo={(name, difficulty, humanColor) => {
-            playButton();
             setSoloHumanName(name);
             setSoloDifficulty(difficulty);
             setSoloHumanColor(humanColor);
@@ -518,7 +510,7 @@ export default function App() {
             setSoloEnabled(true);
             setSoloNonce((n) => n + 1);
           }}
-          onUiClick={playButton}
+          onUiClick={() => {}}
         />
       </div>
     );
@@ -543,7 +535,6 @@ export default function App() {
         try { document.execCommand('copy'); } catch { /* без копии */ }
         document.body.removeChild(ta);
       }
-      playButton();
       setRoomIdCopied(true);
       // На мобиле «Скопировано» должно успеть быть прочитанным, потом снова код.
       window.setTimeout(() => setRoomIdCopied(false), 700);
@@ -574,7 +565,6 @@ export default function App() {
             type="button"
             className={styles.waitLeaveBtn}
             onClick={() => {
-              playButton();
               leaveRoom();
             }}
           >
@@ -619,7 +609,6 @@ export default function App() {
       primaryAction = {
         label: '← Вернуться в меню',
         onClick: () => {
-          playButton();
           returnToMenu();
         },
         variant: 'menu',
@@ -839,7 +828,6 @@ export default function App() {
               type="button"
               className={`${styles.mobileModeBtn} ${mobileInputMode === 'flag' ? styles.mobileModeBtnActive : ''}`}
               onClick={() => {
-                playButton();
                 setMobileInputMode((m) => (m === 'flag' ? 'normal' : 'flag'));
               }}
               aria-pressed={mobileInputMode === 'flag'}
@@ -852,7 +840,6 @@ export default function App() {
               type="button"
               className={`${styles.mobileModeBtn} ${mobileInputMode === 'defuse' ? styles.mobileModeBtnActive : ''}`}
               onClick={() => {
-                playButton();
                 setMobileInputMode((m) => (m === 'defuse' ? 'normal' : 'defuse'));
               }}
               aria-pressed={mobileInputMode === 'defuse'}

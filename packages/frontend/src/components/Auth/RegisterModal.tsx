@@ -55,7 +55,16 @@ export function RegisterModal({
       await onVerifyEmail(email.trim(), code.trim());
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Неверный код');
+      const message = err instanceof ApiError ? err.message : 'Неверный код';
+      // If code is wrong/expired — just show error
+      // If it's a server/network error — log in without verification and inform user
+      const isCodeError = err instanceof ApiError && (err.status === 400 || err.status === 422);
+      if (!isCodeError && onSkipVerification) {
+        setError('Не удалось подтвердить email — возможно, письмо не дошло. Вы вошли в аккаунт. Попробуйте подтвердить почту позже в настройках профиля.');
+        onSkipVerification(email.trim(), password);
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -173,7 +182,7 @@ export function RegisterModal({
               </button>
             </form>
 
-            <div className={styles.switchRow}>
+            <div className={onSkipVerification ? styles.switchRowSpread : styles.switchRow}>
               <button
                 className={styles.switchBtn}
                 onClick={() => { setStep('form'); setError(''); setCode(''); }}

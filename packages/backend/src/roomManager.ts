@@ -44,6 +44,8 @@ export interface PlayerState {
   color: PlayerColor;
   name: string;
   ip?: string;
+  /** Authenticated user id from the API (JWT sub). */
+  userId?: string;
   lives: number;
   minesPlaced: number;
   connected: boolean;
@@ -108,6 +110,7 @@ export class RoomManager {
     playerName: string,
     ip: string,
     timeControl?: TimeControl,
+    userId?: string,
   ): Room {
     const roomId     = this.generateRoomId();
     const tc         = normalizeTimeControl(timeControl);
@@ -118,7 +121,7 @@ export class RoomManager {
     const recorder = createGameRecorder({
       sessionId: roomId,
       mode: 'pvp',
-      initialPlayer: { color: 'red', name: playerName, ip },
+      initialPlayer: { color: 'red', name: playerName, ip, userId },
     });
     recorder.setConfig(fullConfig);
 
@@ -132,6 +135,7 @@ export class RoomManager {
         color: 'red',
         name: playerName,
         ip,
+        userId,
         lives: fullConfig.maxLives,
         minesPlaced: 0,
         connected: true,
@@ -167,7 +171,7 @@ export class RoomManager {
     return room;
   }
 
-  joinRoom(socketId: string, tabId: string, roomId: string, playerName: string, ip: string): Room | null {
+  joinRoom(socketId: string, tabId: string, roomId: string, playerName: string, ip: string, userId?: string): Room | null {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length >= 2) return null;
 
@@ -177,6 +181,7 @@ export class RoomManager {
       color: 'blue',
       name: playerName,
       ip,
+      userId,
       lives: room.config.maxLives,
       minesPlaced: 0,
       connected: true,
@@ -185,7 +190,7 @@ export class RoomManager {
     });
     room.phase      = 'setup';
     room.turn.phase = 'setup';
-    room.recorder.setPlayer({ color: 'blue', name: playerName, ip });
+    room.recorder.setPlayer({ color: 'blue', name: playerName, ip, userId });
 
     this.socketToRoom.set(socketId, roomId);
     this.socketToPlayer.set(socketId, 'blue');
@@ -332,9 +337,12 @@ export class RoomManager {
   logGameFinishedIfNeeded(room: Room): void {
     if (!room.winner || room.gameOverLogged) return;
 
-    const winner = room.players.find((p) => p.color === room.winner);
-    const loser = room.players.find((p) => p.color !== room.winner);
-    const stats = computeBoardStats(room.board);
+    // Propagate userIds to recorder so reportGameToApi can include them
+    for (const p of room.players) {
+      if (p.userId) {
+        room.recorder.setPlayerUserId(p.color, p.userId);
+      }
+    }
 
     room.recorder.gameFinished(room.winner ?? null, room.winReason || 'lives');
     room.gameOverLogged = true;

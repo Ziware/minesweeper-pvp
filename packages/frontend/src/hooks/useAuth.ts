@@ -4,10 +4,13 @@ const API_BASE = '/api';
 const TOKEN_KEY = 'auth_token';
 
 export interface UserProfile {
-  avatarUrl:   string | null;
-  rating:      number;
-  gamesPlayed: number;
-  wins:        number;
+  avatarUrl:        string | null;
+  bio:              string | null;
+  rating:           number;
+  gamesPlayed:      number;
+  wins:             number;
+  ratedGamesPlayed: number;
+  ratedWins:        number;
 }
 
 export interface AuthUser {

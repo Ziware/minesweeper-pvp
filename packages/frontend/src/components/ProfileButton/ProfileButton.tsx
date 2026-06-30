@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { AuthApi } from '../../hooks/useAuth';
 import { LoginModal }    from '../Auth/LoginModal';
 import { RegisterModal } from '../Auth/RegisterModal';
@@ -11,9 +12,10 @@ interface ProfileButtonProps {
 type Modal = 'none' | 'login' | 'register';
 
 export function ProfileButton({ auth }: ProfileButtonProps) {
-  const [modal,       setModal]       = useState<Modal>('none');
+  const [modal,        setModal]        = useState<Modal>('none');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate    = useNavigate();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -53,7 +55,15 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
             title={auth.user!.login}
             aria-expanded={dropdownOpen}
           >
-            <span className={styles.initials}>{initials}</span>
+            {auth.user!.profile?.avatarUrl ? (
+              <img
+                src={auth.user!.profile.avatarUrl}
+                alt={auth.user!.login}
+                className={styles.avatarImg}
+              />
+            ) : (
+              <span className={styles.initials}>{initials}</span>
+            )}
           </button>
         )}
 
@@ -66,6 +76,16 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
                 <span className={styles.unverifiedBadge}>⚠️ Email не подтверждён</span>
               )}
             </div>
+            <div className={styles.dropdownDivider} />
+            <button
+              className={styles.dropdownItem}
+              onClick={() => {
+                setDropdownOpen(false);
+                navigate(`/profile/${auth.user!.login}`);
+              }}
+            >
+              👤 Мой профиль
+            </button>
             <div className={styles.dropdownDivider} />
             <button
               className={styles.dropdownLogout}
