@@ -41,7 +41,7 @@
   font-size: 0.6rem;
   color: #7a8090;
   line-height: 1;
-  height: 9px;
+  height: 12px;
   display: flex;
   align-items: center;
 }
@@ -79,9 +79,9 @@
 }
 
 .cell {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 

@@ -216,7 +216,7 @@ export function ProfilePage() {
 
   const renderHeader = () => (
     <div className={appStyles.gameHeader}>
-      <h2 className={appStyles.logo}><Icon name="headquarters" size="1.1em" /> Minesweeper PvP</h2>
+      <h2 className={appStyles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
       <div className={appStyles.headerActions}>
         <div className={appStyles.settingsAnchor} data-settings-anchor>
           <button

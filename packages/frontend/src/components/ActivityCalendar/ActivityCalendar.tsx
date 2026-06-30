@@ -49,8 +49,22 @@ function buildGrid(activity: ActivityDay[], weeks: number): (ActivityDay & { lev
 }
 
 const MONTH_NAMES = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+const MONTH_NAMES_FULL = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const WEEKDAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 // Mon=0 through Sun=6 (within each week column)
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+function formatTooltip(date: string, count: number): string {
+  const d = new Date(date + 'T12:00:00'); // noon to avoid TZ edge cases
+  const dayName = WEEKDAY_NAMES[d.getDay()];
+  const day = d.getDate();
+  const month = MONTH_NAMES_FULL[d.getMonth()];
+  const year = d.getFullYear();
+  const dateStr = `${dayName}, ${day} ${month} ${year}`;
+  if (count === 0) return dateStr;
+  const word = count === 1 ? 'игра' : count < 5 ? 'игры' : 'игр';
+  return `${dateStr}\n${count} ${word}`;
+}
 
 export function ActivityCalendar({ activity, weeks = 26 }: Props) {
   const grid = buildGrid(activity, weeks);
@@ -69,10 +83,10 @@ export function ActivityCalendar({ activity, weeks = 26 }: Props) {
 
   const totalGames = activity.reduce((s, d) => s + d.count, 0);
 
-  // Cell width (9px) + gap (2px) = 11px per column
-  const cellStep = 11;
+  // Cell width (12px) + gap (2px) = 14px per column
+  const cellStep = 14;
   const monthRowStyle = {
-    gridTemplateColumns: `repeat(${numWeeks}, ${cellStep - 2}px)`,
+    gridTemplateColumns: `repeat(${numWeeks}, 12px)`,
     gap: '2px',
   };
 
@@ -119,7 +133,7 @@ export function ActivityCalendar({ activity, weeks = 26 }: Props) {
                   <div
                     key={dIdx}
                     className={`${styles.cell} ${styles[`level${day.level}`]}`}
-                    title={day.count > 0 ? `${day.date}: ${day.count} игр` : day.date}
+                    title={formatTooltip(day.date, day.count)}
                   />
                 ))}
               </div>
