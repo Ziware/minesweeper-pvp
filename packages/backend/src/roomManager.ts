@@ -54,7 +54,7 @@ export interface PlayerState {
   timeMs: number;
 }
 
-export type WinReason = 'lives' | 'headquarters' | 'time';
+export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender';
 
 export interface Room {
   id: string;
@@ -94,12 +94,12 @@ export class RoomManager {
   private emptyRoomCleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   generateRoomId(): string {
-    // 5 заглавных латинских букв (без цифр и схожих символов) — короче и
-    // удобнее передавать голосом другу.
-    const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    // 16 символов из 54-символьного алфавита (~87 бит энтропии).
+    // Убраны визуально схожие: 0/O, 1/I/l.
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let id = '';
-    for (let i = 0; i < 5; i++) {
-      id += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+    for (let i = 0; i < 16; i++) {
+      id += chars[Math.floor(Math.random() * chars.length)];
     }
     return id;
   }
@@ -720,6 +720,11 @@ export class RoomManager {
     room.phase     = 'finished';
     room.turn.phase = 'finished';
     clearRevealedNumbers(room.board);
+  }
+
+  surrender(room: Room, color: PlayerColor): void {
+    const opponent: PlayerColor = color === 'red' ? 'blue' : 'red';
+    this.finalizeGameOver(room, opponent, 'surrender');
   }
 
   placeMinePhase3(room: Room, color: PlayerColor, row: number, col: number) {

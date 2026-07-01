@@ -29,7 +29,8 @@ export type EngineMove =
   | { type: 'toggle_mark'; row: number; col: number; mark: CellMark }
   | { type: 'end_phase2' }
   | { type: 'place_mine_phase3'; row: number; col: number }
-  | { type: 'end_phase3' };
+  | { type: 'end_phase3' }
+  | { type: 'forfeit'; color: PlayerColor };
 
 /** Stable string key for a move — used as map key in MCTS children. */
 export function moveKey(move: EngineMove): string {
@@ -44,12 +45,13 @@ export function moveKey(move: EngineMove): string {
     case 'end_phase2':        return 'endP2';
     case 'place_mine_phase3': return `pmp3:${move.row},${move.col}`;
     case 'end_phase3':        return 'endP3';
+    case 'forfeit':           return `forfeit:${move.color}`;
   }
 }
 
 // ─── Apply result ────────────────────────────────────────────────────────────
 
-export type WinReason = 'lives' | 'headquarters' | 'time';
+export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender';
 
 export type ApplyResult =
   | { ok: true; next: EngineStateLike; event?: ApplyEvent }

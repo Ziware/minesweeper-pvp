@@ -50,6 +50,10 @@ export interface DriverOpts {
    * для записи в solo-лог.
    */
   onBotMeta?: (kind: string, details: Record<string, unknown>) => void;
+  /** Stable ID for this solo session — used as localStorage snapshot key. */
+  soloRoomId?: string;
+  /** If provided, resumes from this state instead of creating a fresh one. */
+  initialState?: EngineState;
 }
 
 export type DriverListener = (state: EngineState, event?: ApplyEvent) => void;
@@ -69,6 +73,8 @@ export class LocalGameDriver {
    *  the bot; the human's view doesn't run determinizer. Reset every game. */
   private oppMinesRemovedByBot = 0;
   private onBotMeta: DriverOpts['onBotMeta'];
+  /** localStorage key for snapshot persistence. */
+  private snapshotKey: string | null;
 
   constructor(opts: DriverOpts) {
     this.humanColor = opts.humanColor;
@@ -76,15 +82,20 @@ export class LocalGameDriver {
     this.difficulty = opts.difficulty;
     this.botConfig = DIFFICULTY_PRESETS[opts.difficulty];
     this.onBotMeta = opts.onBotMeta;
-    const cfg = makeConfig(opts.config);
-    this.state = createInitialState({
-      config: cfg,
-      playerNames: {
-        red:  this.humanColor === 'red'  ? opts.humanName : (opts.botName ?? 'Бот'),
-        blue: this.humanColor === 'blue' ? opts.humanName : (opts.botName ?? 'Бот'),
-      },
-      noTimer: true,
-    });
+    this.snapshotKey = opts.soloRoomId ? `minesweeper_solo_state_${opts.soloRoomId}` : null;
+    if (opts.initialState) {
+      this.state = opts.initialState;
+    } else {
+      const cfg = makeConfig(opts.config);
+      this.state = createInitialState({
+        config: cfg,
+        playerNames: {
+          red:  this.humanColor === 'red'  ? opts.humanName : (opts.botName ?? 'Бот'),
+          blue: this.humanColor === 'blue' ? opts.humanName : (opts.botName ?? 'Бот'),
+        },
+        noTimer: true,
+      });
+    }
   }
 
   destroy(): void {
@@ -143,6 +154,16 @@ export class LocalGameDriver {
   }
   toggleMark(row: number, col: number, mark: CellMark): void {
     this.humanMove({ type: 'toggle_mark', row, col, mark });
+  }
+
+  /** Human voluntarily forfeits — the opponent wins immediately. */
+  forfeit(): void {
+    if (this.state.phase === 'finished') return;
+    const res = applyMove(this.state, { type: 'forfeit', color: this.humanColor });
+    if (!res.ok) return;
+    this.state = res.next as EngineState;
+    this.emit(res.event);
+    this.clearSnapshot();
   }
 
   private humanMove(move: EngineMove): boolean {
@@ -314,7 +335,29 @@ export class LocalGameDriver {
   }
 
   private emit(ev?: ApplyEvent): void {
+    this.saveSnapshot();
     for (const l of this.listeners) l(this.state, ev);
+  }
+
+  private saveSnapshot(): void {
+    if (!this.snapshotKey) return;
+    if (this.state.phase === 'finished') {
+      this.clearSnapshot();
+      return;
+    }
+    try {
+      localStorage.setItem(this.snapshotKey, JSON.stringify({
+        savedAt: Date.now(),
+        humanColor: this.humanColor,
+        difficulty: this.difficulty,
+        state: this.state,
+      }));
+    } catch { /* storage full or unavailable */ }
+  }
+
+  clearSnapshot(): void {
+    if (!this.snapshotKey) return;
+    try { localStorage.removeItem(this.snapshotKey); } catch { /* ignore */ }
   }
 
   private errorListeners = new Set<(msg: string) => void>();

@@ -11,24 +11,28 @@ interface NavBarProps {
   auth: AuthApi;
   settings: SettingsApi;
   onHelpOpen?: () => void;
+  /** When true, hides the center nav links (used on game/room pages). */
+  hideNavLinks?: boolean;
 }
 
-export function NavBar({ auth, settings, onHelpOpen }: NavBarProps) {
+export function NavBar({ auth, settings, onHelpOpen, hideNavLinks }: NavBarProps) {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
     <nav className={styles.navbar}>
       {/* Left: logo */}
       <Link to="/" className={styles.logo}>
-        <Icon name="headquarters" size="1.6em" />
+        <Icon name="headquarters" size="2em" />
         <span className={styles.logoText}>MsPvP</span>
       </Link>
 
-      {/* Center: nav links (desktop only) */}
-      <div className={styles.navLinks}>
-        <Link to="/rules" className={styles.navLink}>Правила</Link>
-        <Link to="/classic" className={styles.navLink}>Классика</Link>
-      </div>
+      {/* Center: nav links (desktop only, hidden on game pages) */}
+      {!hideNavLinks && (
+        <div className={styles.navLinks}>
+          <Link to="/rules" className={styles.navLink}>Правила</Link>
+          <Link to="/classic" className={styles.navLink}>Классика</Link>
+        </div>
+      )}
 
       {/* Right: actions */}
       <div className={styles.actions}>

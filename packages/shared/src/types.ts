@@ -129,7 +129,7 @@ export interface S2C_GameState {
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor | null;
-  reason: 'lives' | 'headquarters' | 'time';
+  reason: 'lives' | 'headquarters' | 'time' | 'surrender';
   /** API sessionId for guest game claiming after registration. */
   sessionId?: string;
 }
@@ -175,6 +175,7 @@ export interface ClientToServerEvents {
    *  установленных рядом флажков равно цифре. */
   chord:           (data: C2S_ChordCapture) => void;
   placeMinePhase3: (data: C2S_PlaceMinePhase3) => void;
+  surrender:       () => void;
   endPhase2:       () => void;
   endPhase3:       () => void;
   toggleMark:      (data: C2S_ToggleMark) => void;

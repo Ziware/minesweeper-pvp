@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useProfile, type GameRecord } from '../../hooks/useProfile';
 import { useSettings } from '../../hooks/useSettings';
+import { useGameSession } from '../../context/GameSessionContext';
 import { NavBar } from '../../components/NavBar/NavBar';
 import { ActivityCalendar } from '../../components/ActivityCalendar/ActivityCalendar';
 import styles from './ProfilePage.module.css';
@@ -75,8 +76,11 @@ function GameRow({ game, viewerUserId }: { game: GameRecord; viewerUserId: strin
 export function ProfilePage() {
   const { login } = useParams<{ login: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const auth = useAuth();
   const settingsApi = useSettings();
+  const { activeRooms } = useGameSession();
+  const activeTab = searchParams.get('tab') === 'active' ? 'active' : 'history';
 
   const {
     profile, games, activity, total, totalPages, page, setPage,
@@ -411,55 +415,108 @@ export function ProfilePage() {
         </div>
       )}
 
-      {/* Game history */}
-      <section className={styles.history}>
-        <h2 className={styles.historyTitle}>История игр ({total})</h2>
-        {games.length === 0 ? (
-          <p className={styles.noGames}>Игр пока нет</p>
-        ) : (
-          <>
-            <div className={styles.tableWrapper}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Дата</th>
-                    <th>Соперник</th>
-                    <th>Режим</th>
-                    <th>Ходов</th>
-                    <th>Длительность</th>
-                    <th>Итог</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {games.map((g) => (
-                    <GameRow key={g.id} game={g} viewerUserId={auth.user?.id ?? null} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Tab bar */}
+      <div className={styles.tabBar}>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'history' ? styles.tabBtnActive : ''}`}
+          onClick={() => setSearchParams(activeTab === 'history' ? searchParams : {})}
+        >
+          История игр ({total})
+        </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'active' ? styles.tabBtnActive : ''}`}
+          onClick={() => setSearchParams({ tab: 'active' })}
+        >
+          🎮 Текущие игры {activeRooms.length > 0 ? `(${activeRooms.length})` : ''}
+        </button>
+      </div>
 
-            {totalPages > 1 && (
-              <div className={styles.pagination}>
-                <button
-                  className={styles.pageBtn}
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  ← Пред
-                </button>
-                <span className={styles.pageInfo}>Страница {page} / {totalPages}</span>
-                <button
-                  className={styles.pageBtn}
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  След →
-                </button>
+      {/* Game history tab */}
+      {activeTab === 'history' && (
+        <section className={styles.history}>
+          {games.length === 0 ? (
+            <p className={styles.noGames}>Игр пока нет</p>
+          ) : (
+            <>
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Дата</th>
+                      <th>Соперник</th>
+                      <th>Режим</th>
+                      <th>Ходов</th>
+                      <th>Длительность</th>
+                      <th>Итог</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {games.map((g) => (
+                      <GameRow key={g.id} game={g} viewerUserId={auth.user?.id ?? null} />
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </>
-        )}
-      </section>
+
+              {totalPages > 1 && (
+                <div className={styles.pagination}>
+                  <button
+                    className={styles.pageBtn}
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    ← Пред
+                  </button>
+                  <span className={styles.pageInfo}>Страница {page} / {totalPages}</span>
+                  <button
+                    className={styles.pageBtn}
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    След →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Active rooms tab */}
+      {activeTab === 'active' && (
+        <section className={styles.history}>
+          {activeRooms.length === 0 ? (
+            <p className={styles.noGames}>Нет активных игр</p>
+          ) : (
+            <div className={styles.activeRoomsList}>
+              {activeRooms.map((room) => (
+                <div key={room.roomId} className={styles.activeRoomCard}>
+                  <div className={styles.activeRoomInfo}>
+                    <span className={styles.activeRoomMode}>
+                      {room.mode === 'solo' ? '🤖 vs Бот' : '👥 PvP'}
+                    </span>
+                    <span className={styles.activeRoomOpponent}>
+                      vs {room.opponentName}
+                    </span>
+                    <span className={styles.activeRoomColor}>
+                      {room.myColor === 'red' ? '🔴' : '🔵'}
+                    </span>
+                    <span className={styles.activeRoomTime}>
+                      {new Date(room.startedAt).toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                    </span>
+                  </div>
+                  <button
+                    className={styles.activeRoomBtn}
+                    onClick={() => navigate(`/room/${room.roomId}`)}
+                  >
+                    Продолжить →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Delete account confirmation dialog */}
       {showDeleteConfirm && (

@@ -327,6 +327,11 @@ export function applyMove(state: EngineState, move: EngineMove): ApplyResult {
     case 'end_phase2':         event = applyEndPhase2(next); break;
     case 'place_mine_phase3':  event = applyPlaceMinePhase3(next, move.row, move.col); break;
     case 'end_phase3':         event = applyEndPhase3(next); break;
+    case 'forfeit': {
+      const opponent = move.color === 'red' ? 'blue' : 'red';
+      finalizeGameOver(next, opponent, 'surrender');
+      break;
+    }
     default: {
       const _exh: never = move;
       void _exh;

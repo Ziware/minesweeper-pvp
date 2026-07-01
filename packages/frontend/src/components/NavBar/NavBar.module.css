@@ -29,13 +29,13 @@
   letter-spacing: 0.5px;
 }
 
-/* ── Center nav links (desktop) ── */
+/* ── Nav links (desktop) — left-aligned after the logo ── */
 .navLinks {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .navLink {

@@ -52,6 +52,10 @@ export interface UseLocalGameOpts {
   difficulty: Difficulty;
   /** Increment this to start a fresh game. */
   gameNonce: number;
+  /** Stable ID for this solo session — used as localStorage snapshot key. */
+  soloRoomId?: string;
+  /** If provided, resumes from this state instead of creating fresh. */
+  initialState?: EngineState;
   /** Callback fired when user clicks "play vs computer" — App will set the
    *  initial state of the local session. */
   onStarted?: () => void;
@@ -103,6 +107,7 @@ export interface UseLocalGameApi {
   placeMinePhase3: (row: number, col: number) => void;
   toggleMark:      (row: number, col: number, mark: CellMark) => void;
   showLocalError:  (message: string) => void;
+  surrender:       () => void;
   returnToMenu:    () => void;
   leaveRoom:       () => void;
 }
@@ -334,6 +339,8 @@ export function useLocalGame(opts: UseLocalGameOpts): UseLocalGameApi {
       humanColor: opts.humanColor,
       humanName: opts.humanName,
       difficulty: opts.difficulty,
+      soloRoomId: opts.soloRoomId,
+      initialState: opts.initialState,
       onBotMeta: (kind, details) => {
         opts.onLogAux?.(kind, details);
       },
@@ -425,6 +432,7 @@ export function useLocalGame(opts: UseLocalGameOpts): UseLocalGameApi {
     endPhase3:       () => driverRef.current?.endPhase3(),
     placeMinePhase3: (row, col) => driverRef.current?.placeMinePhase3(row, col),
     toggleMark:      (row, col, mark) => driverRef.current?.toggleMark(row, col, mark),
+    surrender:       () => driverRef.current?.forfeit(),
     showLocalError:  (msg) => {
       setErrorMsg(msg);
       if (errTimerRef.current) window.clearTimeout(errTimerRef.current);

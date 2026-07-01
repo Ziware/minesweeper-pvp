@@ -147,6 +147,7 @@ export function scoreMove(
     case 'place_mine_setup':  return scorePlaceMineSetup(state, move.row, move.col, color);
     case 'confirm_setup':     return 0.1;
     case 'toggle_mark':       return 0;
+    case 'forfeit':           return 0;
   }
 }
 

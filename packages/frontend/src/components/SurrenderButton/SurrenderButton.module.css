@@ -1,0 +1,31 @@
+.surrenderBtn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #5a2020;
+  background: #2c1010;
+  color: #e07070;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.surrenderBtn:hover {
+  background: #3e1515;
+  color: #f09090;
+  border-color: #7a3030;
+}
+
+/* Pending (confirm) state — more urgent visuals */
+.surrenderBtn.pending {
+  background: #3e1a1a;
+  color: #ffaaaa;
+  border-color: #c0392b;
+  box-shadow: 0 0 12px rgba(192, 57, 43, 0.4);
+  animation: urgentPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes urgentPulse {
+  from { box-shadow: 0 0 6px rgba(192, 57, 43, 0.3); }
+  to   { box-shadow: 0 0 18px rgba(192, 57, 43, 0.7); }
+}

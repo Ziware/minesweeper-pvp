@@ -196,7 +196,7 @@ io.on('connection', (socket) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
     const userId = userIdFromEvent || socketToUserId.get(socket.id);
-    const room  = roomManager.joinRoom(socket.id, tabId, roomId.toUpperCase(), playerName, ip, userId);
+    const room  = roomManager.joinRoom(socket.id, tabId, roomId, playerName, ip, userId);
     if (!room) {
       socket.emit('error', { message: 'Комната не найдена или заполнена' });
       return;
@@ -294,6 +294,15 @@ io.on('connection', (socket) => {
     roomManager.toggleMark(room, color, row, col, mark);
     const state = roomManager.getGameStateForPlayer(room, color);
     socket.emit('gameState', state as any);
+  });
+
+  socket.on('surrender', () => {
+    const room  = roomManager.getRoom(socket.id);
+    const color = roomManager.getPlayerColor(socket.id);
+    if (!room || !color) return;
+    if (room.turn.phase === 'finished') return;
+    roomManager.surrender(room, color);
+    broadcastGameState(room.id);
   });
 
   socket.on('leaveRoom', () => {

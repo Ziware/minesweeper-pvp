@@ -266,6 +266,8 @@ export function useSocket() {
     socketRef.current?.emit('placeMinePhase3', { row, col });
   const toggleMark      = (row: number, col: number, mark: CellMark) =>
     socketRef.current?.emit('toggleMark',      { row, col, mark });
+  const surrender       = () =>
+    socketRef.current?.emit('surrender');
 
   /** Технический канал: лог одиночной игры против бота. Не меняет состояние,
    *  никак не отображается в UI — нужен только для серверного логирования.
@@ -302,6 +304,7 @@ export function useSocket() {
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     showLocalError,
+    surrender,
     returnToMenu,
     leaveRoom,
     logSoloEvent,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { AuthApi } from '../../hooks/useAuth';
 import { LoginModal }    from '../Auth/LoginModal';
 import { RegisterModal } from '../Auth/RegisterModal';
+import { useGameSession } from '../../context/GameSessionContext';
 import styles from './ProfileButton.module.css';
 
 interface ProfileButtonProps {
@@ -16,6 +17,7 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate    = useNavigate();
+  const { activeRooms } = useGameSession();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -36,6 +38,8 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
   const initials = auth.user
     ? auth.user.login.slice(0, 2).toUpperCase()
     : null;
+
+  const activeCount = activeRooms.length;
 
   return (
     <>
@@ -64,6 +68,11 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
             ) : (
               <span className={styles.initials}>{initials}</span>
             )}
+            {activeCount > 0 && (
+              <span className={styles.activeBadge} aria-label={`${activeCount} активных игр`}>
+                {activeCount}
+              </span>
+            )}
           </button>
         )}
 
@@ -86,6 +95,17 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
             >
               👤 Мой профиль
             </button>
+            {activeCount > 0 && (
+              <button
+                className={styles.dropdownItem}
+                onClick={() => {
+                  setDropdownOpen(false);
+                  navigate(`/profile/${auth.user!.login}?tab=active`);
+                }}
+              >
+                🎮 Текущие игры ({activeCount})
+              </button>
+            )}
             <div className={styles.dropdownDivider} />
             <button
               className={styles.dropdownLogout}
