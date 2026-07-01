@@ -62,6 +62,8 @@ export interface GameSessionContextValue {
   returnToMenu: () => void;
   leaveRoom: () => void;
   surrender: () => void;
+  /** Re-authenticate an existing socket with a new JWT (guest → logged-in). */
+  authenticateSocket: (token: string) => void;
   // game actions
   placeMineSetup: (row: number, col: number) => void;
   confirmSetup: () => void;
@@ -101,6 +103,7 @@ export function GameSessionProvider({ children }: ProviderProps) {
     surrender: socketSurrender,
     returnToMenu: socketReturnToMenu,
     leaveRoom: socketLeaveRoom,
+    authenticateSocket,
   } = useSocket();
 
   // ── Bot player (runs MCTS via Web Worker on botTurn events) ─────────────────
@@ -199,6 +202,7 @@ export function GameSessionProvider({ children }: ProviderProps) {
     returnToMenu,
     leaveRoom,
     surrender,
+    authenticateSocket,
     placeMineSetup,
     confirmSetup,
     selectZone,
@@ -214,6 +218,7 @@ export function GameSessionProvider({ children }: ProviderProps) {
     screen, roomId, myColor, myName, gameState, gameOver, errorMsg,
     serverReachable, isBotGame, restoring, activeRooms,
     createRoom, joinRoom, startBotGame, returnToMenu, leaveRoom, surrender,
+    authenticateSocket,
     placeMineSetup, confirmSetup, selectZone, captureCell, defuseCell,
     chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     showLocalError,

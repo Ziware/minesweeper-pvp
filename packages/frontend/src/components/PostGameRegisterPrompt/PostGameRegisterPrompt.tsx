@@ -13,15 +13,38 @@ interface Props {
   onDismiss: () => void;
 }
 
-type Step = 'form' | 'verify' | 'done';
+type Step = 'register' | 'verify' | 'login' | 'done';
+
+async function claimGame(sessionId: string, color: string) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token || !sessionId) return;
+  try {
+    const res = await fetch(`${API_BASE}/users/me/claim-game`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sessionId, color }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.warn('[PostGamePrompt] claim-game failed:', data);
+    }
+  } catch (err) {
+    console.warn('[PostGamePrompt] claim-game network error:', err);
+  }
+}
 
 export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Props) {
-  const [step,            setStep]            = useState<Step>('form');
+  const [step,            setStep]            = useState<Step>('register');
   const [email,           setEmail]           = useState('');
   const [login,           setLogin]           = useState('');
   const [password,        setPassword]        = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [code,            setCode]            = useState('');
+  const [loginField,      setLoginField]      = useState('');
+  const [loginPassword,   setLoginPassword]   = useState('');
   const [error,           setError]           = useState('');
   const [loading,         setLoading]         = useState(false);
 
@@ -48,46 +71,33 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
     setError('');
     setLoading(true);
     try {
-      // This stores the JWT in localStorage and updates auth state
       await auth.verifyEmail(email.trim(), code.trim());
-
-      // Claim the game using the freshly-stored token
-      const token = localStorage.getItem(TOKEN_KEY);
-      if (token && sessionId) {
-        try {
-          const res = await fetch(`${API_BASE}/users/me/claim-game`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ sessionId, color }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            // Non-fatal — user is registered, just the game link may have failed
-            console.warn('[PostGameRegister] claim-game failed:', data);
-          }
-        } catch (claimErr) {
-          console.warn('[PostGameRegister] claim-game network error:', claimErr);
-        }
-      }
-
+      await claimGame(sessionId, color);
       setStep('done');
     } catch (err) {
       const isCodeError = err instanceof ApiError && (err.status === 400 || err.status === 422);
       if (!isCodeError) {
-        // Network/server error — registration succeeded, verification uncertain.
-        // Try logging in directly with credentials.
-        try {
-          await auth.login(email.trim(), password);
-        } catch {
-          // Ignore
-        }
+        // Network/server error — try logging in directly
+        try { await auth.login(email.trim(), password); } catch { /* ignore */ }
         setStep('done');
       } else {
         setError(err instanceof ApiError ? err.message : 'Неверный код');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await auth.login(loginField.trim(), loginPassword);
+      await claimGame(sessionId, color);
+      setStep('done');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Ошибка входа');
     } finally {
       setLoading(false);
     }
@@ -99,9 +109,9 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
         <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
           <button className={styles.closeBtn} onClick={onDismiss} aria-label="Закрыть">✕</button>
           <div className={styles.doneIcon}>🎉</div>
-          <h2 className={styles.title}>Аккаунт создан!</h2>
+          <h2 className={styles.title}>Готово!</h2>
           <p className={styles.desc}>
-            Ваш результат сохранён. Теперь статистика и история игр будут отображаться в профиле.
+            Ваш результат сохранён. Теперь статистика и история игр отображаются в профиле.
           </p>
           <button className={styles.submitBtn} onClick={onDismiss}>
             Продолжить
@@ -116,7 +126,7 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <button className={styles.closeBtn} onClick={onDismiss} aria-label="Закрыть">✕</button>
 
-        {step === 'form' ? (
+        {step === 'register' && (
           <>
             <h2 className={styles.title}>Сохранить результат</h2>
             <p className={styles.desc}>
@@ -136,7 +146,6 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                   autoFocus
                 />
               </label>
-
               <label className={styles.label}>
                 Логин <span className={styles.hint}>(3–20 символов, a–z 0–9 _ -)</span>
                 <input
@@ -152,7 +161,6 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                   disabled={loading}
                 />
               </label>
-
               <label className={styles.label}>
                 Пароль <span className={styles.hint}>(минимум 8 символов)</span>
                 <input
@@ -166,7 +174,6 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                   disabled={loading}
                 />
               </label>
-
               <label className={styles.label}>
                 Пароль ещё раз
                 <input
@@ -180,21 +187,30 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                   disabled={loading}
                 />
               </label>
-
               {error && <div className={styles.error}>{error}</div>}
-
               <button className={styles.submitBtn} type="submit" disabled={loading}>
                 {loading ? 'Регистрируем...' : 'Зарегистрироваться'}
               </button>
             </form>
-
+            <div className={styles.switchRow}>
+              Уже есть аккаунт?{' '}
+              <button
+                className={styles.switchBtn}
+                type="button"
+                onClick={() => { setError(''); setStep('login'); }}
+              >
+                Войти
+              </button>
+            </div>
             <div className={styles.skipRow}>
               <button className={styles.skipBtn} onClick={onDismiss} type="button">
                 Пропустить
               </button>
             </div>
           </>
-        ) : (
+        )}
+
+        {step === 'verify' && (
           <>
             <h2 className={styles.title}>Подтверждение email</h2>
             <p className={styles.desc}>
@@ -218,9 +234,7 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                   autoFocus
                 />
               </label>
-
               {error && <div className={styles.error}>{error}</div>}
-
               <button
                 className={styles.submitBtn}
                 type="submit"
@@ -229,14 +243,68 @@ export function PostGameRegisterPrompt({ sessionId, color, auth, onDismiss }: Pr
                 {loading ? 'Проверяем...' : 'Подтвердить'}
               </button>
             </form>
-
             <div className={styles.backRow}>
               <button
                 className={styles.skipBtn}
-                onClick={() => { setStep('form'); setError(''); setCode(''); }}
+                onClick={() => { setStep('register'); setError(''); setCode(''); }}
                 type="button"
               >
                 ← Назад
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'login' && (
+          <>
+            <h2 className={styles.title}>Войти в аккаунт</h2>
+            <p className={styles.desc}>
+              Войдите, чтобы привязать эту партию к своему профилю.
+            </p>
+            <form onSubmit={handleLogin} className={styles.form}>
+              <label className={styles.label}>
+                Email или логин
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={loginField}
+                  onChange={(e) => setLoginField(e.target.value)}
+                  autoComplete="username"
+                  required
+                  disabled={loading}
+                  autoFocus
+                />
+              </label>
+              <label className={styles.label}>
+                Пароль
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={loading}
+                />
+              </label>
+              {error && <div className={styles.error}>{error}</div>}
+              <button className={styles.submitBtn} type="submit" disabled={loading}>
+                {loading ? 'Входим...' : 'Войти'}
+              </button>
+            </form>
+            <div className={styles.switchRow}>
+              Нет аккаунта?{' '}
+              <button
+                className={styles.switchBtn}
+                type="button"
+                onClick={() => { setError(''); setStep('register'); }}
+              >
+                Зарегистрироваться
+              </button>
+            </div>
+            <div className={styles.skipRow}>
+              <button className={styles.skipBtn} onClick={onDismiss} type="button">
+                Пропустить
               </button>
             </div>
           </>

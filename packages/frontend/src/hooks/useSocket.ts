@@ -302,6 +302,12 @@ export function useSocket() {
     returnToMenu();
   };
 
+  /** Отправляет токен на сервер, чтобы зарегистрировать userId для текущего сокета.
+   *  Вызывается после входа/регистрации во время активной сессии (гость → авторизованный). */
+  const authenticateSocket = (token: string) => {
+    socketRef.current?.emit('authenticate', { token });
+  };
+
   return {
     socketRef,
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
@@ -313,5 +319,6 @@ export function useSocket() {
     surrender,
     returnToMenu,
     leaveRoom,
+    authenticateSocket,
   };
 }

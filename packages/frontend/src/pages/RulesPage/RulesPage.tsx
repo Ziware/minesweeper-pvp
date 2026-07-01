@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { NavBar } from '../../components/NavBar/NavBar';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
@@ -39,12 +38,9 @@ export function RulesPage() {
               {item.label}
             </button>
           ))}
-          <Link to="/" className={styles.tocBack}>← На главную</Link>
         </nav>
 
         <article className={styles.article}>
-          <Link to="/" className={styles.backLink}>← На главную</Link>
-
           <h1 className={styles.pageTitle}>Правила игры</h1>
           <p className={styles.pageSubtitle}>Minesweeper PvP — тактическая дуэль на минном поле</p>
 
@@ -126,9 +122,6 @@ export function RulesPage() {
             </ul>
           </section>
 
-          <div className={styles.backRow}>
-            <Link to="/" className={styles.backLink}>← На главную</Link>
-          </div>
         </article>
       </div>
     </div>

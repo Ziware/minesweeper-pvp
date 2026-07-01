@@ -122,13 +122,33 @@
 }
 
 .skipRow {
-  margin-top: 16px;
+  margin-top: 12px;
   text-align: center;
 }
 
 .backRow {
   margin-top: 16px;
 }
+
+.switchRow {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #6a7a90;
+}
+
+.switchBtn {
+  background: none;
+  border: none;
+  color: #e67e22;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  font-weight: 600;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+.switchBtn:hover { color: #f39c12; }
 
 .skipBtn {
   background: none;

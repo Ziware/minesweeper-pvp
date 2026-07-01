@@ -262,26 +262,6 @@ export function ProfilePage() {
       {renderHeader()}
       <div className={styles.pageBody}>
       <div className={styles.page}>
-      {/* Back link + account actions on the same row */}
-      <div className={styles.topNav}>
-        <button className={styles.backBtn} onClick={() => navigate('/')}>← На главную</button>
-        {isMe && (
-          <>
-            <button
-              className={styles.logoutBtn}
-              onClick={() => { auth.logout(); navigate('/'); }}
-            >
-              🚪 Выйти
-            </button>
-            <button
-              className={styles.deleteAccountBtn}
-              onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
-            >
-              🗑 Удалить аккаунт
-            </button>
-          </>
-        )}
-      </div>
 
       {/* Email verification banner (only for the owner) */}
       {isMe && profile.emailVerified === false && (
@@ -392,6 +372,13 @@ export function ProfilePage() {
               </button>
               <button className={styles.cancelBtn} onClick={cancelEdit} disabled={editSaving}>
                 Отмена
+              </button>
+              <button
+                className={styles.deleteAccountBtn}
+                onClick={() => { setDeleteError(''); setShowDeleteConfirm(true); }}
+                disabled={editSaving}
+              >
+                🗑 Удалить аккаунт
               </button>
             </div>
           )}
