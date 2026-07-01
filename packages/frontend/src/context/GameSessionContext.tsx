@@ -1,23 +1,21 @@
 /**
- * GameSessionContext — lifts socket + local-game state outside App so that
+ * GameSessionContext — lifts socket state outside App so that
  * navigation away from "/" does NOT destroy the active game.
  *
  * All pages consume this context to read/modify game state.
  */
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { CellMark, PlayerColor, S2C_GameState, S2C_GameOver, TimeControl } from '@minesweeper-pvp/shared';
-import type { SoloLogPayload } from '@minesweeper-pvp/shared';
 import { useSocket } from '../hooks/useSocket';
-import { useLocalGame } from '../ai/driver/useLocalGame';
-import type { Difficulty, EngineState } from '../ai/types';
-import type { GameScreen } from '../ai/driver/useLocalGame';
-import { DIFFICULTY_LABELS } from '../ai/difficulty';
+import { useBotPlayer } from '../hooks/useBotPlayer';
+import type { Difficulty } from '../ai/types';
+import type { GameScreen } from '../hooks/useSocket';
 
 // ─── ActiveRoom registry (persisted to localStorage) ─────────────────────────
 
 export interface ActiveRoom {
   roomId: string;
-  mode: 'pvp' | 'solo';
+  mode: 'pvp' | 'bot';
   myColor: PlayerColor;
   opponentName: string;
   startedAt: number;
@@ -41,25 +39,6 @@ function saveActiveRooms(rooms: ActiveRoom[]) {
   try { localStorage.setItem(ACTIVE_ROOMS_KEY, JSON.stringify(rooms)); } catch { /* ignore */ }
 }
 
-// ─── Solo snapshot restore ────────────────────────────────────────────────────
-
-interface SoloSnapshot {
-  savedAt: number;
-  humanColor: PlayerColor;
-  difficulty: Difficulty;
-  state: EngineState;
-}
-
-function loadSoloSnapshot(soloRoomId: string): SoloSnapshot | null {
-  try {
-    const raw = localStorage.getItem(`minesweeper_solo_state_${soloRoomId}`);
-    if (!raw) return null;
-    const snap: SoloSnapshot = JSON.parse(raw);
-    if (Date.now() - snap.savedAt > ACTIVE_ROOM_TTL_MS) return null;
-    return snap;
-  } catch { return null; }
-}
-
 // ─── Context shape ────────────────────────────────────────────────────────────
 
 export interface GameSessionContextValue {
@@ -72,14 +51,14 @@ export interface GameSessionContextValue {
   gameOver: S2C_GameOver | null;
   errorMsg: string;
   serverReachable: boolean;
-  gameMode: 'pvp' | 'solo';
+  isBotGame: boolean;
   restoring: boolean;
   // active rooms registry
   activeRooms: ActiveRoom[];
   // actions
   createRoom: (name: string, tc: TimeControl) => void;
   joinRoom: (id: string, name: string) => void;
-  startSolo: (difficulty: Difficulty, humanColor: PlayerColor, soloRoomId: string) => void;
+  startBotGame: (name: string, difficulty: Difficulty, humanColor: PlayerColor, userId?: string) => void;
   returnToMenu: () => void;
   leaveRoom: () => void;
   surrender: () => void;
@@ -95,7 +74,6 @@ export interface GameSessionContextValue {
   placeMinePhase3: (row: number, col: number) => void;
   toggleMark: (row: number, col: number, mark: CellMark) => void;
   showLocalError: (message: string) => void;
-  logSoloEvent: (data: SoloLogPayload) => void;
 }
 
 const GameSessionContext = createContext<GameSessionContextValue | null>(null);
@@ -105,69 +83,28 @@ const GameSessionContext = createContext<GameSessionContextValue | null>(null);
 interface ProviderProps { children: React.ReactNode; }
 
 export function GameSessionProvider({ children }: ProviderProps) {
-  const [gameMode, setGameMode] = useState<'pvp' | 'solo'>('pvp');
-  const [soloEnabled, setSoloEnabled] = useState(false);
-  const [soloHumanColor, setSoloHumanColor] = useState<PlayerColor>('red');
-  const [soloDifficulty, setSoloDifficulty] = useState<Difficulty>('normal');
-  const [soloNonce, setSoloNonce] = useState(0);
-  const [soloRoomId, setSoloRoomId] = useState('');
-  const [soloInitialState, setSoloInitialState] = useState<EngineState | undefined>(undefined);
-  const soloSessionIdRef = useRef<string>('');
+  const [isBotGame, setIsBotGame] = useState(false);
 
   const [activeRooms, setActiveRooms] = useState<ActiveRoom[]>(loadActiveRooms);
 
-  // ── PvP socket session ──────────────────────────────────────────────────────
-  const pvpSession = useSocket();
-  const logSoloEvent = pvpSession.logSoloEvent;
-  const playerName = pvpSession.myName || 'Гость';
-
-  // ── Solo local game session ─────────────────────────────────────────────────
-  const soloSession = useLocalGame({
-    enabled: soloEnabled,
-    humanColor: soloHumanColor,
-    humanName: playerName,
-    difficulty: soloDifficulty,
-    gameNonce: soloNonce,
-    soloRoomId,
-    initialState: soloInitialState,
-    onSession: (kind, meta) => {
-      const sid = soloSessionIdRef.current;
-      if (!sid) return;
-      if (kind === 'session_start') {
-        logSoloEvent({
-          kind: 'session_start',
-          sessionId: sid,
-          playerName: meta.humanName,
-          humanColor: meta.humanColor,
-          difficulty: meta.difficulty as string,
-          config: meta.config,
-          botName: `Бот (${DIFFICULTY_LABELS[meta.difficulty as Difficulty]})`,
-        } as any);
-      }
-    },
-    onSoloEvent: (event) => {
-      const sid = soloSessionIdRef.current;
-      if (!sid) return;
-      logSoloEvent({ ...event, sessionId: sid } as any);
-    },
-    onLogAux: (auxKind, details) => {
-      const sid = soloSessionIdRef.current;
-      if (!sid) return;
-      logSoloEvent({ kind: 'session_aux', sessionId: sid, auxKind, details } as any);
-    },
-  });
-
-  // ── Active session ──────────────────────────────────────────────────────────
-  const session = gameMode === 'solo' ? soloSession : pvpSession;
+  // ── Socket session ──────────────────────────────────────────────────────────
   const {
+    socketRef,
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, serverReachable,
     restoring,
+    createRoom: socketCreateRoom,
+    joinRoom: socketJoinRoom,
+    createBotGame: socketCreateBotGame,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     showLocalError,
-    returnToMenu: sessionReturnToMenu,
-    leaveRoom: sessionLeaveRoom,
-  } = session;
+    surrender: socketSurrender,
+    returnToMenu: socketReturnToMenu,
+    leaveRoom: socketLeaveRoom,
+  } = useSocket();
+
+  // ── Bot player (runs MCTS via Web Worker on botTurn events) ─────────────────
+  useBotPlayer(socketRef, isBotGame);
 
   // ── Active rooms: persist/update ────────────────────────────────────────────
 
@@ -194,9 +131,9 @@ export function GameSessionProvider({ children }: ProviderProps) {
   useEffect(() => {
     if (gameState && roomId) {
       const opponentName = gameState.players.find((p) => p.color !== myColor)?.name ?? '...';
-      upsertActiveRoom({ roomId, mode: gameMode, myColor: myColor ?? 'red', opponentName });
+      upsertActiveRoom({ roomId, mode: isBotGame ? 'bot' : 'pvp', myColor: myColor ?? 'red', opponentName });
     }
-  }, [gameState, roomId, myColor, gameMode, upsertActiveRoom]);
+  }, [gameState, roomId, myColor, isBotGame, upsertActiveRoom]);
 
   // Remove on game over
   useEffect(() => {
@@ -208,51 +145,40 @@ export function GameSessionProvider({ children }: ProviderProps) {
   // ── Public actions ──────────────────────────────────────────────────────────
 
   const createRoom = useCallback((name: string, tc: TimeControl) => {
-    setGameMode('pvp');
-    pvpSession.createRoom(name, tc);
-  }, [pvpSession]);
+    setIsBotGame(false);
+    socketCreateRoom(name, tc);
+  }, [socketCreateRoom]);
 
   const joinRoom = useCallback((id: string, name: string) => {
-    setGameMode('pvp');
-    pvpSession.joinRoom(id, name);
-  }, [pvpSession]);
+    setIsBotGame(false);
+    socketJoinRoom(id, name);
+  }, [socketJoinRoom]);
 
-  const startSolo = useCallback((difficulty: Difficulty, humanColor: PlayerColor, srId: string) => {
-    const snapshot = loadSoloSnapshot(srId);
-    setSoloDifficulty(snapshot?.difficulty ?? difficulty);
-    setSoloHumanColor(snapshot?.humanColor ?? humanColor);
-    setSoloRoomId(srId);
-    setSoloInitialState(snapshot?.state);
-    soloSessionIdRef.current = srId;
-    setGameMode('solo');
-    setSoloEnabled(true);
-    setSoloNonce((n) => n + 1);
-
-    // Register in active rooms
-    upsertActiveRoom({ roomId: srId, mode: 'solo', myColor: humanColor, opponentName: 'Бот', startedAt: Date.now(), lastSeenAt: Date.now() });
-  }, [upsertActiveRoom]);
+  const startBotGame = useCallback((
+    name: string,
+    difficulty: Difficulty,
+    humanColor: PlayerColor,
+    userId?: string,
+  ) => {
+    setIsBotGame(true);
+    socketCreateBotGame(name, difficulty, humanColor, userId);
+  }, [socketCreateBotGame]);
 
   const returnToMenu = useCallback(() => {
-    sessionReturnToMenu();
+    socketReturnToMenu();
     if (roomId) removeActiveRoom(roomId);
-    setSoloEnabled(false);
-    setGameMode('pvp');
-  }, [sessionReturnToMenu, roomId, removeActiveRoom]);
+    setIsBotGame(false);
+  }, [socketReturnToMenu, roomId, removeActiveRoom]);
 
   const leaveRoom = useCallback(() => {
-    sessionLeaveRoom();
+    socketLeaveRoom();
     if (roomId) removeActiveRoom(roomId);
-    setSoloEnabled(false);
-    setGameMode('pvp');
-  }, [sessionLeaveRoom, roomId, removeActiveRoom]);
+    setIsBotGame(false);
+  }, [socketLeaveRoom, roomId, removeActiveRoom]);
 
   const surrender = useCallback(() => {
-    if (gameMode === 'solo') {
-      soloSession.surrender?.();
-    } else {
-      pvpSession.surrender();
-    }
-  }, [gameMode, soloSession, pvpSession]);
+    socketSurrender();
+  }, [socketSurrender]);
 
   // ── Context value ───────────────────────────────────────────────────────────
   const value = useMemo<GameSessionContextValue>(() => ({
@@ -264,12 +190,12 @@ export function GameSessionProvider({ children }: ProviderProps) {
     gameOver,
     errorMsg,
     serverReachable,
-    gameMode,
+    isBotGame,
     restoring,
     activeRooms,
     createRoom,
     joinRoom,
-    startSolo,
+    startBotGame,
     returnToMenu,
     leaveRoom,
     surrender,
@@ -284,14 +210,13 @@ export function GameSessionProvider({ children }: ProviderProps) {
     placeMinePhase3,
     toggleMark,
     showLocalError,
-    logSoloEvent,
   }), [
     screen, roomId, myColor, myName, gameState, gameOver, errorMsg,
-    serverReachable, gameMode, restoring, activeRooms,
-    createRoom, joinRoom, startSolo, returnToMenu, leaveRoom, surrender,
+    serverReachable, isBotGame, restoring, activeRooms,
+    createRoom, joinRoom, startBotGame, returnToMenu, leaveRoom, surrender,
     placeMineSetup, confirmSetup, selectZone, captureCell, defuseCell,
     chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
-    showLocalError, logSoloEvent,
+    showLocalError,
   ]);
 
   return (

@@ -420,9 +420,11 @@ export function GameInfo({
         <div className={styles.phaseBox}>
           <div className={styles.phaseTitle}>Игра окончена</div>
           <div className={styles.phaseDesc}>
-            {reason === 'lives' && 'Потеряны все жизни'}
-            {reason === 'headquarters' && 'Захвачен штаб'}
-            {reason === 'time' && 'Истекло время на партию'}
+            {reason === 'lives'         && 'Потеряны все жизни'}
+            {reason === 'headquarters'  && 'Захвачен штаб'}
+            {reason === 'time'          && 'Истекло время на партию'}
+            {reason === 'surrender'     && 'Игрок сдался'}
+            {reason === 'aborted'       && 'Игра прервана из-за бездействия'}
           </div>
         </div>
       )}

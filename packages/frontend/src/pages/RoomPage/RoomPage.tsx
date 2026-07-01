@@ -41,7 +41,7 @@ export function RoomPage() {
     gameOver,
     errorMsg,
     serverReachable,
-    gameMode,
+    isBotGame,
     placeMineSetup,
     confirmSetup,
     selectZone,
@@ -94,9 +94,6 @@ export function RoomPage() {
   const previousPhaseRef = useRef<string | null>(null);
   const previousMinesAllowedNoticeRef = useRef<string | null>(null);
   const primaryActionRef = useRef<(() => void) | null>(null);
-
-  // Solo session ID ref — needed for PostGameRegisterPrompt
-  const soloSessionIdRef = useRef<string>(urlRoomId ?? '');
 
   const lowTimeFiredRef = useRef<Record<'red' | 'blue', boolean>>({
     red: false,
@@ -399,7 +396,7 @@ export function RoomPage() {
       {showHelp && <HelpModal onClose={closeHelp} />}
       {showRegisterPrompt && auth.isGuest && myColor && (
         <PostGameRegisterPrompt
-          sessionId={gameMode === 'solo' ? soloSessionIdRef.current : (gameOver?.sessionId ?? '')}
+          sessionId={gameOver?.sessionId ?? ''}
           color={myColor}
           auth={auth}
           onDismiss={() => setShowRegisterPrompt(false)}
@@ -565,7 +562,7 @@ export function RoomPage() {
             className={styles.playerBadge}
             style={{ borderColor: opponent?.color === 'red' ? '#e74c3c55' : '#3498db55' }}
           >
-            {opponent?.color === 'red' ? '🔴' : '🔵'} {opponent?.name ?? '...'}
+            {opponent?.color === 'red' ? '🔴' : '🔵'} {isBotGame ? '🤖 ' : ''}{opponent?.name ?? '...'}
           </span>
         </div>
       </>

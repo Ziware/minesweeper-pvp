@@ -9,6 +9,7 @@ import {
   CellMark,
   TimeControl,
 } from '@minesweeper-pvp/shared';
+import type { Difficulty } from '../ai/types';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 export type GameScreen = 'lobby' | 'waiting' | 'setup' | 'game' | 'finished';
@@ -240,6 +241,17 @@ export function useSocket() {
     socketRef.current?.emit('joinRoom', { roomId: id, playerName: name });
   };
 
+  const createBotGame = (
+    name: string,
+    difficulty: Difficulty,
+    humanColor: PlayerColor,
+    userId?: string,
+  ) => {
+    myNameRef.current = name;
+    setMyName(name);
+    socketRef.current?.emit('createBotRoom', { playerName: name, difficulty, humanColor, userId });
+  };
+
   const placeMineSetup  = (row: number, col: number) =>
     socketRef.current?.emit('placeMineSetup',  { row, col });
   const confirmSetup    = () =>
@@ -269,13 +281,6 @@ export function useSocket() {
   const surrender       = () =>
     socketRef.current?.emit('surrender');
 
-  /** Технический канал: лог одиночной игры против бота. Не меняет состояние,
-   *  никак не отображается в UI — нужен только для серверного логирования.
-   *  Принимает уже типизированный SoloLogPayload (sessionId внутри). */
-  const logSoloEvent = (data: import('@minesweeper-pvp/shared').SoloLogPayload) => {
-    socketRef.current?.emit('soloLog', data);
-  };
-
   const returnToMenu = () => {
     clearSession();
     setScreen('lobby');
@@ -298,15 +303,15 @@ export function useSocket() {
   };
 
   return {
+    socketRef,
     screen, roomId, myColor, myName, gameState, errorMsg, gameOver, restoring,
     serverReachable,
-    createRoom, joinRoom,
+    createRoom, joinRoom, createBotGame,
     placeMineSetup, confirmSetup,
     selectZone, captureCell, defuseCell, chord, endPhase2, endPhase3, placeMinePhase3, toggleMark,
     showLocalError,
     surrender,
     returnToMenu,
     leaveRoom,
-    logSoloEvent,
   };
 }

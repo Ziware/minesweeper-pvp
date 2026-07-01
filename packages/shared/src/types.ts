@@ -34,6 +34,8 @@ export interface PlayerState {
   setupConfirmed: boolean;
   /** Оставшееся время на партию в миллисекундах. */
   timeMs: number;
+  /** Флаг бота — игрок управляется AI браузера, не живым человеком. */
+  isBot?: true;
 }
 
 /** Шахматные настройки времени: базовое время + инкремент за ход. */
@@ -129,7 +131,7 @@ export interface S2C_GameState {
 export interface S2C_Error   { message: string; }
 export interface S2C_GameOver {
   winnerColor: PlayerColor | null;
-  reason: 'lives' | 'headquarters' | 'time' | 'surrender';
+  reason: 'lives' | 'headquarters' | 'time' | 'surrender' | 'aborted';
   /** API sessionId for guest game claiming after registration. */
   sessionId?: string;
 }
@@ -144,6 +146,61 @@ export interface C2S_ChordCapture    { row: number; col: number; }
 export interface C2S_PlaceMinePhase3 { row: number; col: number; }
 export interface C2S_ToggleMark { row: number; col: number; mark: CellMark; }
 
+/**
+ * Полное состояние движка, которое сервер отправляет боту для расчёта хода.
+ * Содержит все данные, включая скрытые мины обоих игроков (безопасно — бот и
+ * человек находятся в одной вкладке браузера).
+ */
+export interface BotTurnSnapshot {
+  botColor: PlayerColor;
+  difficulty: 'easy' | 'normal' | 'hard';
+  phase: GamePhase;
+  board: CellState[][];
+  players: Array<{
+    color: PlayerColor;
+    name: string;
+    lives: number;
+    minesPlaced: number;
+    setupConfirmed: boolean;
+    timeMs: number;
+  }>;
+  turn: {
+    phase: GamePhase;
+    currentPlayer: PlayerColor;
+    selectedZone: { row: number; col: number } | null;
+    actionZone: { row: number; col: number } | null;
+    canDefuse: boolean;
+    phase2Locked: boolean;
+    minesPlacedThisTurn: number;
+    minesAllowedThisTurn: number;
+    capturedThisTurn: string[];
+    lastAction: LastAction | null;
+    turnsPlayed: number;
+    defusesPerTurn: number;
+    defusesUsedThisTurn: number;
+    currentTurnStartedAtMs: number | null;
+    serverNowMs: number;
+  };
+  setupConfirmed: PlayerColor[];
+  config: GameConfig;
+}
+
+/**
+ * Ход бота, отправляемый браузером на сервер после расчёта AI.
+ * Соответствует одному игровому действию в любой фазе.
+ */
+export type BotMovePayload =
+  | { type: 'placeMineSetup'; row: number; col: number }
+  | { type: 'confirmSetup' }
+  | { type: 'selectZone'; row: number; col: number }
+  | { type: 'captureCell'; row: number; col: number }
+  | { type: 'defuseCell'; row: number; col: number }
+  | { type: 'chord'; row: number; col: number }
+  | { type: 'endPhase2' }
+  | { type: 'placeMinePhase3'; row: number; col: number }
+  | { type: 'endPhase3' }
+  | { type: 'forfeit' };
+
 export interface ServerToClientEvents {
   roomCreated:        (data: S2C_RoomCreated) => void;
   roomJoined:         (data: S2C_RoomJoined) => void;
@@ -155,6 +212,8 @@ export interface ServerToClientEvents {
   // Сессия больше невалидна (комната исчезла / игрок не найден / другая вкладка),
   // клиент должен очистить сохранённое состояние и вернуться в лобби без тоста.
   sessionInvalid:     (data: S2C_Error) => void;
+  /** Сервер сигнализирует: сейчас ход бота, вычисли и отправь botMove. */
+  botTurn:            (data: BotTurnSnapshot) => void;
 }
 
 export interface ClientToServerEvents {
@@ -162,6 +221,10 @@ export interface ClientToServerEvents {
   authenticate:    (data: { token: string }) => void;
   createRoom:      (data: C2S_CreateRoom) => void;
   joinRoom:        (data: C2S_JoinRoom) => void;
+  /** Создать комнату с ботом. Сервер сразу начинает фазу расстановки. */
+  createBotRoom:   (data: { playerName: string; difficulty: 'easy' | 'normal' | 'hard'; humanColor: PlayerColor; userId?: string }) => void;
+  /** Ход бота: браузер вычислил move через MCTS и отправляет его серверу. */
+  botMove:         (data: BotMovePayload) => void;
   /** Добровольный выход из комнаты (например, с экрана ожидания соперника).
    *  Если игрок уходит ОДИН — комната удаляется немедленно, без TTL. */
   leaveRoom:       () => void;
@@ -181,115 +244,5 @@ export interface ClientToServerEvents {
   toggleMark:      (data: C2S_ToggleMark) => void;
   // tabId позволяет серверу различать вкладки одного устройства
   restoreSession:  (data: { roomId: string; playerColor: PlayerColor; tabId: string }) => void;
-  /**
-   * Технический канал для одиночной игры. Фронтенд отправляет упрощённые
-   * «игровые» события (унифицированный с PvP словарь — `setup_mine`,
-   * `cell_open`, `mine_hit`, `mine_defused`, `phase3_mine`, `turn_end`,
-   * `game_finished`, …), а также события «жизненного цикла сессии»
-   * (`session_start` / `session_meta` / `session_aux`).
-   *
-   * `session_start` ОБЯЗАН прийти первым — он создаёт recorder и
-   * назначает meta. После `game_finished` запись закрывается.
-   */
-  soloLog:         (data: SoloLogPayload) => void;
 }
 
-// ─── Solo-log payload (unified game-event channel for solo mode) ──────────
-
-export type SoloLogPayload =
-  | {
-      kind: 'session_start';
-      sessionId: string;
-      playerName: string;
-      humanColor: PlayerColor;
-      difficulty: string;
-      botName?: string;
-      config: GameConfig;
-      /** userId игрока-человека (из JWT, если авторизован). */
-      userId?: string;
-    }
-  | {
-      kind: 'setup_mine';
-      sessionId: string;
-      actor: PlayerColor;
-      row: number;
-      col: number;
-      hasMine: boolean;
-      minesPlaced: number;
-    }
-  | {
-      kind: 'setup_confirmed';
-      sessionId: string;
-      actor: PlayerColor;
-      minesPlaced: number;
-    }
-  | {
-      kind: 'game_started';
-      sessionId: string;
-      firstPlayer: PlayerColor;
-    }
-  | {
-      kind: 'zone_select';
-      sessionId: string;
-      actor: PlayerColor;
-      clicked: { row: number; col: number };
-      displayZone: { row: number; col: number };
-      actionZone: { row: number; col: number };
-    }
-  | {
-      kind: 'cell_open';
-      sessionId: string;
-      actor: PlayerColor;
-      row: number;
-      col: number;
-      viaChord?: boolean;
-      viaDefuse?: boolean;
-    }
-  | {
-      kind: 'mine_hit';
-      sessionId: string;
-      actor: PlayerColor;
-      row: number;
-      col: number;
-      livesLeft: number;
-      viaChord?: boolean;
-    }
-  | {
-      kind: 'mine_defused';
-      sessionId: string;
-      actor: PlayerColor;
-      row: number;
-      col: number;
-      hadMine: boolean;
-    }
-  | {
-      kind: 'phase3_mine';
-      sessionId: string;
-      actor: PlayerColor;
-      row: number;
-      col: number;
-    }
-  | {
-      kind: 'turn_end';
-      sessionId: string;
-      actor: PlayerColor;
-      turnsPlayed: number;
-    }
-  | {
-      kind: 'game_finished';
-      sessionId: string;
-      winner: PlayerColor | null;
-      reason: string;
-    }
-  /**
-   * «Прочие» события сессии, не относящиеся к игровым ходам:
-   *   bot_decision, bot_setup_planned, bot_search_failed, … —
-   *   пишутся отдельным файлом `aux.log.jsonl` рядом с `game.log.jsonl`,
-   *   на просмотрщик не влияют. Backend просто складирует JSON «как есть».
-   */
-  | {
-      kind: 'session_aux';
-      sessionId: string;
-      auxKind: string;
-      details?: Record<string, unknown>;
-    };

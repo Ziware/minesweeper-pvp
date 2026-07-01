@@ -8,8 +8,8 @@ import styles from './Lobby.module.css';
 interface LobbyProps {
   onCreateRoom:        (timeControl: TimeControl) => void;
   onJoinRoom:          (roomId: string) => void;
-  /** Запустить локальную игру против компьютера. */
-  onStartSolo?:        (difficulty: Difficulty, humanColor: PlayerColor) => void;
+  /** Запустить серверную игру против компьютера. */
+  onStartBotGame?:     (difficulty: Difficulty, humanColor: PlayerColor) => void;
   /** Опциональный звук-эффект «клик», прокидывается из App. */
   onUiClick?:          () => void;
 }
@@ -29,7 +29,7 @@ function loadStored<T extends string>(key: string, fallback: T): T {
   }
 }
 
-export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: LobbyProps) {
+export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: LobbyProps) {
   const [activeCard, setActiveCard] = useState<ActiveCard>(null);
   const [joinId, setJoinId] = useState('');
   const [joinErr, setJoinErr] = useState('');
@@ -63,8 +63,8 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: Lobb
     onJoinRoom(joinId.trim());
   };
 
-  const handleStartSolo = () => {
-    onStartSolo?.(difficulty, humanColor);
+  const handleStartBotGame = () => {
+    onStartBotGame?.(difficulty, humanColor);
   };
 
   return (
@@ -243,7 +243,7 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartSolo, onUiClick }: Lobb
 
           <button
             className={humanColor === 'red' ? styles.btnRed : styles.btnBlue}
-            onClick={handleStartSolo}
+            onClick={handleStartBotGame}
           >
             Начать игру
           </button>

@@ -493,7 +493,7 @@ export function ProfilePage() {
                 <div key={room.roomId} className={styles.activeRoomCard}>
                   <div className={styles.activeRoomInfo}>
                     <span className={styles.activeRoomMode}>
-                      {room.mode === 'solo' ? '🤖 vs Бот' : '👥 PvP'}
+                      {room.mode === 'bot' ? '🤖 vs Бот' : '👥 PvP'}
                     </span>
                     <span className={styles.activeRoomOpponent}>
                       vs {room.opponentName}

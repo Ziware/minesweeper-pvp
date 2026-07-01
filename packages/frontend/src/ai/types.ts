@@ -51,7 +51,7 @@ export function moveKey(move: EngineMove): string {
 
 // ─── Apply result ────────────────────────────────────────────────────────────
 
-export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender';
+export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender' | 'aborted';
 
 export type ApplyResult =
   | { ok: true; next: EngineStateLike; event?: ApplyEvent }

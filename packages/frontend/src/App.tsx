@@ -22,7 +22,7 @@ export default function App() {
     serverReachable,
     createRoom,
     joinRoom,
-    startSolo,
+    startBotGame,
   } = useGameSession();
 
   // Preload sounds early so they are ready when the user enters a room.
@@ -37,6 +37,7 @@ export default function App() {
 
   // Player name: authenticated users use their login, guests use 'Гость'.
   const playerName = auth.isGuest ? 'Гость' : (auth.user?.login ?? 'Гость');
+  const userId = auth.isGuest ? undefined : auth.user?.id;
 
   return (
     <div className={styles.gameLayout}>
@@ -48,9 +49,8 @@ export default function App() {
         onJoinRoom={(id) => {
           joinRoom(id, playerName);
         }}
-        onStartSolo={(difficulty, humanColor) => {
-          const soloRoomId = `solo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          startSolo(difficulty, humanColor, soloRoomId);
+        onStartBotGame={(difficulty, humanColor) => {
+          startBotGame(playerName, difficulty, humanColor, userId);
         }}
         onUiClick={() => {}}
       />

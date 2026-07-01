@@ -7,16 +7,11 @@ import {
   ServerToClientEvents,
   ClientToServerEvents,
   PlayerColor,
-  SoloLogPayload,
 } from '@minesweeper-pvp/shared';
-import { RoomManager } from './roomManager';
-import { createGameRecorder, getClientIp, type GameRecorder } from './gameRecorder';
+import { RoomManager, type Room } from './roomManager';
+import { getClientIp } from './gameRecorder';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
-
-// Per-socket map of active solo recorders (one socket = at most one solo session
-// in flight; if a new session_start arrives we close the previous one).
-const soloRecorders = new Map<string, GameRecorder>();
 
 // Per-socket userId (populated via 'authenticate' event or createRoom/joinRoom data).
 const socketToUserId = new Map<string, string>();
@@ -42,97 +37,6 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const roomManager = new RoomManager();
 
-// ─── Solo-session handler ───────────────────────────────────────────────────
-//
-// Solo логи приходят с фронтенда (нет сервера-исполнителя — движок крутится
-// в браузере). Backend здесь — лишь «писатель»: переводит каждое сообщение
-// SoloLogPayload в соответствующий вызов GameRecorder, чтобы файлы на диске
-// выглядели идентично с PvP-играми (одна директория, meta.json + game.log.jsonl).
-function handleSoloLog(
-  socketId: string,
-  handshake: { address?: string; headers: Record<string, unknown> },
-  payload: SoloLogPayload,
-): void {
-  if (payload.kind === 'session_start') {
-    // Если уже была активная сессия (новая игра подряд без disconnect),
-    // закрываем её корректным aborted-финишем.
-    const prev = soloRecorders.get(socketId);
-    if (prev && !prev.meta.endedAt) prev.gameFinished(null, 'aborted');
-
-    const ip = getClientIp(handshake.address, handshake.headers['x-forwarded-for'] as string | string[] | undefined);
-    const humanColor: PlayerColor = payload.humanColor;
-    const botColor: PlayerColor = humanColor === 'red' ? 'blue' : 'red';
-    const userId = payload.userId || socketToUserId.get(socketId);
-    const rec = createGameRecorder({
-      sessionId: payload.sessionId,
-      mode: 'solo',
-      initialPlayer: {
-        color: humanColor,
-        name: payload.playerName,
-        ip,
-        userId,
-      },
-    });
-    rec.setConfig(payload.config);
-    rec.setPlayer({
-      color: botColor,
-      name: payload.botName || `Бот (${payload.difficulty})`,
-      difficulty: payload.difficulty,
-      isBot: true,
-    });
-    soloRecorders.set(socketId, rec);
-    return;
-  }
-
-  const rec = soloRecorders.get(socketId);
-  if (!rec) {
-    console.warn('[soloLog] event without active session', payload.kind);
-    return;
-  }
-
-  switch (payload.kind) {
-    case 'setup_mine':
-      rec.setupMine(payload.actor, payload.row, payload.col, payload.hasMine, payload.minesPlaced);
-      break;
-    case 'setup_confirmed':
-      rec.setupConfirmed(payload.actor, payload.minesPlaced);
-      break;
-    case 'game_started':
-      rec.gameStarted(payload.firstPlayer);
-      break;
-    case 'zone_select':
-      rec.zoneSelect(payload.actor, payload.clicked, payload.displayZone, payload.actionZone);
-      break;
-    case 'cell_open':
-      rec.cellOpen(payload.actor, payload.row, payload.col, {
-        viaChord: payload.viaChord,
-        viaDefuse: payload.viaDefuse,
-      });
-      break;
-    case 'mine_hit':
-      rec.mineHit(payload.actor, payload.row, payload.col, payload.livesLeft, {
-        viaChord: payload.viaChord,
-      });
-      break;
-    case 'mine_defused':
-      rec.mineDefused(payload.actor, payload.row, payload.col, payload.hadMine);
-      break;
-    case 'phase3_mine':
-      rec.phase3Mine(payload.actor, payload.row, payload.col);
-      break;
-    case 'turn_end':
-      rec.turnEnd(payload.actor, { turnsPlayed: payload.turnsPlayed });
-      break;
-    case 'game_finished':
-      rec.gameFinished(payload.winner, payload.reason);
-      soloRecorders.delete(socketId);
-      break;
-    case 'session_aux':
-      rec.appendAux(payload.auxKind, payload.details);
-      break;
-  }
-}
-
 function broadcastGameState(roomId: string) {
   const room = roomManager.getRoomById(roomId);
   if (!room) return;
@@ -153,6 +57,25 @@ function broadcastGameState(roomId: string) {
   }
 }
 
+/**
+ * If it's the bot's turn, serialize engine state and emit botTurn to the human
+ * player's socket (who is running the bot AI in a Web Worker).
+ */
+function maybeSendBotTurn(room: Room): void {
+  const bot = room.players.find((p) => p.isBot);
+  if (!bot || !room.botSocketId || room.phase === 'finished') return;
+
+  // During setup phase: bot sends moves until its setup is confirmed
+  const isBotSetupTurn = room.phase === 'setup' && !bot.setupConfirmed;
+  // During game: it's bot's turn
+  const isBotGameTurn = room.phase !== 'setup' && room.turn.currentPlayer === bot.color;
+
+  if (!isBotSetupTurn && !isBotGameTurn) return;
+
+  const snapshot = roomManager.serializeEngineState(room, bot.color, bot.botDifficulty!);
+  io.to(room.botSocketId).emit('botTurn', snapshot);
+}
+
 io.on('connection', (socket) => {
   console.log('[connect]', socket.id);
 
@@ -171,7 +94,6 @@ io.on('connection', (socket) => {
   socket.on('restoreSession', ({ roomId, playerColor, tabId }) => {
     const result = roomManager.restoreSession(socket.id, roomId, playerColor, tabId);
     if (!result.room) {
-      // Отдельное событие — клиент молча очистит сессию и вернётся в лобби
       socket.emit('sessionInvalid', { message: result.error || 'Сессия истекла' });
       return;
     }
@@ -180,6 +102,8 @@ io.on('connection', (socket) => {
     const state = roomManager.getGameStateForPlayer(result.room, playerColor);
     socket.emit('gameState', state as any);
     console.log(`[restore] ${playerColor} tab=${tabId} room=${roomId}`);
+    // If restored into a bot game and it's the bot's turn, re-emit botTurn
+    maybeSendBotTurn(result.room);
   });
 
   socket.on('createRoom', ({ playerName, timeControl, userId: userIdFromEvent }) => {
@@ -206,6 +130,84 @@ io.on('connection', (socket) => {
     broadcastGameState(room.id);
   });
 
+  socket.on('createBotRoom', ({ playerName, difficulty, humanColor, userId: userIdFromEvent }) => {
+    const tabId = (socket.handshake.query.tabId as string) || socket.id;
+    const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+    const userId = userIdFromEvent || socketToUserId.get(socket.id);
+    const room = roomManager.createBotRoom(socket.id, tabId, playerName, difficulty, humanColor, ip, userId);
+    socket.join(room.id);
+    socket.emit('roomCreated', { roomId: room.id, playerColor: humanColor });
+    broadcastGameState(room.id);
+    // Immediately trigger bot's setup turn
+    maybeSendBotTurn(room);
+  });
+
+  socket.on('botMove', (move) => {
+    const room = roomManager.getRoom(socket.id);
+    if (!room) return;
+    const bot = room.players.find((p) => p.isBot);
+    if (!bot) return;
+    const botColor = bot.color;
+
+    // Dispatch the bot's move to the room manager
+    switch (move.type) {
+      case 'placeMineSetup': {
+        const r = roomManager.placeMineSetup(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] placeMineSetup error:', r.error); return; }
+        break;
+      }
+      case 'confirmSetup': {
+        const r = roomManager.confirmSetup(room, botColor);
+        if (!r.ok) { console.warn('[botMove] confirmSetup error:', r.error); return; }
+        break;
+      }
+      case 'selectZone': {
+        const r = roomManager.selectZone(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] selectZone error:', r.error); return; }
+        break;
+      }
+      case 'captureCell': {
+        const r = roomManager.captureCell(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] captureCell error:', r.error); return; }
+        break;
+      }
+      case 'defuseCell': {
+        const r = roomManager.defuseCell(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] defuseCell error:', r.error); return; }
+        break;
+      }
+      case 'chord': {
+        const r = roomManager.chordCapture(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] chord error:', r.error); return; }
+        break;
+      }
+      case 'endPhase2': {
+        const r = roomManager.endPhase2(room, botColor);
+        if (!r.ok) { console.warn('[botMove] endPhase2 error:', r.error); return; }
+        break;
+      }
+      case 'placeMinePhase3': {
+        const r = roomManager.placeMinePhase3(room, botColor, move.row, move.col);
+        if (!r.ok) { console.warn('[botMove] placeMinePhase3 error:', r.error); return; }
+        break;
+      }
+      case 'endPhase3': {
+        const r = roomManager.endPhase3(room, botColor);
+        if (!r.ok) { console.warn('[botMove] endPhase3 error:', r.error); return; }
+        break;
+      }
+      case 'forfeit': {
+        roomManager.surrender(room, botColor);
+        break;
+      }
+    }
+
+    broadcastGameState(room.id);
+    if (room.phase !== 'finished') {
+      maybeSendBotTurn(room);
+    }
+  });
+
   socket.on('placeMineSetup', ({ row, col }) => {
     const room  = roomManager.getRoom(socket.id);
     const color = roomManager.getPlayerColor(socket.id);
@@ -222,6 +224,8 @@ io.on('connection', (socket) => {
     const r = roomManager.confirmSetup(room, color);
     if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
+    // If game started and bot goes first, trigger bot's turn
+    maybeSendBotTurn(room);
   });
 
   socket.on('selectZone', ({ row, col }) => {
@@ -276,6 +280,8 @@ io.on('connection', (socket) => {
     const r = roomManager.endPhase3(room, color);
     if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
+    // Turn switched — bot might need to go
+    maybeSendBotTurn(room);
   });
 
   socket.on('placeMinePhase3', ({ row, col }) => {
@@ -285,6 +291,10 @@ io.on('connection', (socket) => {
     const r = roomManager.placeMinePhase3(room, color, row, col);
     if (!r.ok) { socket.emit('error', { message: r.error! }); return; }
     broadcastGameState(room.id);
+    // If the last mine was placed, turn ended — bot might need to go
+    if (r.done && room.phase !== 'finished') {
+      maybeSendBotTurn(room);
+    }
   });
 
   socket.on('toggleMark', ({ row, col, mark }) => {
@@ -308,26 +318,14 @@ io.on('connection', (socket) => {
   socket.on('leaveRoom', () => {
     const room = roomManager.leaveRoom(socket.id);
     if (room) {
-      // Если в комнате ещё кто-то остался — обновить ему состояние / уведомить.
       if (room.players.length > 0) broadcastGameState(room.id);
       console.log(`[leaveRoom] ${socket.id} left room ${room.id}`);
     }
   });
 
-  socket.on('soloLog', (payload: SoloLogPayload) => {
-    handleSoloLog(socket.id, socket.handshake, payload);
-  });
-
   socket.on('disconnect', () => {
     const { room } = roomManager.removePlayer(socket.id);
     if (room) console.log(`[disconnect] left room ${room.id}`);
-    // Закрыть незакрытую solo-сессию: пишем game_finished='aborted' если игра
-    // не дошла до естественного конца. Recorder сам закроет meta.
-    const rec = soloRecorders.get(socket.id);
-    if (rec) {
-      if (!rec.meta.endedAt) rec.gameFinished(null, 'aborted');
-      soloRecorders.delete(socket.id);
-    }
     socketToUserId.delete(socket.id);
   });
 });

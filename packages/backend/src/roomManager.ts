@@ -39,8 +39,8 @@ import {
 } from './gameLogic';
 
 export interface PlayerState {
-  id: string;          // текущий socket.id
-  tabId: string;       // уникальный id вкладки браузера
+  id: string;          // текущий socket.id ('__bot__' для бот-игрока)
+  tabId: string;       // уникальный id вкладки браузера ('__bot__' для бота)
   color: PlayerColor;
   name: string;
   ip?: string;
@@ -52,9 +52,12 @@ export interface PlayerState {
   setupConfirmed: boolean;
   /** Оставшееся время на партию в миллисекундах. */
   timeMs: number;
+  /** Бот-игрок — ходы вычисляет браузер и отправляет через botMove. */
+  isBot?: true;
+  botDifficulty?: 'easy' | 'normal' | 'hard';
 }
 
-export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender';
+export type WinReason = 'lives' | 'headquarters' | 'time' | 'surrender' | 'aborted';
 
 export interface Room {
   id: string;
@@ -69,6 +72,10 @@ export interface Room {
   marks: Record<PlayerColor, Record<string, CellMark>>;
   recorder: GameRecorder;
   gameOverLogged: boolean;
+  /** Timestamp последнего игрового действия (для inactivity-таймаута). */
+  lastActionAt: number;
+  /** socket.id человека-игрока в bot-комнате — туда шлём botTurn события. */
+  botSocketId?: string;
 }
 
 /** Допустимые пресеты времени, которые сервер принимает от клиента. */
@@ -163,11 +170,110 @@ export class RoomManager {
       marks: { red: {}, blue: {} },
       recorder,
       gameOverLogged: false,
+      lastActionAt: Date.now(),
     };
 
     this.rooms.set(roomId, room);
     this.socketToRoom.set(socketId, roomId);
     this.socketToPlayer.set(socketId, 'red');
+    return room;
+  }
+
+  /**
+   * Создать комнату с ботом. Сразу переходит в фазу setup (без ожидания).
+   * Бот-игрок имеет id='__bot__' — реального сокета нет.
+   */
+  createBotRoom(
+    humanSocketId: string,
+    tabId: string,
+    playerName: string,
+    difficulty: 'easy' | 'normal' | 'hard',
+    humanColor: PlayerColor,
+    ip: string,
+    userId?: string,
+  ): Room {
+    const roomId = this.generateRoomId();
+    // Игры против бота — без таймера
+    const noTimerControl: TimeControl = { baseMs: 0, incrementMs: 0 };
+    const fullConfig: GameConfig = { ...DEFAULT_CONFIG, timeControl: noTimerControl };
+    const board = createBoard(fullConfig.boardSize);
+    initBoard(board, fullConfig);
+
+    const botColor: PlayerColor = humanColor === 'red' ? 'blue' : 'red';
+    const botName = difficulty === 'easy' ? 'Бот (Легко)' : difficulty === 'normal' ? 'Бот (Нормально)' : 'Бот (Сложно)';
+
+    const recorder = createGameRecorder({
+      sessionId: roomId,
+      mode: 'solo',
+      initialPlayer: { color: humanColor, name: playerName, ip, userId },
+    });
+    recorder.setConfig(fullConfig);
+    recorder.setPlayer({ color: botColor, name: botName, isBot: true, difficulty });
+
+    const humanPlayer: PlayerState = {
+      id: humanSocketId,
+      tabId,
+      color: humanColor,
+      name: playerName,
+      ip,
+      userId,
+      lives: fullConfig.maxLives,
+      minesPlaced: 0,
+      connected: true,
+      setupConfirmed: false,
+      timeMs: 0,
+    };
+    const botPlayer: PlayerState = {
+      id: '__bot__',
+      tabId: '__bot__',
+      color: botColor,
+      name: botName,
+      lives: fullConfig.maxLives,
+      minesPlaced: 0,
+      connected: true,
+      setupConfirmed: false,
+      timeMs: 0,
+      isBot: true,
+      botDifficulty: difficulty,
+    };
+
+    const players: PlayerState[] = humanColor === 'red'
+      ? [humanPlayer, botPlayer]
+      : [botPlayer, humanPlayer];
+
+    const room: Room = {
+      id: roomId,
+      config: fullConfig,
+      board,
+      players,
+      phase: 'setup',
+      turn: {
+        phase: 'setup',
+        currentPlayer: 'red',
+        selectedZone: null,
+        actionZone: null,
+        canDefuse: true,
+        minesPlacedThisTurn: 0,
+        minesAllowedThisTurn: fullConfig.minesPerTurn,
+        capturedThisTurn: new Set(),
+        lastAction: null,
+        turnsPlayed: 0,
+        defusesPerTurn: INITIAL_DEFUSES_PER_TURN,
+        defusesUsedThisTurn: 0,
+        currentTurnStartedAtMs: null,
+        serverNowMs: Date.now(),
+      },
+      setupConfirmed: new Set(),
+      marks: { red: {}, blue: {} },
+      recorder,
+      gameOverLogged: false,
+      lastActionAt: Date.now(),
+      botSocketId: humanSocketId,
+    };
+
+    this.rooms.set(roomId, room);
+    this.socketToRoom.set(humanSocketId, roomId);
+    this.socketToPlayer.set(humanSocketId, humanColor);
     return room;
   }
 
@@ -362,6 +468,7 @@ export class RoomManager {
       cell.hasMine = false;
       player.minesPlaced--;
       room.recorder.setupMine(color, row, col, false, player.minesPlaced);
+      room.lastActionAt = Date.now();
       return { ok: true };
     }
     const setupLimit = color === 'red' ? room.config.initialMinesRed : room.config.initialMinesBlue;
@@ -371,6 +478,7 @@ export class RoomManager {
     cell.hasMine = true;
     player.minesPlaced++;
     room.recorder.setupMine(color, row, col, true, player.minesPlaced);
+    room.lastActionAt = Date.now();
     return { ok: true };
   }
 
@@ -384,6 +492,7 @@ export class RoomManager {
     player.setupConfirmed = true;
     room.setupConfirmed.add(color);
     room.recorder.setupConfirmed(color, player.minesPlaced);
+    room.lastActionAt = Date.now();
     const bothConfirmed = room.setupConfirmed.size === 2;
     if (bothConfirmed) {
       room.phase = 'phase1';
@@ -422,6 +531,7 @@ export class RoomManager {
     room.turn.phase = 'phase2';
     room.phase      = 'phase2';
     room.turn.lastAction = null;
+    room.lastActionAt = Date.now();
     return { ok: true };
   }
 
@@ -473,6 +583,7 @@ export class RoomManager {
       }
       room.turn.lastAction = null;
     }
+    room.lastActionAt = Date.now();
     return { ok: true, hitMine, gameOver: false };
   }
 
@@ -690,8 +801,8 @@ export class RoomManager {
   endPhase2(room: Room, color: PlayerColor) {
     if (room.turn.phase !== 'phase2') return { ok: false, error: 'Сейчас не фаза захвата' };
     if (room.turn.currentPlayer !== color) return { ok: false, error: 'Сейчас не ваш ход' };
-    const player = room.players.find((p) => p.color === color)!;
     this.startPhase3(room);
+    room.lastActionAt = Date.now();
     return { ok: true };
   }
 
@@ -724,6 +835,7 @@ export class RoomManager {
 
   surrender(room: Room, color: PlayerColor): void {
     const opponent: PlayerColor = color === 'red' ? 'blue' : 'red';
+    room.lastActionAt = Date.now();
     this.finalizeGameOver(room, opponent, 'surrender');
   }
 
@@ -744,8 +856,8 @@ export class RoomManager {
     if (cell.hasMine)         return { ok: false, done: false, gameOver: false, error: 'Здесь уже стоит мина' };
     cell.hasMine = true;
     room.turn.minesPlacedThisTurn++;
-    const player = room.players.find((p) => p.color === color)!;
     room.recorder.phase3Mine(color, row, col, { timeLeftMs: this.getTimeLeftMs(room, color) });
+    room.lastActionAt = Date.now();
     const done = room.turn.minesPlacedThisTurn >= room.turn.minesAllowedThisTurn;
     if (done) {
       room.recorder.turnEnd(color, { timeLeftMs: this.getTimeLeftMs(room, color), turnsPlayed: room.turn.turnsPlayed });
@@ -758,8 +870,8 @@ export class RoomManager {
   endPhase3(room: Room, color: PlayerColor) {
     if (room.turn.phase !== 'phase3') return { ok: false, gameOver: false, error: 'Сейчас не фаза минирования' };
     if (room.turn.currentPlayer !== color) return { ok: false, gameOver: false, error: 'Сейчас не ваш ход' };
-    const player = room.players.find((p) => p.color === color)!;
     room.recorder.turnEnd(color, { timeLeftMs: this.getTimeLeftMs(room, color), turnsPlayed: room.turn.turnsPlayed });
+    room.lastActionAt = Date.now();
     const gameOver = this.checkAndFinishTurn(room);
     return { ok: true, gameOver };
   }
@@ -867,20 +979,42 @@ export class RoomManager {
     return true;
   }
 
-  /** Перебрать все комнаты, вернуть те, где сработал тайм-аут — нужно разослать gameState/gameOver. */
+  /** Перебрать все комнаты, вернуть те, где сработал тайм-аут или inactivity — нужно разослать gameState/gameOver. */
   tickTimeouts(): Room[] {
     const finished: Room[] = [];
     for (const room of this.rooms.values()) {
-      if (this.checkTimeout(room)) finished.push(room);
+      if (room.phase === 'finished') continue;
+      if (this.checkTimeout(room)) { finished.push(room); continue; }
+      if (this.checkInactivity(room)) { finished.push(room); }
     }
     return finished;
+  }
+
+  /**
+   * Проверить бездействие игроков. Применяется только к играм без таймера
+   * (timeControl.baseMs === 0). Если с момента последнего хода прошло ≥24ч,
+   * партия завершается как 'aborted' — проигрывает тот, чья сейчас очередь.
+   */
+  private checkInactivity(room: Room): boolean {
+    // Только игры без таймера (включая игры с ботом)
+    if (room.config.timeControl.baseMs !== 0) return false;
+    // Только в активных фазах
+    if (room.phase !== 'setup' && room.phase !== 'phase1' &&
+        room.phase !== 'phase2' && room.phase !== 'phase3') return false;
+    const LIMIT_MS = 24 * 60 * 60 * 1000; // 24 часа
+    if (Date.now() - room.lastActionAt < LIMIT_MS) return false;
+
+    // Проигрывает тот, чей сейчас ход (не сделал ход за 24 часа)
+    const currentPlayer = room.turn.currentPlayer;
+    const winner: PlayerColor = currentPlayer === 'red' ? 'blue' : 'red';
+    this.finalizeGameOver(room, winner, 'aborted');
+    return true;
   }
 
   toggleMark(room: Room, color: PlayerColor, row: number, col: number, mark: CellMark) {
     const cell = room.board[row][col];
     if (cell.owner === color) return { ok: false, error: 'Нельзя ставить метку на свою клетку' };
     room.marks[color][`${row},${col}`] = mark;
-    const player = room.players.find((p) => p.color === color)!;
     return { ok: true };
   }
 
@@ -909,10 +1043,51 @@ export class RoomManager {
     return board;
   }
 
+  /**
+   * Сериализует состояние движка для отправки боту через botTurn событие.
+   * Включает все данные (в том числе расположение мин обоих игроков) —
+   * безопасно, т.к. человек и бот в одной вкладке браузера.
+   */
+  serializeEngineState(room: Room, botColor: PlayerColor, difficulty: 'easy' | 'normal' | 'hard'): import('@minesweeper-pvp/shared').BotTurnSnapshot {
+    return {
+      botColor,
+      difficulty,
+      phase: room.phase,
+      board: room.board.map((row) => row.map((cell) => ({ ...cell }))),
+      players: room.players.map((p) => ({
+        color: p.color,
+        name: p.name,
+        lives: p.lives,
+        minesPlaced: p.minesPlaced,
+        setupConfirmed: p.setupConfirmed,
+        timeMs: p.timeMs,
+      })),
+      turn: {
+        phase: room.turn.phase,
+        currentPlayer: room.turn.currentPlayer,
+        selectedZone: room.turn.selectedZone,
+        actionZone: room.turn.actionZone,
+        canDefuse: room.turn.canDefuse,
+        phase2Locked: room.turn.phase2Locked ?? false,
+        minesPlacedThisTurn: room.turn.minesPlacedThisTurn,
+        minesAllowedThisTurn: room.turn.minesAllowedThisTurn,
+        capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
+        lastAction: room.turn.lastAction ?? null,
+        turnsPlayed: room.turn.turnsPlayed,
+        defusesPerTurn: room.turn.defusesPerTurn,
+        defusesUsedThisTurn: room.turn.defusesUsedThisTurn,
+        currentTurnStartedAtMs: room.turn.currentTurnStartedAtMs,
+        serverNowMs: Date.now(),
+      },
+      setupConfirmed: Array.from(room.setupConfirmed) as PlayerColor[],
+      config: room.config,
+    };
+  }
+
   getGameStateForPlayer(room: Room, color: PlayerColor) {
     return {
       board:       this.getBoardForPlayer(room, color),
-      players:     room.players.map(({ ip, ...player }) => player),
+      players:     room.players.map(({ ip, tabId, ...player }) => player),
       turn: {
         ...room.turn,
         capturedThisTurn: Array.from(room.turn.capturedThisTurn as Set<string>),
