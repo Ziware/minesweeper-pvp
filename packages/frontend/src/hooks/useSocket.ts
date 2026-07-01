@@ -229,10 +229,10 @@ export function useSocket() {
     }
   }, [roomId, myColor, myName]);
 
-  const createRoom = (name: string, timeControl: TimeControl) => {
+  const createRoom = (name: string, timeControl: TimeControl, preferredColor?: PlayerColor) => {
     myNameRef.current = name;
     setMyName(name);
-    socketRef.current?.emit('createRoom', { playerName: name, timeControl });
+    socketRef.current?.emit('createRoom', { playerName: name, timeControl, preferredColor });
   };
 
   const joinRoom = (id: string, name: string) => {

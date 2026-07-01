@@ -36,7 +36,7 @@ function buildGrid(activity: ActivityDay[], weeks: number): (ActivityDay & { lev
     d.setDate(startDay.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10);
     const count = map.get(dateStr) ?? 0;
-    const level: 0 | 1 | 2 | 3 | 4 = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4;
+    const level: 0 | 1 | 2 | 3 | 4 = count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count <= 3 ? 3 : 4;
     week.push({ date: dateStr, count, level });
     if (week.length === 7) {
       grid.push(week);

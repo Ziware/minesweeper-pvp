@@ -56,6 +56,23 @@
 }
 .mineHit:hover { filter: none; }
 
+/* ── Chord preview: amber overlay identical to PvP .chordPreview ── */
+.cellChordPreview {
+  position: relative;
+}
+.cellChordPreview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 195, 90, 0.32);
+  pointer-events: none;
+  transition: background 0.08s linear;
+}
+.cellChordPreview:hover::after {
+  background: rgba(255, 210, 110, 0.45);
+}
+
 /* ── Exploding mine (shake + flash) ── */
 .exploding {
   animation: explosionShake 0.5s ease-out;

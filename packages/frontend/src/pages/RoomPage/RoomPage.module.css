@@ -138,26 +138,6 @@
   box-sizing: border-box;
 }
 
-.gameHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  background: #16213e;
-  border-bottom: 1px solid #0f3460;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-
-.logo {
-  margin: 0;
-  font-size: 1.2rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  line-height: 1;
-}
-
 .roomBadge {
   background: #0f3460;
   padding: 4px 10px;
@@ -182,42 +162,13 @@
   font-weight: bold;
 }
 
-.headerActions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .headerPlayersRow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.headerRowBreak { display: none; }
-
 .mobileOnly { display: none !important; }
-
-.headerBtn {
-  padding: 5px 12px;
-  border-radius: 8px;
-  border: 1px solid #0f3460;
-  background: #0f3460;
-  color: #7af;
-  font-size: 0.84rem;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.2s;
-}
-.headerBtn:hover { background: #1a4f80; }
-.headerBtnActive { background: #1a4f80; }
-
-.settingsAnchor {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
 
 .gameBody {
   display: flex;

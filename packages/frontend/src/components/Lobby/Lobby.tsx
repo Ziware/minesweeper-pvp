@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { TimeControl, TIME_CONTROL_PRESETS, BALANCE, PlayerColor } from '@minesweeper-pvp/shared';
 import type { Difficulty } from '../../ai/types';
 import { DIFFICULTY_LABELS } from '../../ai/difficulty';
 import styles from './Lobby.module.css';
 
 interface LobbyProps {
-  onCreateRoom:        (timeControl: TimeControl) => void;
+  onCreateRoom:        (timeControl: TimeControl, preferredColor: PlayerColor) => void;
   onJoinRoom:          (roomId: string) => void;
   /** Запустить серверную игру против компьютера. */
   onStartBotGame?:     (difficulty: Difficulty, humanColor: PlayerColor) => void;
@@ -17,6 +16,7 @@ interface LobbyProps {
 const DEFAULT_PRESET_INDEX = BALANCE.timeControls.defaultPresetIndex;
 const DIFFICULTY_STORAGE_KEY = 'minesweeper_solo_difficulty';
 const COLOR_STORAGE_KEY = 'minesweeper_solo_color';
+const PVP_COLOR_STORAGE_KEY = 'minesweeper_pvp_color';
 
 type ActiveCard = 'pvp' | 'solo' | null;
 
@@ -40,6 +40,9 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
   const [humanColor, setHumanColor] = useState<PlayerColor>(() =>
     loadStored<PlayerColor>(COLOR_STORAGE_KEY, 'red'),
   );
+  const [pvpColor, setPvpColor] = useState<PlayerColor>(() =>
+    loadStored<PlayerColor>(PVP_COLOR_STORAGE_KEY, 'red'),
+  );
 
   useEffect(() => {
     try { localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty); } catch { /* ignore */ }
@@ -47,6 +50,9 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
   useEffect(() => {
     try { localStorage.setItem(COLOR_STORAGE_KEY, humanColor); } catch { /* ignore */ }
   }, [humanColor]);
+  useEffect(() => {
+    try { localStorage.setItem(PVP_COLOR_STORAGE_KEY, pvpColor); } catch { /* ignore */ }
+  }, [pvpColor]);
 
   const toggleCard = (card: ActiveCard) => {
     onUiClick?.();
@@ -54,7 +60,7 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
   };
 
   const handleCreate = () => {
-    onCreateRoom(TIME_CONTROL_PRESETS[presetIdx].timeControl);
+    onCreateRoom(TIME_CONTROL_PRESETS[presetIdx].timeControl, pvpColor);
   };
 
   const handleJoin = () => {
@@ -131,17 +137,6 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
           </button>
         </div>
 
-        {/* Classic Card */}
-        <Link to="/classic" className={styles.modeCard} onClick={() => onUiClick?.()}>
-          <div className={styles.modeCardIcon}>💣</div>
-          <div className={styles.modeCardBody}>
-            <div className={styles.modeCardTitle}>Классический сапёр</div>
-            <div className={styles.modeCardDesc}>
-              Стандартный Сапёр на скорость. Пресеты новичок/любитель/эксперт или своё поле.
-            </div>
-          </div>
-          <div className={styles.modeCardBtn}>Открыть</div>
-        </Link>
       </div>
 
       {/* ── Inline expand: PvP ── */}
@@ -167,9 +162,27 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
             {/* Создать */}
             <div className={styles.expandCard}>
               <div className={styles.expandCardTitle}>Создать комнату</div>
-              <div className={styles.expandCardHint}>Вы играете за 🔴 Красного · ходит первым</div>
-              <button className={styles.btnRed} onClick={handleCreate}>
-                Создать
+              <div className={styles.expandSection}>
+                <div className={styles.expandLabel}>Ваш цвет · Красный ходит первым</div>
+                <div className={styles.presetRow}>
+                  <button
+                    type="button"
+                    className={`${styles.presetBtn} ${pvpColor === 'red' ? styles.presetBtnActive : ''}`}
+                    onClick={() => { if (pvpColor !== 'red') onUiClick?.(); setPvpColor('red'); }}
+                  >
+                    🔴 Красный
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.presetBtn} ${pvpColor === 'blue' ? styles.presetBtnActive : ''}`}
+                    onClick={() => { if (pvpColor !== 'blue') onUiClick?.(); setPvpColor('blue'); }}
+                  >
+                    🔵 Синий
+                  </button>
+                </div>
+              </div>
+              <button className={pvpColor === 'red' ? styles.btnRed : styles.btnBlue} onClick={handleCreate}>
+                Создать комнату
               </button>
             </div>
 
@@ -178,18 +191,22 @@ export function Lobby({ onCreateRoom, onJoinRoom, onStartBotGame, onUiClick }: L
             {/* Войти */}
             <div className={styles.expandCard}>
               <div className={styles.expandCardTitle}>Войти в комнату</div>
+              <div className={styles.expandCardHint}>Вставьте ссылку-приглашение или введите ID комнаты (5 букв)</div>
               <input
                 className={`${styles.input} ${joinErr ? styles.inputError : ''}`}
                 placeholder="ID комнаты (5 букв)"
                 value={joinId}
                 onChange={(e) => {
-                  setJoinId(e.target.value.replace(/[^A-Za-z]/g, '').toUpperCase());
+                  const raw = e.target.value.trim();
+                  // Accept full invite URL or just room ID
+                  const match = raw.match(/\/room\/([A-Za-z]{5})/) || raw.match(/^([A-Za-z]{5})$/);
+                  const id = match ? match[1].toUpperCase() : raw.replace(/[^A-Za-z]/g, '').toUpperCase();
+                  setJoinId(id);
                   setJoinErr('');
                 }}
                 maxLength={5}
               />
               {joinErr && <div className={styles.fieldError}>{joinErr}</div>}
-              <div className={styles.expandCardHint}>Вы играете за 🔵 Синего</div>
               <button
                 className={styles.btnBlue}
                 onClick={handleJoin}

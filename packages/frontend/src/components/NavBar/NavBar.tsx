@@ -13,9 +13,11 @@ interface NavBarProps {
   onHelpOpen?: () => void;
   /** When true, hides the center nav links (used on game/room pages). */
   hideNavLinks?: boolean;
+  /** Custom content rendered in the center slot (replaces nav links). */
+  centerContent?: React.ReactNode;
 }
 
-export function NavBar({ auth, settings, onHelpOpen, hideNavLinks }: NavBarProps) {
+export function NavBar({ auth, settings, onHelpOpen, hideNavLinks, centerContent }: NavBarProps) {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -23,16 +25,19 @@ export function NavBar({ auth, settings, onHelpOpen, hideNavLinks }: NavBarProps
       {/* Left: logo */}
       <Link to="/" className={styles.logo}>
         <Icon name="headquarters" size="2em" />
-        <span className={styles.logoText}>MsPvP</span>
+        <span className={styles.logoTextFull}>MinesweeperPvP</span>
+        <span className={styles.logoTextShort}>MsPvP</span>
       </Link>
 
-      {/* Center: nav links (desktop only, hidden on game pages) */}
-      {!hideNavLinks && (
+      {/* Center: custom content or nav links */}
+      {centerContent ? (
+        <div className={styles.navCenter}>{centerContent}</div>
+      ) : !hideNavLinks ? (
         <div className={styles.navLinks}>
           <Link to="/rules" className={styles.navLink}>Правила</Link>
           <Link to="/classic" className={styles.navLink}>Классика</Link>
         </div>
-      )}
+      ) : null}
 
       {/* Right: actions */}
       <div className={styles.actions}>

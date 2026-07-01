@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import type { ClassicCell, ClassicStatus } from '../../hooks/useClassicGame';
 import { Icon } from '../Icon/Icon';
 import styles from './ClassicBoard.module.css';
@@ -76,6 +76,43 @@ function countUnflaggedUnrevealed(cells: ClassicCell[][], r: number, c: number, 
   return count;
 }
 
+/** Returns true if holding down on this cell would trigger a chord action */
+function isChordSourceCell(
+  cells: ClassicCell[][],
+  r: number,
+  c: number,
+  rows: number,
+  cols: number,
+): boolean {
+  const cell = cells[r][c];
+  if (!cell.revealed || cell.adjacentMines === 0) return false;
+  const flagCount = countAdjFlags(cells, r, c, rows, cols);
+  const unflagged = countUnflaggedUnrevealed(cells, r, c, rows, cols);
+  return flagCount === cell.adjacentMines || (unflagged > 0 && flagCount + unflagged === cell.adjacentMines);
+}
+
+/** Returns the unrevealed-unflagged neighbors that will be affected by chord */
+function getChordCandidates(
+  cells: ClassicCell[][],
+  r: number,
+  c: number,
+  rows: number,
+  cols: number,
+): Array<{ r: number; c: number }> {
+  const result: Array<{ r: number; c: number }> = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr; const nc = c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+        const n = cells[nr][nc];
+        if (!n.revealed && !n.flagged) result.push({ r: nr, c: nc });
+      }
+    }
+  }
+  return result;
+}
+
 export function ClassicBoard({
   cells,
   status,
@@ -87,6 +124,22 @@ export function ClassicBoard({
 }: ClassicBoardProps) {
   const rows = cells.length;
   const cols = cells[0]?.length ?? 0;
+
+  /** Cell currently being held down — used to compute chord preview */
+  const [pressedCell, setPressedCell] = useState<{ r: number; c: number } | null>(null);
+
+  /** Set of "r-c" keys for cells highlighted as chord candidates */
+  const chordPreviewSet = useMemo(() => {
+    const set = new Set<string>();
+    if (!pressedCell) return set;
+    if (status === 'won' || status === 'lost') return set;
+    const { r, c } = pressedCell;
+    if (!isChordSourceCell(cells, r, c, rows, cols)) return set;
+    for (const candidate of getChordCandidates(cells, r, c, rows, cols)) {
+      set.add(`${candidate.r}-${candidate.c}`);
+    }
+    return set;
+  }, [pressedCell, cells, rows, cols, status]);
 
   const handleClick = useCallback((e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
@@ -142,6 +195,7 @@ export function ClassicBoard({
             const isCenter = firstClickHint && status === 'idle'
               && Math.abs(r - centerR) <= 1 && Math.abs(c - centerC) <= 1;
             const isExplodedMine = status === 'lost' && cell.hasMine && cell.revealed;
+            const isChordPreview = chordPreviewSet.has(`${r}-${c}`);
 
             const cls = [
               styles.cell,
@@ -150,6 +204,7 @@ export function ClassicBoard({
                 : styles.cellHidden,
               isCenter && !cell.revealed ? styles.cellHint : '',
               isExplodedMine ? styles.exploding : '',
+              isChordPreview ? styles.cellChordPreview : '',
             ].filter(Boolean).join(' ');
 
             return (
@@ -158,6 +213,18 @@ export function ClassicBoard({
                 className={cls}
                 onClick={(e) => handleClick(e, r, c)}
                 onContextMenu={(e) => handleRightClick(e, r, c)}
+                onPointerDown={() => {
+                  if (status !== 'won' && status !== 'lost') {
+                    if (isChordSourceCell(cells, r, c, rows, cols)) {
+                      setPressedCell({ r, c });
+                    }
+                  }
+                }}
+                onPointerLeave={() => {
+                  setPressedCell((prev) =>
+                    prev && prev.r === r && prev.c === c ? null : prev,
+                  );
+                }}
               >
                 {isExplodedMine && (
                   <span className={styles.explosionFlash} aria-hidden />

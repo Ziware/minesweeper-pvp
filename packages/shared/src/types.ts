@@ -136,7 +136,7 @@ export interface S2C_GameOver {
   sessionId?: string;
 }
 
-export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; userId?: string; }
+export interface C2S_CreateRoom { playerName: string; timeControl: TimeControl; preferredColor?: PlayerColor; userId?: string; }
 export interface C2S_JoinRoom   { roomId: string; playerName: string; userId?: string; }
 export interface C2S_PlaceMine  { row: number; col: number; }
 export interface C2S_SelectZone { row: number; col: number; }

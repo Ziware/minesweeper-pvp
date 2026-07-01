@@ -25,8 +25,24 @@
 }
 .logo:hover { color: #fff; }
 
-.logoText {
+.logoTextFull {
   letter-spacing: 0.5px;
+}
+
+.logoTextShort {
+  letter-spacing: 0.5px;
+  display: none;
+}
+
+/* ── Center slot (nav links or custom game content) ── */
+.navCenter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  overflow: hidden;
 }
 
 /* ── Nav links (desktop) — left-aligned after the logo ── */
@@ -107,5 +123,13 @@
 
   .actionBtnLabel {
     display: none;
+  }
+
+  .logoTextFull {
+    display: none;
+  }
+
+  .logoTextShort {
+    display: inline;
   }
 }

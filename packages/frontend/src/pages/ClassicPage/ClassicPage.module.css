@@ -16,31 +16,13 @@
   overflow-y: auto;
 }
 
-/* ── Top row ── */
-.topRow {
-  width: 100%;
-  max-width: 760px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.backLink {
-  color: #e67e22;
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 600;
-  flex-shrink: 0;
-  transition: color 0.15s;
-}
-.backLink:hover { color: #f39c12; }
-
+/* ── Title ── */
 .title {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 800;
   color: #eef;
+  text-align: center;
 }
 
 /* ── Preset buttons ── */

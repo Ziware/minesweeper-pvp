@@ -36,7 +36,7 @@ export function ProfileButton({ auth }: ProfileButtonProps) {
   }
 
   const initials = auth.user
-    ? auth.user.login.slice(0, 2).toUpperCase()
+    ? auth.user.login.slice(0, 1).toUpperCase()
     : null;
 
   const activeCount = activeRooms.length;

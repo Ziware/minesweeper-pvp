@@ -106,13 +106,14 @@ io.on('connection', (socket) => {
     maybeSendBotTurn(result.room);
   });
 
-  socket.on('createRoom', ({ playerName, timeControl, userId: userIdFromEvent }) => {
+  socket.on('createRoom', ({ playerName, timeControl, preferredColor, userId: userIdFromEvent }) => {
     const tabId = (socket.handshake.query.tabId as string) || socket.id;
     const ip = getClientIp(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
     const userId = userIdFromEvent || socketToUserId.get(socket.id);
-    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip, timeControl, userId);
+    const color: 'red' | 'blue' = preferredColor === 'blue' ? 'blue' : 'red';
+    const room  = roomManager.createRoom(socket.id, tabId, playerName, ip, timeControl, color, userId);
     socket.join(room.id);
-    socket.emit('roomCreated', { roomId: room.id, playerColor: 'red' });
+    socket.emit('roomCreated', { roomId: room.id, playerColor: color });
     socket.emit('waitingForOpponent');
   });
 
@@ -125,8 +126,10 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Комната не найдена или заполнена' });
       return;
     }
+    const joinerPlayer = room.players.find((p) => p.id === socket.id);
+    const joinerColor = joinerPlayer?.color ?? 'blue';
     socket.join(room.id);
-    socket.emit('roomJoined', { roomId: room.id, playerColor: 'blue' });
+    socket.emit('roomJoined', { roomId: room.id, playerColor: joinerColor });
     broadcastGameState(room.id);
   });
 

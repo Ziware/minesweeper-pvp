@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { NavBar } from '../../components/NavBar/NavBar';
 import { ClassicBoard } from '../../components/ClassicBoard/ClassicBoard';
 import { useClassicGame, CLASSIC_PRESETS } from '../../hooks/useClassicGame';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
+import { useSound } from '../../hooks/useSound';
 import styles from './ClassicPage.module.css';
 
 const CUSTOM_KEY = 'minesweeper_classic_custom';
@@ -43,6 +43,7 @@ function cellSize(cols: number): number {
 export function ClassicPage() {
   const auth = useAuth();
   const settings = useSettings();
+  const { play } = useSound({ mutedRef: settings.mutedRef, volumeRef: settings.volumeRef });
 
   const [presetKey, setPresetKey] = useState<string>(CLASSIC_PRESETS[0].key);
   const [customMode, setCustomMode] = useState(false);
@@ -60,6 +61,7 @@ export function ClassicPage() {
   const minesRemaining = game.minesTotal - game.flagsPlaced;
 
   const handlePreset = (key: string) => {
+    play('button');
     setPresetKey(key);
     setCustomMode(false);
   };
@@ -74,6 +76,22 @@ export function ClassicPage() {
     setCustomDraft(cfg);
     saveCustom(cfg);
     setCustomMode(true);
+    play('button');
+  };
+
+  const handleRestart = () => {
+    play('button');
+    game.restart();
+  };
+
+  const handleReveal = (r: number, c: number) => {
+    play('scan');
+    game.reveal(r, c);
+  };
+
+  const handleChord = (r: number, c: number) => {
+    play('scan');
+    game.chord(r, c);
   };
 
   const cs = cellSize(activeCols);
@@ -83,10 +101,7 @@ export function ClassicPage() {
       <NavBar auth={auth} settings={settings} />
 
       <div className={styles.body}>
-        <div className={styles.topRow}>
-          <Link to="/" className={styles.backLink}>← На главную</Link>
-          <h1 className={styles.title}>Классический Сапёр</h1>
-        </div>
+        <h1 className={styles.title}>Классический Сапёр</h1>
 
         {/* ── Preset selector ── */}
         <div className={styles.presets}>
@@ -102,7 +117,7 @@ export function ClassicPage() {
           ))}
           <button
             className={`${styles.presetBtn} ${customMode ? styles.presetBtnActive : ''}`}
-            onClick={() => setCustomMode((v) => !v)}
+            onClick={() => { play('button'); setCustomMode((v) => !v); }}
             type="button"
           >
             ⚙ Своё
@@ -159,7 +174,7 @@ export function ClassicPage() {
               {game.status === 'idle' ? '0s' : formatTime(game.elapsedMs)}
             </span>
           </div>
-          <button className={styles.restartBtn} onClick={game.restart} type="button" title="Рестарт">
+          <button className={styles.restartBtn} onClick={handleRestart} type="button" title="Рестарт">
             🔄 Рестарт
           </button>
         </div>
@@ -176,7 +191,7 @@ export function ClassicPage() {
         {game.status === 'lost' && (
           <div className={`${styles.resultBanner} ${styles.resultLost}`}>
             💥 Вы подорвались!{' '}
-            <button className={styles.tryAgainBtn} onClick={game.restart}>Ещё раз</button>
+            <button className={styles.tryAgainBtn} onClick={handleRestart}>Ещё раз</button>
           </div>
         )}
 
@@ -186,9 +201,9 @@ export function ClassicPage() {
             cells={game.board}
             status={game.status}
             cellSize={cs}
-            onReveal={game.reveal}
+            onReveal={handleReveal}
             onFlag={game.cycleFlag}
-            onChord={game.chord}
+            onChord={handleChord}
             firstClickHint={game.status === 'idle'}
           />
         </div>

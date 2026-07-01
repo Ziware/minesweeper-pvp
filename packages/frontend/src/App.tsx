@@ -43,8 +43,8 @@ export default function App() {
     <div className={styles.gameLayout}>
       <NavBar auth={auth} settings={settingsApi} />
       <Lobby
-        onCreateRoom={(timeControl) => {
-          createRoom(playerName, timeControl);
+        onCreateRoom={(timeControl, preferredColor) => {
+          createRoom(playerName, timeControl, preferredColor);
         }}
         onJoinRoom={(id) => {
           joinRoom(id, playerName);

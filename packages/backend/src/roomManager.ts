@@ -117,6 +117,7 @@ export class RoomManager {
     playerName: string,
     ip: string,
     timeControl?: TimeControl,
+    preferredColor?: 'red' | 'blue',
     userId?: string,
   ): Room {
     const roomId     = this.generateRoomId();
@@ -125,10 +126,12 @@ export class RoomManager {
     const board      = createBoard(fullConfig.boardSize);
     initBoard(board, fullConfig);
 
+    const creatorColor: 'red' | 'blue' = preferredColor === 'blue' ? 'blue' : 'red';
+
     const recorder = createGameRecorder({
       sessionId: roomId,
       mode: 'pvp',
-      initialPlayer: { color: 'red', name: playerName, ip, userId },
+      initialPlayer: { color: creatorColor, name: playerName, ip, userId },
     });
     recorder.setConfig(fullConfig);
 
@@ -139,7 +142,7 @@ export class RoomManager {
       players: [{
         id: socketId,
         tabId,
-        color: 'red',
+        color: creatorColor,
         name: playerName,
         ip,
         userId,
@@ -152,7 +155,7 @@ export class RoomManager {
       phase: 'waiting',
       turn: {
         phase: 'waiting',
-        currentPlayer: 'red',
+        currentPlayer: creatorColor,
         selectedZone: null,
         actionZone: null,
         canDefuse: true,
@@ -175,7 +178,7 @@ export class RoomManager {
 
     this.rooms.set(roomId, room);
     this.socketToRoom.set(socketId, roomId);
-    this.socketToPlayer.set(socketId, 'red');
+    this.socketToPlayer.set(socketId, creatorColor);
     return room;
   }
 
@@ -281,10 +284,14 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (!room || room.players.length >= 2) return null;
 
+    // Assign the opposite color from the existing player (creator may have chosen blue)
+    const existingColor = room.players[0]?.color ?? 'red';
+    const joinerColor: 'red' | 'blue' = existingColor === 'red' ? 'blue' : 'red';
+
     room.players.push({
       id: socketId,
       tabId,
-      color: 'blue',
+      color: joinerColor,
       name: playerName,
       ip,
       userId,
@@ -296,10 +303,10 @@ export class RoomManager {
     });
     room.phase      = 'setup';
     room.turn.phase = 'setup';
-    room.recorder.setPlayer({ color: 'blue', name: playerName, ip, userId });
+    room.recorder.setPlayer({ color: joinerColor, name: playerName, ip, userId });
 
     this.socketToRoom.set(socketId, roomId);
-    this.socketToPlayer.set(socketId, 'blue');
+    this.socketToPlayer.set(socketId, joinerColor);
     return room;
   }
 

@@ -8,10 +8,8 @@ import { NavBar } from '../../components/NavBar/NavBar';
 import { Board, MobileInputMode } from '../../components/Board/Board';
 import { GameInfo, SideNotice, describeLastAction } from '../../components/GameInfo/GameInfo';
 import { HelpModal } from '../../components/HelpModal/HelpModal';
-import { SettingsMenu } from '../../components/SettingsMenu/SettingsMenu';
 import { PostGameRegisterPrompt } from '../../components/PostGameRegisterPrompt/PostGameRegisterPrompt';
 import { SurrenderButton } from '../../components/SurrenderButton/SurrenderButton';
-import { Icon } from '../../components/Icon/Icon';
 import styles from './RoomPage.module.css';
 
 export function RoomPage() {
@@ -55,12 +53,12 @@ export function RoomPage() {
     showLocalError,
     returnToMenu,
     leaveRoom,
+    joinRoom,
     surrender,
   } = session;
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [showHelp, setShowHelp] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showRegisterPrompt, setShowRegisterPrompt] = useState(false);
   const [boardHeight, setBoardHeight] = useState<number | null>(null);
   const [inviteUrlCopied, setInviteUrlCopied] = useState(false);
@@ -105,12 +103,12 @@ export function RoomPage() {
 
   primaryActionRef.current = null;
 
-  // ── Redirect to lobby when no active game ───────────────────────────────────
+  // ── Redirect to lobby only when there is no URL room to join ────────────────
   useEffect(() => {
-    if (screen === 'lobby') {
+    if (screen === 'lobby' && !urlRoomId) {
       navigate('/', { replace: true });
     }
-  }, [screen, navigate]);
+  }, [screen, urlRoomId, navigate]);
 
   // ── Preload sounds ──────────────────────────────────────────────────────────
   useEffect(() => { preload(); }, [preload]);
@@ -319,46 +317,6 @@ export function RoomPage() {
   }, [roomId]);
 
   // ── Helper renderers ────────────────────────────────────────────────────────
-  const renderHeader = (content?: React.ReactNode, showHelpBtn = false) => (
-    <div className={styles.gameHeader}>
-      <h2 className={styles.logo}><Icon name="headquarters" size="2em" /> Minesweeper PvP</h2>
-      {content}
-      <div className={styles.headerActions}>
-        <div className={styles.settingsAnchor} data-settings-anchor>
-          <button
-            className={`${styles.headerBtn} ${showSettings ? styles.headerBtnActive : ''}`}
-            onClick={() => setShowSettings((v) => !v)}
-            aria-expanded={showSettings}
-            aria-haspopup="menu"
-          >
-            ⚙️<span className={styles.headerBtnLabel}> Настройки</span>
-          </button>
-          {showSettings && (
-            <SettingsMenu
-              muted={muted}
-              volume={volume}
-              hideControls={hideControls}
-              flagClickDefuse={flagClickDefuse}
-              onToggleMuted={() => toggleMuted()}
-              onVolumeChange={(v) => setVolume(v)}
-              onToggleHideControls={() => toggleHideControls()}
-              onToggleFlagClickDefuse={() => toggleFlagClickDefuse()}
-              onClose={() => setShowSettings(false)}
-            />
-          )}
-        </div>
-        {showHelpBtn && (
-          <button
-            className={styles.headerBtn}
-            onClick={() => setShowHelp(true)}
-          >
-            ❓<span className={styles.headerBtnLabel}> Правила</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
   const renderErrorToast = () => (
     errorMsg ? <div className={styles.toastError}>{errorMsg}</div> : null
   );
@@ -386,9 +344,15 @@ export function RoomPage() {
     );
   };
 
-  const renderShell = (content: React.ReactNode, headerContent?: React.ReactNode, showHelpBtn = false) => (
+  const renderShell = (content: React.ReactNode, centerContent?: React.ReactNode, showHelpBtn = false) => (
     <div className={styles.gameLayout}>
-      {renderHeader(headerContent, showHelpBtn)}
+      <NavBar
+        auth={auth}
+        settings={settingsApi}
+        onHelpOpen={showHelpBtn ? () => setShowHelp(true) : undefined}
+        centerContent={centerContent}
+        hideNavLinks={!!centerContent}
+      />
       {content}
       {renderErrorToast()}
       {renderMobileNoticeToast()}
@@ -404,6 +368,39 @@ export function RoomPage() {
       )}
     </div>
   );
+
+  // ── Join-from-invite screen (visited /room/:id with no active game) ──────────
+  if (screen === 'lobby' && urlRoomId) {
+    return renderShell(
+      <div className={styles.centered}>
+        <div className={styles.waitCard}>
+          <h2>🎮 Присоединиться к игре</h2>
+          <p>Комната <strong>{urlRoomId}</strong></p>
+          <button
+            type="button"
+            className={styles.waitLeaveBtn}
+            style={{ background: '#1a4f80', color: '#7af', borderColor: '#2a5f90', alignSelf: 'center' }}
+            onClick={() => {
+              if (auth.isGuest) {
+                joinRoom(urlRoomId, 'Гость');
+              } else {
+                joinRoom(urlRoomId, auth.user?.login ?? 'Игрок');
+              }
+            }}
+          >
+            Войти в комнату
+          </button>
+          <button
+            type="button"
+            className={styles.waitLeaveBtn}
+            onClick={() => navigate('/', { replace: true })}
+          >
+            ← В главное меню
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Waiting screen ──────────────────────────────────────────────────────────
   if (screen === 'waiting') {
@@ -548,8 +545,6 @@ export function RoomPage() {
 
     const headerContent = (
       <>
-        <span className={styles.roomBadge}>Комната: {roomId}</span>
-        <span className={styles.headerRowBreak} aria-hidden="true" />
         <div className={styles.headerPlayersRow}>
           <span
             className={styles.playerBadge}
@@ -730,13 +725,10 @@ export function RoomPage() {
   }
 
   // ── Restoring / loading state ───────────────────────────────────────────────
-  return (
-    <div className={styles.gameLayout}>
-      <NavBar auth={auth} settings={settingsApi} hideNavLinks />
-      <div className={styles.centered}>
-        <div className={styles.waitCard}>
-          <p>⏳ Загрузка игры…</p>
-        </div>
+  return renderShell(
+    <div className={styles.centered}>
+      <div className={styles.waitCard}>
+        <p>⏳ Загрузка игры…</p>
       </div>
     </div>
   );

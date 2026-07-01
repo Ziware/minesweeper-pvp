@@ -5,21 +5,50 @@ import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import styles from './RulesPage.module.css';
 
+const TOC = [
+  { id: 'goal',    label: '🎯 Цель игры' },
+  { id: 'field',   label: '🗺️ Поле' },
+  { id: 'turn',    label: '🔄 Ход игрока' },
+  { id: 'defuse',  label: '🔧 Дефюзеры' },
+  { id: 'time',    label: '⏱️ Время' },
+  { id: 'win',     label: '🏁 Победа' },
+];
+
 export function RulesPage() {
   const auth = useAuth();
   const settings = useSettings();
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className={styles.layout}>
       <NavBar auth={auth} settings={settings} />
       <div className={styles.body}>
+        {/* Sidebar TOC */}
+        <nav className={styles.toc}>
+          <div className={styles.tocTitle}>Содержание</div>
+          {TOC.map((item) => (
+            <button
+              key={item.id}
+              className={styles.tocLink}
+              onClick={() => scrollTo(item.id)}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+          <Link to="/" className={styles.tocBack}>← На главную</Link>
+        </nav>
+
         <article className={styles.article}>
           <Link to="/" className={styles.backLink}>← На главную</Link>
 
           <h1 className={styles.pageTitle}>Правила игры</h1>
           <p className={styles.pageSubtitle}>Minesweeper PvP — тактическая дуэль на минном поле</p>
 
-          <section className={styles.section}>
+          <section id="goal" className={styles.section}>
             <h2 className={styles.sectionTitle}>🎯 Цель игры</h2>
             <p>
               Захвати штаб противника или уничтожь все его жизни взрывами мин.
@@ -27,7 +56,7 @@ export function RulesPage() {
             </p>
           </section>
 
-          <section className={styles.section}>
+          <section id="field" className={styles.section}>
             <h2 className={styles.sectionTitle}>🗺️ Поле</h2>
             <p>
               Поле делится на две половины — красную и синюю. В начале каждый расставляет свои мины
@@ -40,7 +69,7 @@ export function RulesPage() {
             </ul>
           </section>
 
-          <section className={styles.section}>
+          <section id="turn" className={styles.section}>
             <h2 className={styles.sectionTitle}>🔄 Ход игрока</h2>
 
             <h3 className={styles.subTitle}>Фаза 1 — Выбор зоны</h3>
@@ -70,7 +99,7 @@ export function RulesPage() {
             </p>
           </section>
 
-          <section className={styles.section}>
+          <section id="defuse" className={styles.section}>
             <h2 className={styles.sectionTitle}>🔧 Дефюзеры</h2>
             <p>
               Дефюзер позволяет безопасно обезвредить одну мину без потери жизни.
@@ -79,7 +108,7 @@ export function RulesPage() {
             </p>
           </section>
 
-          <section className={styles.section}>
+          <section id="time" className={styles.section}>
             <h2 className={styles.sectionTitle}>⏱️ Контроль времени</h2>
             <p>
               Перед игрой выбирается пресет контроля времени (например, 3+2 или 5+0).
@@ -88,7 +117,7 @@ export function RulesPage() {
             </p>
           </section>
 
-          <section className={styles.section}>
+          <section id="win" className={styles.section}>
             <h2 className={styles.sectionTitle}>🏁 Победа и поражение</h2>
             <ul className={styles.list}>
               <li><strong>Штаб</strong>: захвати штаб противника — мгновенная победа.</li>

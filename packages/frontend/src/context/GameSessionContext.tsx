@@ -56,7 +56,7 @@ export interface GameSessionContextValue {
   // active rooms registry
   activeRooms: ActiveRoom[];
   // actions
-  createRoom: (name: string, tc: TimeControl) => void;
+  createRoom: (name: string, tc: TimeControl, preferredColor?: PlayerColor) => void;
   joinRoom: (id: string, name: string) => void;
   startBotGame: (name: string, difficulty: Difficulty, humanColor: PlayerColor, userId?: string) => void;
   returnToMenu: () => void;
@@ -144,9 +144,9 @@ export function GameSessionProvider({ children }: ProviderProps) {
 
   // ── Public actions ──────────────────────────────────────────────────────────
 
-  const createRoom = useCallback((name: string, tc: TimeControl) => {
+  const createRoom = useCallback((name: string, tc: TimeControl, preferredColor?: PlayerColor) => {
     setIsBotGame(false);
-    socketCreateRoom(name, tc);
+    socketCreateRoom(name, tc, preferredColor);
   }, [socketCreateRoom]);
 
   const joinRoom = useCallback((id: string, name: string) => {
